@@ -268,72 +268,79 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
         </div>
 
         {/* Rows */}
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Konto</th>
-                <th className="w-32 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Debet</th>
-                <th className="w-32 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">Kredit</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => (
-                <tr key={i} className="border-t border-slate-100 first:border-0">
-                  <td className="px-4 py-2">
-                    <select value={row.accountId} onChange={e => updateRow(i, 'accountId', e.target.value)} className={cls}>
-                      <option value="">Välj konto…</option>
-                      {accounts?.map(a => (
-                        <option key={a.id} value={a.id}>{a.id} – {a.name}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-2">
-                    <input
-                      type="number" step="0.01" min="0"
-                      value={row.debit}
-                      onChange={e => updateRow(i, 'debit', e.target.value)}
-                      disabled={row.credit !== ''}
-                      className={cls}
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    <input
-                      type="number" step="0.01" min="0"
-                      value={row.credit}
-                      onChange={e => updateRow(i, 'credit', e.target.value)}
-                      disabled={row.debit !== ''}
-                      className={cls}
-                    />
-                  </td>
-                  <td className="px-2 py-2">
-                    <button
-                      type="button" onClick={() => removeRow(i)} disabled={rows.length <= 2}
-                      className="rounded p-1.5 text-slate-300 transition-colors hover:text-red-500 disabled:opacity-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-slate-200 bg-slate-50">
-                <td className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Summa</td>
-                <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">{totalDebit.toFixed(2)}</td>
-                <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">{totalCredit.toFixed(2)}</td>
-                <td />
-              </tr>
-              {Math.abs(diff) > 0.01 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-1.5 text-right text-xs text-red-500">
-                    Differens: {Math.abs(diff).toFixed(2)} kr
-                  </td>
-                </tr>
-              )}
-            </tfoot>
-          </table>
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          {/* Desktop table header */}
+          <div className="hidden sm:grid sm:grid-cols-[1fr_7rem_7rem_2rem] border-b border-slate-100 px-4 py-3 gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Konto</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Debet</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Kredit</span>
+            <span />
+          </div>
+
+          {rows.map((row, i) => (
+            <div key={i} className="border-t border-slate-100 first:border-0 p-3 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-[1fr_7rem_7rem_2rem] sm:items-center sm:gap-2 sm:px-4 sm:py-2">
+              {/* Account — full width on mobile */}
+              <select
+                value={row.accountId}
+                onChange={e => updateRow(i, 'accountId', e.target.value)}
+                className={cls}
+              >
+                <option value="">Välj konto…</option>
+                {accounts?.map(a => (
+                  <option key={a.id} value={a.id}>{a.id} – {a.name}</option>
+                ))}
+              </select>
+
+              {/* Debet + Kredit side by side on mobile */}
+              <div className="grid grid-cols-2 gap-2 sm:contents">
+                <div className="sm:contents">
+                  <label className="sm:hidden text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5 block">Debet</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={row.debit}
+                    onChange={e => updateRow(i, 'debit', e.target.value)}
+                    disabled={row.credit !== ''}
+                    placeholder="0.00"
+                    className={cls}
+                  />
+                </div>
+                <div className="sm:contents">
+                  <label className="sm:hidden text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5 block">Kredit</label>
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={row.credit}
+                    onChange={e => updateRow(i, 'credit', e.target.value)}
+                    disabled={row.debit !== ''}
+                    placeholder="0.00"
+                    className={cls}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end sm:justify-center">
+                <button
+                  type="button" onClick={() => removeRow(i)} disabled={rows.length <= 2}
+                  className="rounded p-1.5 text-slate-300 transition-colors hover:text-red-500 disabled:opacity-0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/* Totals */}
+          <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 grid grid-cols-[1fr_7rem_7rem_2rem] gap-2 items-center">
+            <span className="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 hidden sm:block">Summa</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 sm:hidden">Summa</span>
+            <span className="font-semibold tabular-nums text-slate-900 text-sm">{totalDebit.toFixed(2)}</span>
+            <span className="font-semibold tabular-nums text-slate-900 text-sm">{totalCredit.toFixed(2)}</span>
+            <span />
+          </div>
+          {Math.abs(diff) > 0.01 && (
+            <div className="px-4 py-1.5 text-right text-xs text-red-500">
+              Differens: {Math.abs(diff).toFixed(2)} kr
+            </div>
+          )}
         </div>
 
         {/* Add row + submit */}
