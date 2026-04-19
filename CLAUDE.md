@@ -51,6 +51,85 @@ src/
 - `useLiveQuery` — alla vyer uppdateras automatiskt när DB ändras, ingen manuell refresh behövs
 - JSON-backup är primär säkerhetskopia; SIE4 för export till revisorer/andra system
 
+---
+
+## Bokföringsdomän — vad tjänsten måste förstå
+
+Du är en AI-tjänst som bygger och underhåller ett bokföringsprogram. Du måste förstå den underliggande bokföringslogiken på djupet — inte bara implementera UI. Nedan är de regler och begrepp som styr ALL kod du skriver i det här projektet.
+
+### Grundprincipen: dubbelbokföring
+
+Varje ekonomisk händelse registreras som en **verifikation** med minst ett debetbelopp och ett kreditbelopp. Regeln är absolut:
+
+> **Summa debet = Summa kredit** — alltid, utan undantag.
+
+Om du skriver kod som tillåter att en obalanserad verifikation sparas är det ett allvarligt fel. Balanskontrollen ska göras på de rader som faktiskt sparas (rader med valt konto), inte på alla rader i formuläret.
+
+### Kontoarter och deras logik
+
+Varje konto tillhör en kontoart. Kontoarten avgör hur saldot tolkas i rapporterna:
+
+| Kontoart | Svenska | Debet ökar/minskar | Kredit ökar/minskar |
+|----------|---------|-------------------|---------------------|
+| `asset` | Tillgång | Ökar (+) | Minskar (−) |
+| `liability` | Skuld | Minskar (−) | Ökar (+) |
+| `equity` | Eget kapital | Minskar (−) | Ökar (+) |
+| `revenue` | Intäkt | Minskar (−) | Ökar (+) |
+| `expense` | Kostnad | Ökar (+) | Minskar (−) |
+
+I databasen lagras alla belopp som ett signerat tal: positivt = debet, negativt = kredit. För att visa ett intäktssaldo som positivt tal i rapporterna måste du negera databassaldot (`revenue -= bal`).
+
+### Verifikation — vad som ska bokföras
+
+En verifikation är en ekonomisk händelse. Exempel på vanliga händelser och hur de bokförs:
+
+**Inköp med moms (ingående moms):**
+- Kostnadskonto (t.ex. 5410) Debet: nettobelopp
+- 2640 Ingående moms Debet: momsbelopp
+- 1930 Bank Kredit: bruttobelopp
+
+**Försäljning med moms (utgående moms):**
+- 1930 Bank Debet: bruttobelopp
+- Intäktskonto (t.ex. 3000) Kredit: nettobelopp
+- 2610/2620/2630 Utgående moms Kredit: momsbelopp
+
+En bokning med bara 2 av 3 rader ovan är **alltid fel** — det är ett tecken på att kostnadskontot eller intäktskontot saknas.
+
+### Momsberäkning
+
+Moms beräknas alltid från bruttobeloppet (inkl. moms):
+
+```
+moms = round(brutto × sats / (100 + sats), 2 decimaler)
+netto = round(brutto − moms, 2 decimaler)
+```
+
+Momssatser: 6%, 12%, 25%. Kontomappning:
+- 25% utgående → 2610, 12% → 2620, 6% → 2630
+- Ingående moms (alla satser) → 2640
+
+### Huvudboken
+
+Huvudboken är summan av alla transaktioner per konto. Det är grunden för alla rapporter — resultaträkning, balansräkning och momsrapport är olika filter på samma underliggande data. Du ska aldrig beräkna en rapport från något annat än huvudboken.
+
+### Balansräkningsekvationen
+
+Denna ekvation ska alltid stämma i databasen:
+
+> **Tillgångar = Skulder + Eget kapital + Årets resultat**
+
+Om ekvationen inte stämmer finns det ett fel i bokföringen. Testerna kontrollerar detta efter varje operation.
+
+### Resultaträkning
+
+- **Intäkter** = summan av kreditbokningar på intäktskonton (negerat databassaldo)
+- **Kostnader** = summan av debetbokningar på kostnadskonton (databassaldo direkt)
+- **Årets resultat** = Intäkter − Kostnader
+
+### Rapporter är vyer — inte separat data
+
+Alla rapporter (resultat, balans, huvudbok, moms) läser samma `transactions`-tabell. Det finns ingen separat "rapportdatabas". När du ändrar en verifikation uppdateras alla rapporter automatiskt via `useLiveQuery`.
+
 ## Utvecklingsflöde
 ```bash
 npm run dev    # lokal dev
