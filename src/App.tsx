@@ -5,7 +5,9 @@ import { ChartOfAccounts } from './components/ChartOfAccounts';
 import { Reports } from './components/Reports';
 import { initializeDb } from './db';
 import { exportBackup } from './lib/backup';
-import { LayoutDashboard, BookOpen, FileText, List, Download, Menu } from 'lucide-react';
+import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link } from 'lucide-react';
+
+const APP_URL = 'https://skaneby.github.io/bokf-ring-/';
 
 const NAV = [
   { id: 'dashboard', label: 'Översikt',   icon: LayoutDashboard },
@@ -17,8 +19,19 @@ const NAV = [
 type TabId = typeof NAV[number]['id'];
 
 export default function App() {
-  const [tab, setTab]     = useState<TabId>('dashboard');
+  const [tab, setTab]       = useState<TabId>('dashboard');
   const [mobile, setMobile] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(APP_URL);
+    } catch {
+      prompt('Kopiera länken:', APP_URL);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
 
   useEffect(() => { initializeDb().catch(console.error); }, []);
 
@@ -69,6 +82,17 @@ export default function App() {
           >
             <Download className="h-4 w-4 shrink-0" />
             Ladda ned backup
+          </button>
+          <button
+            onClick={handleShare}
+            className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              copied
+                ? 'bg-emerald-900/40 text-emerald-400'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Link className="h-4 w-4 shrink-0" />
+            {copied ? 'Länk kopierad!' : 'Dela appen'}
           </button>
         </div>
       </aside>
