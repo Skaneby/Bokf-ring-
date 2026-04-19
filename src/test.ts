@@ -320,6 +320,39 @@ async function runTests() {
   ]) >= 2, 'Två rader → godkänd');
   assert(validRows([{ accountId: 0, debit: '100', credit: '' }]) < 2, 'Rad utan konto ignoreras');
 
+  // KRITISK: balanskontrollen måste baseras på giltiga rader (samma som sparas)
+  // Simulerar OCR-autofyll: kvitto 668.60 kr, 25% moms, ingående
+  // Rad 1: tomt konto (kostnad ej vald), debet 534.88
+  // Rad 2: 2640 ingående moms, debet 133.72
+  // Rad 3: 1930 bank, kredit 668.60
+  // Fel: balans på ALLA rader = 0 → godkänns trots att rad 1 saknar konto → 2 obalanserade rader sparas
+  // Rätt: balans på GILTIGA rader → 133.72 - 668.60 = -534.88 → avvisas
+
+  const simulateFormRows = (rows: { accountId: number | string; debit: string; credit: string }[]) => {
+    const valid = rows.filter(r => r.accountId && (r.debit || r.credit));
+    const debit  = valid.reduce((s, r) => s + (parseFloat(r.debit)  || 0), 0);
+    const credit = valid.reduce((s, r) => s + (parseFloat(r.credit) || 0), 0);
+    return { valid: valid.length, diff: Math.round((debit - credit) * 100) / 100 };
+  };
+
+  const ocrRows = [
+    { accountId: '',   debit: '534.88', credit: '' },   // kostnadskonto ej valt
+    { accountId: 2640, debit: '133.72', credit: '' },
+    { accountId: 1930, debit: '',       credit: '668.60' },
+  ];
+  const { valid: ocrValid, diff: ocrDiff } = simulateFormRows(ocrRows as any);
+  assert(ocrValid === 2,           'OCR-autofyll utan kostnadskonto: 2 giltiga rader');
+  assert(Math.abs(ocrDiff) > 0.01, 'OCR-autofyll utan kostnadskonto: obalans detekteras (diff=' + ocrDiff + ')');
+
+  const completeRows = [
+    { accountId: 5410, debit: '534.88', credit: '' },   // kostnadskonto valt
+    { accountId: 2640, debit: '133.72', credit: '' },
+    { accountId: 1930, debit: '',       credit: '668.60' },
+  ];
+  const { valid: fullValid, diff: fullDiff } = simulateFormRows(completeRows as any);
+  assert(fullValid === 3,           'OCR-autofyll med kostnadskonto: 3 giltiga rader');
+  assert(Math.abs(fullDiff) < 0.01, 'OCR-autofyll med kostnadskonto: balansen stämmer (diff=' + fullDiff + ')');
+
   // ═══════════════════════════════════════════════════════════════════════
   // 8. SIE4-EXPORT
   // ═══════════════════════════════════════════════════════════════════════

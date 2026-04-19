@@ -125,10 +125,11 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
       return n;
     });
 
-  const totalDebit  = rows.reduce((s, r) => s + (parseFloat(r.debit  as string) || 0), 0);
-  const totalCredit = rows.reduce((s, r) => s + (parseFloat(r.credit as string) || 0), 0);
-  const diff        = Math.round((totalDebit - totalCredit) * 100) / 100;
+  // Only rows with an account selected will be saved — balance must be checked on those rows only
   const valid       = rows.filter(r => r.accountId && (r.debit || r.credit));
+  const totalDebit  = valid.reduce((s, r) => s + (parseFloat(r.debit  as string) || 0), 0);
+  const totalCredit = valid.reduce((s, r) => s + (parseFloat(r.credit as string) || 0), 0);
+  const diff        = Math.round((totalDebit - totalCredit) * 100) / 100;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
