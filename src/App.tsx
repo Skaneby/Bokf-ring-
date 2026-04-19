@@ -4,82 +4,100 @@ import { VoucherEntry } from './components/VoucherEntry';
 import { ChartOfAccounts } from './components/ChartOfAccounts';
 import { Reports } from './components/Reports';
 import { initializeDb } from './db';
-import { LayoutDashboard, BookOpen, FileText, Settings, Menu, X } from 'lucide-react';
+import { exportBackup } from './lib/backup';
+import { LayoutDashboard, BookOpen, FileText, List, Download, Menu } from 'lucide-react';
+
+const NAV = [
+  { id: 'dashboard', label: 'Översikt',   icon: LayoutDashboard },
+  { id: 'voucher',   label: 'Bokför',     icon: BookOpen },
+  { id: 'accounts',  label: 'Kontoplan',  icon: List },
+  { id: 'reports',   label: 'Rapporter',  icon: FileText },
+] as const;
+
+type TabId = typeof NAV[number]['id'];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [tab, setTab]     = useState<TabId>('dashboard');
+  const [mobile, setMobile] = useState(false);
 
-  useEffect(() => {
-    initializeDb().catch(console.error);
-  }, []);
+  useEffect(() => { initializeDb().catch(console.error); }, []);
 
-  const navItems = [
-    { id: 'dashboard', label: 'Översikt', icon: LayoutDashboard },
-    { id: 'voucher', label: 'Bokför', icon: BookOpen },
-    { id: 'accounts', label: 'Kontoplan', icon: Settings },
-    { id: 'reports', label: 'Rapporter', icon: FileText },
-  ];
-
-  const handleNavClick = (id: string) => {
-    setActiveTab(id);
-    setIsMobileMenuOpen(false);
-  };
+  const go = (id: TabId) => { setTab(id); setMobile(false); };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row">
-      {/* Mobile Header */}
-      <div className="md:hidden bg-gray-900 text-white p-4 flex justify-between items-center z-20">
-        <div>
-          <h1 className="text-lg font-bold tracking-wider">Lokal Bokföring</h1>
-        </div>
-        <button 
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="p-2 hover:bg-gray-800 rounded-md"
-        >
-          {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
-      </div>
+    <div className="min-h-screen bg-slate-50 flex">
 
-      {/* Sidebar */}
-      <div className={`
-        ${isMobileMenuOpen ? 'block' : 'hidden'} 
-        md:flex w-full md:w-64 bg-gray-900 text-white flex-col md:min-h-screen
-        absolute md:relative z-10
+      {/* ── Sidebar ───────────────────────────────────────────────── */}
+      <aside className={`
+        fixed inset-y-0 left-0 z-30 flex w-56 flex-col bg-slate-900
+        transition-transform duration-200
+        ${mobile ? 'translate-x-0' : '-translate-x-full'}
+        md:relative md:translate-x-0
       `}>
-        <div className="hidden md:block p-6">
-          <h1 className="text-xl font-bold tracking-wider">Lokal Bokföring</h1>
-          <p className="text-xs text-gray-400 mt-1">Privat & Enkel</p>
+        {/* Logo */}
+        <div className="px-6 py-6 border-b border-slate-800">
+          <p className="text-[10px] font-semibold tracking-[0.15em] text-slate-500 uppercase mb-0.5">Lokal</p>
+          <h1 className="text-lg font-bold text-white tracking-tight">Bokföring</h1>
         </div>
-        
-        <nav className="flex-1 px-4 py-4 md:py-0 space-y-2 mt-0 md:mt-4">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-                  activeTab === item.id
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
-              >
-                <Icon className="h-5 w-5 mr-3" />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
 
-      {/* Main content */}
-      <div className="flex-1 overflow-auto w-full">
-        <main className="p-4 md:p-8 max-w-7xl mx-auto">
-          {activeTab === 'dashboard' && <Dashboard />}
-          {activeTab === 'voucher' && <VoucherEntry />}
-          {activeTab === 'accounts' && <ChartOfAccounts />}
-          {activeTab === 'reports' && <Reports />}
+        {/* Nav */}
+        <nav className="flex-1 px-3 py-4 space-y-0.5">
+          {NAV.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => go(id)}
+              className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                tab === id
+                  ? 'bg-slate-800 text-white'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Quick backup */}
+        <div className="px-3 py-4 border-t border-slate-800">
+          <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.15em] text-slate-500 uppercase">
+            Säkerhet
+          </p>
+          <button
+            onClick={() => exportBackup()}
+            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+          >
+            <Download className="h-4 w-4 shrink-0" />
+            Ladda ned backup
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile overlay */}
+      {mobile && (
+        <div
+          className="fixed inset-0 z-20 bg-black/40 md:hidden"
+          onClick={() => setMobile(false)}
+        />
+      )}
+
+      {/* ── Main ──────────────────────────────────────────────────── */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile top bar */}
+        <header className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white md:hidden">
+          <span className="font-bold tracking-tight">Bokföring</span>
+          <button onClick={() => setMobile(true)} className="p-1 text-slate-400 hover:text-white">
+            <Menu className="h-5 w-5" />
+          </button>
+        </header>
+
+        <main className="flex-1 overflow-auto p-5 md:p-8">
+          <div className="mx-auto max-w-5xl">
+            {tab === 'dashboard' && <Dashboard />}
+            {tab === 'voucher'   && <VoucherEntry />}
+            {tab === 'accounts'  && <ChartOfAccounts />}
+            {tab === 'reports'   && <Reports />}
+          </div>
         </main>
       </div>
     </div>

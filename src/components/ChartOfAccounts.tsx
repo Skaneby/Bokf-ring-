@@ -1,128 +1,174 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, Account } from '../db';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
+
+const TYPE_LABELS: Record<string, string> = {
+  asset:     'Tillgång',
+  liability: 'Skuld',
+  equity:    'Eget kapital',
+  revenue:   'Intäkt',
+  expense:   'Kostnad',
+};
+
+const TYPE_COLORS: Record<string, string> = {
+  asset:     'bg-blue-50 text-blue-700',
+  liability: 'bg-amber-50 text-amber-700',
+  equity:    'bg-violet-50 text-violet-700',
+  revenue:   'bg-emerald-50 text-emerald-700',
+  expense:   'bg-slate-100 text-slate-600',
+};
+
+const input =
+  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 ' +
+  'focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent';
 
 export function ChartOfAccounts() {
   const accounts = useLiveQuery(() => db.accounts.orderBy('id').toArray());
-  const [isAdding, setIsAdding] = useState(false);
-  const [newAccount, setNewAccount] = useState<Partial<Account>>({ type: 'expense' });
+  const [adding, setAdding] = useState(false);
+  const [form,   setForm]   = useState<Partial<Account>>({ type: 'expense' });
+  const [err,    setErr]    = useState('');
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newAccount.id || !newAccount.name || !newAccount.type) return;
-    
+    if (!form.id || !form.name || !form.type) return;
     try {
-      await db.accounts.add(newAccount as Account);
-      setIsAdding(false);
-      setNewAccount({ type: 'expense' });
-    } catch (err) {
-      alert('Kunde inte lägga till konto. Kanske kontonumret redan finns?');
+      await db.accounts.add(form as Account);
+      setAdding(false);
+      setForm({ type: 'expense' });
+      setErr('');
+    } catch {
+      setErr('Kontonumret finns redan.');
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Är du säker på att du vill radera kontot? Det kan orsaka problem om det finns transaktioner kopplade till det.')) {
-      await db.accounts.delete(id);
-    }
-  };
-
-  const typeLabels = {
-    asset: 'Tillgång',
-    liability: 'Skuld',
-    equity: 'Eget kapital',
-    revenue: 'Intäkt',
-    expense: 'Kostnad'
+    if (confirm('Radera kontot?')) await db.accounts.delete(id);
   };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Kontoplan (BAS)</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Kontoplan</h1>
+          <p className="mt-0.5 text-sm text-slate-500">BAS 2026 — {accounts?.length ?? 0} konton</p>
+        </div>
         <button
-          onClick={() => setIsAdding(!isAdding)}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+          onClick={() => setAdding(a => !a)}
+          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
         >
-          <Plus className="h-4 w-4 mr-2" /> Nytt konto
+          <Plus className="h-4 w-4" /> Nytt konto
         </button>
       </div>
 
-      {isAdding && (
-        <form onSubmit={handleAdd} className="bg-gray-50 p-4 rounded-lg border border-gray-200 grid grid-cols-1 sm:grid-cols-5 gap-4 items-end">
+      {/* Add form */}
+      {adding && (
+        <form
+          onSubmit={handleAdd}
+          className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-4"
+        >
           <div>
-            <label className="block text-sm font-medium text-gray-700">Kontonr</label>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Kontonr
+            </label>
             <input
               type="number"
               required
-              value={newAccount.id || ''}
-              onChange={(e) => setNewAccount({ ...newAccount, id: parseInt(e.target.value) })}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 sm:text-sm"
+              value={form.id || ''}
+              onChange={e => setForm({ ...form, id: parseInt(e.target.value) })}
+              className={input}
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Namn</label>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Namn
+            </label>
             <input
               type="text"
               required
-              value={newAccount.name || ''}
-              onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 sm:text-sm"
+              value={form.name || ''}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              className={input}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Typ</label>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Typ
+            </label>
             <select
-              required
-              value={newAccount.type}
-              onChange={(e) => setNewAccount({ ...newAccount, type: e.target.value as any })}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 sm:text-sm"
+              value={form.type}
+              onChange={e => setForm({ ...form, type: e.target.value as any })}
+              className={input}
             >
-              <option value="asset">Tillgång</option>
-              <option value="liability">Skuld</option>
-              <option value="equity">Eget kapital</option>
-              <option value="revenue">Intäkt</option>
-              <option value="expense">Kostnad</option>
+              {Object.entries(TYPE_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
             </select>
           </div>
-          <div>
-            <button type="submit" className="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700">
-              <Save className="h-4 w-4 mr-2" /> Spara
-            </button>
+          <div className="sm:col-span-4 flex items-center justify-between border-t border-slate-100 pt-3">
+            {err
+              ? <p className="text-sm text-red-500">{err}</p>
+              : <span />
+            }
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => { setAdding(false); setErr(''); }}
+                className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Avbryt
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+              >
+                Spara konto
+              </button>
+            </div>
           </div>
         </form>
       )}
 
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Konto</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Namn</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Typ</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Åtgärd</th>
+      {/* Table */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-100">
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Konto
+              </th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Namn
+              </th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Typ
+              </th>
+              <th className="w-12" />
+            </tr>
+          </thead>
+          <tbody>
+            {accounts?.map(a => (
+              <tr key={a.id} className="border-t border-slate-100 transition-colors hover:bg-slate-50">
+                <td className="px-4 py-3 font-mono text-slate-700">{a.id}</td>
+                <td className="px-4 py-3 text-slate-900">{a.name}</td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${TYPE_COLORS[a.type]}`}>
+                    {TYPE_LABELS[a.type]}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => handleDelete(a.id)}
+                    className="rounded p-1 text-slate-300 transition-colors hover:text-red-500"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {accounts?.map((acc) => (
-                <tr key={acc.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{acc.id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{acc.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                      {typeLabels[acc.type]}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button onClick={() => handleDelete(acc.id)} className="text-red-600 hover:text-red-900 p-2">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

@@ -2,113 +2,86 @@ import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { formatCurrency } from '../lib/utils';
-import { Wallet, TrendingUp, TrendingDown, Landmark } from 'lucide-react';
+import { format } from 'date-fns';
+import { sv } from 'date-fns/locale';
 
 export function Dashboard() {
-  const accounts = useLiveQuery(() => db.accounts.toArray());
+  const accounts     = useLiveQuery(() => db.accounts.toArray());
   const transactions = useLiveQuery(() => db.transactions.toArray());
 
-  if (!accounts || !transactions) return <div className="p-8 text-gray-500">Laddar data...</div>;
+  if (!accounts || !transactions) {
+    return <div className="text-sm text-slate-400">Laddar…</div>;
+  }
 
-  // Calculate balances
-  let totalAssets = 0;
-  let totalLiabilities = 0;
-  let totalRevenue = 0;
-  let totalExpense = 0;
+  const bal = new Map<number, number>();
+  transactions.forEach(t => bal.set(t.accountId, (bal.get(t.accountId) ?? 0) + t.amount));
 
-  const accountBalances = new Map<number, number>();
-  
-  transactions.forEach(t => {
-    const current = accountBalances.get(t.accountId) || 0;
-    accountBalances.set(t.accountId, current + t.amount);
+  let assets = 0, liabilities = 0, revenue = 0, expenses = 0;
+  accounts.forEach(a => {
+    const b = bal.get(a.id) ?? 0;
+    if (a.type === 'asset')                               assets      += b;
+    if (a.type === 'liability' || a.type === 'equity')    liabilities -= b;
+    if (a.type === 'revenue')                             revenue     -= b;
+    if (a.type === 'expense')                             expenses    += b;
   });
+  const result = revenue - expenses;
 
-  accounts.forEach(acc => {
-    const balance = accountBalances.get(acc.id) || 0;
-    if (acc.type === 'asset') totalAssets += balance;
-    if (acc.type === 'liability' || acc.type === 'equity') totalLiabilities -= balance; // Credit is negative, so -balance is positive
-    if (acc.type === 'revenue') totalRevenue -= balance; // Credit is negative, so -balance is positive
-    if (acc.type === 'expense') totalExpense += balance; // Debit is positive
-  });
-
-  const result = totalRevenue - totalExpense;
+  const kpis = [
+    { label: 'Tillgångar',           value: assets,      positive: true  },
+    { label: 'Skulder & Eget kap.',  value: liabilities, positive: true  },
+    { label: 'Intäkter',             value: revenue,     positive: true  },
+    { label: 'Kostnader',            value: expenses,    positive: false },
+  ];
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Översikt</h1>
-      
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <Landmark className="h-6 w-6 text-gray-400" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Tillgångar</dt>
-                  <dd className="text-lg font-medium text-gray-900">{formatCurrency(totalAssets)}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <Wallet className="h-6 w-6 text-gray-400" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Skulder & Eget kapital</dt>
-                  <dd className="text-lg font-medium text-gray-900">{formatCurrency(totalLiabilities)}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <TrendingUp className="h-6 w-6 text-green-400" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Intäkter</dt>
-                  <dd className="text-lg font-medium text-gray-900">{formatCurrency(totalRevenue)}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <TrendingDown className="h-6 w-6 text-red-400" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">Kostnader</dt>
-                  <dd className="text-lg font-medium text-gray-900">{formatCurrency(totalExpense)}</dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-900">Översikt</h1>
+        <p className="mt-0.5 text-sm text-slate-500">
+          {format(new Date(), "d MMMM yyyy", { locale: sv })}
+        </p>
       </div>
 
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">Årets resultat</h2>
-        <div className={`flex items-baseline text-3xl font-bold ${result >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {kpis.map(({ label, value }) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+            <p className="mt-2 text-xl font-semibold tabular-nums text-slate-900">
+              {formatCurrency(value)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Result */}
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          Årets resultat
+        </p>
+        <p className={`mt-3 text-4xl font-bold tabular-nums ${result >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
           {formatCurrency(result)}
+        </p>
+        <p className="mt-1.5 text-xs text-slate-400">Intäkter minus kostnader</p>
+      </div>
+
+      {/* Data summary */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 flex gap-8 text-sm">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Verifikationer</p>
+          <p className="mt-1 font-semibold text-slate-900">
+            {useLiveQuery(() => db.vouchers.count()) ?? '—'}
+          </p>
         </div>
-        <p className="mt-1 text-sm text-gray-500">Intäkter minus kostnader</p>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Konton</p>
+          <p className="mt-1 font-semibold text-slate-900">{accounts.length}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Transaktioner</p>
+          <p className="mt-1 font-semibold text-slate-900">{transactions.length}</p>
+        </div>
       </div>
     </div>
   );

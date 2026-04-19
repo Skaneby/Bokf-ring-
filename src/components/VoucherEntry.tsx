@@ -1,259 +1,239 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { Plus, Trash2, Save } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
+
+const input =
+  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 ' +
+  'placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 ' +
+  'focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400';
 
 export function VoucherEntry() {
   const accounts = useLiveQuery(() => db.accounts.orderBy('id').toArray());
-  
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  const [date, setDate]               = useState(format(new Date(), 'yyyy-MM-dd'));
   const [description, setDescription] = useState('');
-  const [rows, setRows] = useState([{ accountId: 1930, debit: '', credit: '' }, { accountId: '', debit: '', credit: '' }]);
-  const [error, setError] = useState('');
+  const [rows, setRows] = useState([
+    { accountId: 1930, debit: '', credit: '' } as Row,
+    { accountId: '',   debit: '', credit: '' } as Row,
+  ]);
+  const [error,   setError]   = useState('');
   const [success, setSuccess] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [saving,  setSaving]  = useState(false);
 
-  const addRow = () => {
-    setRows([...rows, { accountId: '', debit: '', credit: '' }]);
-  };
+  const addRow    = () => setRows(r => [...r, { accountId: '', debit: '', credit: '' }]);
+  const removeRow = (i: number) => { if (rows.length > 2) setRows(r => r.filter((_, j) => j !== i)); };
 
-  const removeRow = (index: number) => {
-    if (rows.length > 2) {
-      setRows(rows.filter((_, i) => i !== index));
-    }
-  };
+  const updateRow = (i: number, field: keyof Row, value: string | number) =>
+    setRows(r => {
+      const n = r.map((row, j) => j !== i ? row : { ...row, [field]: value });
+      if (field === 'debit'  && value !== '') n[i].credit = '';
+      if (field === 'credit' && value !== '') n[i].debit  = '';
+      return n;
+    });
 
-  const updateRow = (index: number, field: string, value: string | number) => {
-    const newRows = [...rows];
-    newRows[index] = { ...newRows[index], [field]: value };
-    
-    // Auto-clear opposite field
-    if (field === 'debit' && value !== '') newRows[index].credit = '';
-    if (field === 'credit' && value !== '') newRows[index].debit = '';
-    
-    setRows(newRows);
-  };
+  const totalDebit  = rows.reduce((s, r) => s + (parseFloat(r.debit  as string) || 0), 0);
+  const totalCredit = rows.reduce((s, r) => s + (parseFloat(r.credit as string) || 0), 0);
+  const diff        = totalDebit - totalCredit;
+  const valid       = rows.filter(r => r.accountId && (r.debit || r.credit));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError(''); setSuccess('');
 
-    // Validation
-    if (!date || !description) {
-      setError('Datum och beskrivning krävs.');
+    if (!date || !description)   { setError('Datum och beskrivning krävs.'); return; }
+    if (valid.length < 2)        { setError('Minst två konteringsrader krävs.'); return; }
+    if (Math.abs(diff) > 0.01)   {
+      setError(`Debet och kredit balanserar inte — differens: ${diff.toFixed(2)} kr`);
       return;
     }
 
-    let totalDebit = 0;
-    let totalCredit = 0;
-    const validRows = [];
-
-    for (const row of rows) {
-      if (!row.accountId) continue;
-      
-      const debit = parseFloat(row.debit as string) || 0;
-      const credit = parseFloat(row.credit as string) || 0;
-      
-      if (debit === 0 && credit === 0) continue;
-      
-      totalDebit += debit;
-      totalCredit += credit;
-      
-      validRows.push({
-        accountId: Number(row.accountId),
-        amount: debit > 0 ? debit : -credit
-      });
-    }
-
-    if (validRows.length < 2) {
-      setError('Minst två konteringsrader krävs.');
-      return;
-    }
-
-    if (Math.abs(totalDebit - totalCredit) > 0.01) {
-      setError(`Debet (${totalDebit.toFixed(2)}) och Kredit (${totalCredit.toFixed(2)}) balanserar inte! Diff: ${(totalDebit - totalCredit).toFixed(2)}`);
-      return;
-    }
-
-    setIsSaving(true);
+    setSaving(true);
     try {
-      // Dexie transactions are atomic. If any part fails, the whole transaction rolls back.
       await db.transaction('rw', db.vouchers, db.transactions, async () => {
-        const voucherId = await db.vouchers.add({
-          date,
-          description,
-          created_at: Date.now()
-        });
-
-        for (const row of validRows) {
+        const vid = await db.vouchers.add({ date, description, created_at: Date.now() });
+        for (const row of valid) {
+          const d = parseFloat(row.debit  as string) || 0;
+          const c = parseFloat(row.credit as string) || 0;
           await db.transactions.add({
-            voucherId,
-            accountId: row.accountId,
-            amount: row.amount
+            voucherId: vid,
+            accountId: Number(row.accountId),
+            amount: d > 0 ? d : -c,
           });
         }
       });
-
-      setSuccess('Verifikation bokförd och säkert sparad i databasen!');
+      setSuccess('Verifikation bokförd.');
       setDescription('');
-      setRows([{ accountId: 1930, debit: '', credit: '' }, { accountId: '', debit: '', credit: '' }]);
+      setRows([
+        { accountId: 1930, debit: '', credit: '' },
+        { accountId: '',   debit: '', credit: '' },
+      ]);
       setTimeout(() => setSuccess(''), 4000);
-    } catch (err) {
-      setError('Ett kritiskt fel uppstod. Transaktionen kunde inte sparas.');
-      console.error('Transaction failed:', err);
+    } catch {
+      setError('Kunde inte spara. Försök igen.');
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
-  const totalDebit = rows.reduce((sum, row) => sum + (parseFloat(row.debit as string) || 0), 0);
-  const totalCredit = rows.reduce((sum, row) => sum + (parseFloat(row.credit as string) || 0), 0);
-  const diff = totalDebit - totalCredit;
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Ny Verifikation</h1>
-      </div>
+      <h1 className="text-2xl font-semibold text-slate-900">Ny verifikation</h1>
 
-      <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-4 md:p-6 space-y-6">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Date + description */}
+        <div className="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-white p-5 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Datum</label>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Datum
+            </label>
             <input
               type="date"
               required
               value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              onChange={e => setDate(e.target.value)}
+              className={input}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Beskrivning</label>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Beskrivning
+            </label>
             <input
               type="text"
               required
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={e => setDescription(e.target.value)}
               placeholder="T.ex. Inköp kontorsmaterial"
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              className={input}
             />
           </div>
         </div>
 
-        <div className="mt-8 overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        {/* Rows */}
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full text-sm">
             <thead>
-              <tr>
-                <th className="px-2 md:px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Konto</th>
-                <th className="px-2 md:px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Debet</th>
-                <th className="px-2 md:px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Kredit</th>
-                <th className="px-2 md:px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+              <tr className="border-b border-slate-100">
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Konto
+                </th>
+                <th className="w-32 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Debet
+                </th>
+                <th className="w-32 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Kredit
+                </th>
+                <th className="w-10" />
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {rows.map((row, index) => (
-                <tr key={index}>
-                  <td className="px-2 md:px-3 py-2">
+            <tbody>
+              {rows.map((row, i) => (
+                <tr key={i} className="border-t border-slate-100 first:border-0">
+                  <td className="px-4 py-2">
                     <select
                       value={row.accountId}
-                      onChange={(e) => updateRow(index, 'accountId', e.target.value)}
-                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      onChange={e => updateRow(i, 'accountId', e.target.value)}
+                      className={input}
                     >
-                      <option value="">Välj konto...</option>
-                      {accounts?.map(acc => (
-                        <option key={acc.id} value={acc.id}>{acc.id} - {acc.name}</option>
+                      <option value="">Välj konto…</option>
+                      {accounts?.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.id} – {a.name}
+                        </option>
                       ))}
                     </select>
                   </td>
-                  <td className="px-2 md:px-3 py-2">
+                  <td className="px-4 py-2">
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                      type="number" step="0.01" min="0"
                       value={row.debit}
-                      onChange={(e) => updateRow(index, 'debit', e.target.value)}
+                      onChange={e => updateRow(i, 'debit', e.target.value)}
                       disabled={row.credit !== ''}
-                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
+                      className={input}
                     />
                   </td>
-                  <td className="px-2 md:px-3 py-2">
+                  <td className="px-4 py-2">
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                      type="number" step="0.01" min="0"
                       value={row.credit}
-                      onChange={(e) => updateRow(index, 'credit', e.target.value)}
+                      onChange={e => updateRow(i, 'credit', e.target.value)}
                       disabled={row.debit !== ''}
-                      className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
+                      className={input}
                     />
                   </td>
-                  <td className="px-2 md:px-3 py-2 text-right">
+                  <td className="px-2 py-2">
                     <button
                       type="button"
-                      onClick={() => removeRow(index)}
+                      onClick={() => removeRow(i)}
                       disabled={rows.length <= 2}
-                      className="text-red-600 hover:text-red-900 disabled:opacity-50 p-2"
+                      className="rounded p-1.5 text-slate-300 transition-colors hover:text-red-500 disabled:opacity-0"
                     >
-                      <Trash2 className="h-5 w-5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="bg-gray-50">
-                <td className="px-2 md:px-3 py-3 text-sm font-medium text-gray-900 text-right">Summa:</td>
-                <td className="px-2 md:px-3 py-3 text-sm font-medium text-gray-900">{totalDebit.toFixed(2)}</td>
-                <td className="px-2 md:px-3 py-3 text-sm font-medium text-gray-900">{totalCredit.toFixed(2)}</td>
-                <td></td>
+              <tr className="border-t border-slate-200 bg-slate-50">
+                <td className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  Summa
+                </td>
+                <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">
+                  {totalDebit.toFixed(2)}
+                </td>
+                <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">
+                  {totalCredit.toFixed(2)}
+                </td>
+                <td />
               </tr>
               {Math.abs(diff) > 0.01 && (
                 <tr>
-                  <td colSpan={4} className="px-2 md:px-3 py-2 text-sm text-red-600 text-right">
-                    Differens: {Math.abs(diff).toFixed(2)}
+                  <td colSpan={4} className="px-4 py-1.5 text-right text-xs text-red-500">
+                    Differens: {Math.abs(diff).toFixed(2)} kr
                   </td>
                 </tr>
               )}
             </tfoot>
           </table>
-          
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={addRow}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Plus className="h-4 w-4 mr-1" /> Lägg till rad
-            </button>
-          </div>
         </div>
 
-        {error && <div className="rounded-md bg-red-50 p-4 text-sm text-red-700 font-medium">{error}</div>}
-        {success && <div className="rounded-md bg-green-50 p-4 text-sm text-green-700 font-medium">{success}</div>}
+        {/* Add row + submit */}
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={addRow}
+            className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 transition-colors"
+          >
+            <Plus className="h-4 w-4" /> Lägg till rad
+          </button>
 
-        <div className="pt-5 flex justify-end">
           <button
             type="submit"
-            disabled={Math.abs(diff) > 0.01 || validRowsLengthCheck(rows) < 2 || isSaving}
-            className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+            disabled={Math.abs(diff) > 0.01 || valid.length < 2 || saving}
+            className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {isSaving ? (
-              <>Sparar...</>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" /> Bokför
-              </>
-            )}
+            {saving ? 'Sparar…' : 'Bokför'}
           </button>
         </div>
+
+        {error   && <Notice type="error">{error}</Notice>}
+        {success && <Notice type="success">{success}</Notice>}
       </form>
     </div>
   );
 }
 
-function validRowsLengthCheck(rows: any[]) {
-  return rows.filter(r => r.accountId && (r.debit || r.credit)).length;
+type Row = { accountId: number | string; debit: string; credit: string };
+
+function Notice({ type, children }: { type: 'error' | 'success'; children: React.ReactNode }) {
+  const cls =
+    type === 'error'
+      ? 'bg-red-50 border-red-200 text-red-600'
+      : 'bg-emerald-50 border-emerald-200 text-emerald-700';
+  return (
+    <p className={`rounded-lg border px-4 py-3 text-sm ${cls}`}>{children}</p>
+  );
 }
