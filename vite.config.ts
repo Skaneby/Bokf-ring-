@@ -30,11 +30,11 @@ export default defineConfig(({mode}) => {
           ],
         },
         workbox: {
-          // Cache all app assets for offline use
+          skipWaiting: true,    // new SW takes over immediately, no waiting
+          clientsClaim: true,   // new SW controls all open tabs right away
           globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
           runtimeCaching: [
             {
-              // Cache Gemini API calls with network-first strategy
               urlPattern: /^https:\/\/generativelanguage\.googleapis\.com\/.*/i,
               handler: 'NetworkOnly',
             },
