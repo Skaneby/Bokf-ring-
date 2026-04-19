@@ -40,11 +40,34 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
     setScanning(true); setError('');
     try {
       const data = await scanReceipt(file);
-      if (data.date)              setDate(data.date);
-      if (data.vendor)            setDescription(data.vendor);
-      if (data.vatRate !== undefined) setVatRate(data.vatRate);
-      if (data.amount)            setVatGross(String(data.amount));
-      if (data.vatDir)            setVatDir(data.vatDir);
+      if (data.date)   setDate(data.date);
+      if (data.vendor) setDescription(data.vendor);
+
+      const dir   = data.vatDir ?? 'in';
+      const rate  = data.vatRate ?? 0;
+      const gross = data.amount  ?? 0;
+      if (rate)  setVatRate(rate as 0 | 6 | 12 | 25);
+      if (gross) setVatGross(String(gross));
+      setVatDir(dir);
+
+      // Auto-fill accounting rows immediately — no need to click "Fyll i rader"
+      if (rate && gross) {
+        const { net, vat } = splitVat(gross, rate);
+        const vatAcc = dir === 'out' ? VAT_OUT[rate] : VAT_IN;
+        setRows(
+          dir === 'out'
+            ? [
+                { accountId: 1930,   debit: String(gross), credit: '' },
+                { accountId: '',     debit: '',              credit: String(net) },
+                { accountId: vatAcc, debit: '',              credit: String(vat) },
+              ]
+            : [
+                { accountId: '',     debit: String(net),   credit: '' },
+                { accountId: vatAcc, debit: String(vat),   credit: '' },
+                { accountId: 1930,   debit: '',             credit: String(gross) },
+              ],
+        );
+      }
     } catch {
       setError('Kunde inte läsa kvittot. Kontrollera att GEMINI_API_KEY är konfigurerad.');
     } finally {
@@ -73,7 +96,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
 
   // VAT helper
   const [vatRate, setVatRate] = useState<0 | 6 | 12 | 25>(0);
-  const [vatDir,  setVatDir]  = useState<'out' | 'in'>('out');
+  const [vatDir,  setVatDir]  = useState<'out' | 'in'>('in');
   const [vatGross, setVatGross] = useState('');
 
   const grossNum = parseFloat(vatGross) || 0;
