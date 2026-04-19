@@ -1,10 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export interface ReceiptData {
-  date?: string;        // YYYY-MM-DD
-  amount?: number;      // inkl. moms
+  date?: string;            // YYYY-MM-DD
+  amount?: number;          // inkl. moms
   vatRate?: 0 | 6 | 12 | 25;
   vendor?: string;
+  vatDir?: 'in' | 'out';   // in = inköp/kvitto, out = försäljning/faktura
 }
 
 export async function scanReceipt(file: File): Promise<ReceiptData> {
@@ -21,7 +22,8 @@ Analysera bilden och extrahera följande information i JSON-format:
   "date": "YYYY-MM-DD eller null",
   "amount": totalbelopp inklusive moms som nummer eller null,
   "vatRate": momssats i procent (0, 6, 12 eller 25) eller null,
-  "vendor": leverantörens namn eller null
+  "vendor": leverantörens namn eller null,
+  "vatDir": "in" om dokumentet är ett inköpskvitto eller leverantörsfaktura (du köper något), "out" om det är en kundfaktura (du säljer något). Butikskvitton är alltid "in".
 }
 Svara ENBART med giltig JSON, ingen annan text.`;
 
@@ -38,6 +40,7 @@ Svara ENBART med giltig JSON, ingen annan text.`;
     amount:  typeof parsed.amount === 'number' ? parsed.amount : undefined,
     vatRate: [0, 6, 12, 25].includes(parsed.vatRate) ? parsed.vatRate : undefined,
     vendor:  typeof parsed.vendor === 'string' ? parsed.vendor : undefined,
+    vatDir:  parsed.vatDir === 'out' ? 'out' : 'in', // default 'in' — most scanned docs are purchase receipts
   };
 }
 
