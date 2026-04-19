@@ -1,0 +1,50 @@
+#FLAGGA 0
+#FORMAT PC8
+#SIETYP 4
+#PROGRAM "TestGen" 1.0
+#GEN 20260301
+
+#KONTO 1930 "Företagskonto / Bank"
+#KONTO 2018 "Egna insättningar"
+#KONTO 2610 "Utgående moms, 25%"
+#KONTO 2640 "Ingående moms"
+#KONTO 3000 "Försäljning (25% moms)"
+#KONTO 5420 "Programvaror"
+#KONTO 6110 "Kontorsmateriel"
+
+; Kommentarrader ska ignoreras
+; Denna fil testar kantfall i parsern
+
+#VER "" "" 20260301 "Verifikat med decimaler"
+{
+    #TRANS 1930 {} 12345.67 ""
+    #TRANS 3000 {} -9876.54 ""
+    #TRANS 2610 {} -2469.13 ""
+}
+
+#VER "" "" 20260302 "Verifikat med öresbelopp"
+{
+    #TRANS 1930 {} 100.01 ""
+    #TRANS 2018 {} -100.01 ""
+}
+
+#VER "" "" 20260303 "Inköp programvara"
+{
+    #TRANS 5420 {} 499.00 ""
+    #TRANS 2640 {} 124.75 ""
+    #TRANS 1930 {} -623.75 ""
+}
+
+#VER "" "" 20260315 "Kontorsmaterial, lågt belopp"
+{
+    #TRANS 6110 {} 49.90 ""
+    #TRANS 2640 {} 12.47 ""
+    #TRANS 1930 {} -62.37 ""
+}
+
+#VER "" "" 20260320 "Negativ försäljning (kreditnota)"
+{
+    #TRANS 3000 {} 800.00 ""
+    #TRANS 2610 {} 200.00 ""
+    #TRANS 1930 {} -1000.00 ""
+}

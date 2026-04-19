@@ -1,0 +1,75 @@
+#FLAGGA 0
+#FORMAT PC8
+#SIETYP 4
+#PROGRAM "Visma eEkonomi" 26.0
+#GEN 20260228
+#FNAMN "Hantverk & Design HB"
+#RAR 0 20260101 20261231
+
+#KONTO 1910 "Kassa"
+#KONTO 1930 "Företagskonto / Bank"
+#KONTO 2010 "Eget kapital"
+#KONTO 2018 "Egna insättningar"
+#KONTO 2013 "Egna uttag"
+#KONTO 2620 "Utgående moms, 12%"
+#KONTO 2630 "Utgående moms, 6%"
+#KONTO 2640 "Ingående moms"
+#KONTO 2650 "Redovisningskonto för moms"
+#KONTO 3001 "Försäljning (12% moms)"
+#KONTO 3002 "Försäljning (6% moms)"
+#KONTO 3040 "Försäljning (momsfri)"
+#KONTO 4000 "Inköp av varor"
+#KONTO 5410 "Förbrukningsinventarier"
+#KONTO 6570 "Bankkostnader"
+
+#VER "" "" 20260101 "Ägarinsättning"
+{
+    #TRANS 1930 {} 25000.00 ""
+    #TRANS 2018 {} -25000.00 ""
+}
+#VER "" "" 20260105 "Försäljning hantverkstjänst 12%"
+{
+    #TRANS 1930 {} 5600.00 ""
+    #TRANS 3001 {} -5000.00 ""
+    #TRANS 2620 {} -600.00 ""
+}
+#VER "" "" 20260112 "Försäljning tryckt material 6%"
+{
+    #TRANS 1930 {} 2120.00 ""
+    #TRANS 3002 {} -2000.00 ""
+    #TRANS 2630 {} -120.00 ""
+}
+#VER "" "" 20260115 "Momsfri export"
+{
+    #TRANS 1930 {} 8000.00 ""
+    #TRANS 3040 {} -8000.00 ""
+}
+#VER "" "" 20260120 "Inköp förbrukningsmat. m. moms"
+{
+    #TRANS 5410 {} 1200.00 ""
+    #TRANS 2640 {} 300.00 ""
+    #TRANS 1930 {} -1500.00 ""
+}
+#VER "" "" 20260125 "Momsredovisning (utbetaling)"
+{
+    #TRANS 2610 {} 0.00 ""
+    #TRANS 2620 {} 600.00 ""
+    #TRANS 2630 {} 120.00 ""
+    #TRANS 2640 {} -300.00 ""
+    #TRANS 2650 {} -420.00 ""
+}
+#VER "" "" 20260128 "Betalning moms till Skatteverket"
+{
+    #TRANS 2650 {} 420.00 ""
+    #TRANS 1930 {} -420.00 ""
+}
+#VER "" "" 20260131 "Bankavgift"
+{
+    #TRANS 6570 {} 95.00 ""
+    #TRANS 1930 {} -95.00 ""
+}
+#VER "" "" 20260131 "Eget uttag"
+{
+    #TRANS 2013 {} 5000.00 ""
+    #TRANS 1930 {} -5000.00 ""
+}

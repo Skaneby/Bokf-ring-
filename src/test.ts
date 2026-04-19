@@ -1,4 +1,6 @@
 import 'fake-indexeddb/auto';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { db, initializeDb } from './db';
 import { exportSIE, importSIE } from './lib/sie';
 
@@ -276,6 +278,102 @@ async function runTests() {
   assert(near(afterImport.revenue,   15000), `Import: intäkter = 15 000 kr (fick ${afterImport.revenue.toFixed(2)})`);
   assert(near(afterImport.expenses,  18650), `Import: kostnader = 18 650 kr (fick ${afterImport.expenses.toFixed(2)})`);
   assert(near(afterImport.netIncome, -3650), `Import: nettoresultat = -3 650 kr (fick ${afterImport.netIncome.toFixed(2)})`);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // IMPORT AV EXTERNA SIE-TESTFILER
+  // ═══════════════════════════════════════════════════════════════════════
+
+  // Helper: load a file, clear db, import, return balances + counts
+  async function importFile(filename: string) {
+    const content = readFileSync(resolve('testdata', filename), 'utf-8');
+    await db.transactions.clear();
+    await db.vouchers.clear();
+    await db.accounts.clear();
+    await importSIE(content);
+    return {
+      vouchers:     await db.vouchers.count(),
+      transactions: await db.transactions.count(),
+      accounts:     await db.accounts.count(),
+      balances:     await getBalances(),
+    };
+  }
+
+  // ── fortnox_export.se ───────────────────────────────────────────────
+  console.log('\n── Import: fortnox_export.se ─────────────────────────\n');
+  {
+    const r = await importFile('fortnox_export.se');
+    assert(r.vouchers === 6, `Fortnox: 6 verifikationer (fick ${r.vouchers})`);
+    // Rows: 3+2+3+2+2+4 = 16
+    assert(r.transactions === 16, `Fortnox: 16 transaktionsrader (fick ${r.transactions})`);
+    assert(r.accounts > 0,        `Fortnox: konton importerade (fick ${r.accounts})`);
+
+    // Bank 1930 = 18750-18750-10000+0-12000-16337.50 = -38337.50
+    // Kundfordran 1510 = 18750-18750 = 0
+    // Ingen tillgångspost utan banksaldot är negativt pga löner + hyra utan intäkt i bank ännu
+    // Verifikat 1 (faktura): 1510 Debit 18750, 3000 Credit -15000, 2610 Credit -3750
+    // Verifikat 2 (betalning): 1930 Debit 18750, 1510 Credit -18750
+    // Verifikat 3 (lev.fakt): 4000 Debit 8000, 2640 Debit 2000, 2440 Credit -10000
+    // Verifikat 4 (betalar lev): 2440 Debit 10000, 1930 Credit -10000
+    // Verifikat 5 (hyra): 5010 Debit 12000, 1930 Credit -12000
+    // Verifikat 6 (lön): 7010 Debit 35000, 2710 Credit -7200, 2731 Credit -11462.50, 1930 Credit -16337.50
+    // Bank = 18750 - 10000 - 12000 - 16337.50 = -19587.50
+    // Assets: 1930(-19587.50) + 2640(2000) = -17587.50  (negative = liability to bank)
+    // Liabilities: 2610(-3750→display +3750) + 2710(-7200→display +7200) + 2731(-11462.50→+11462.50) = +22412.50
+    // Revenue: 3000(-15000→display +15000)
+    // Expenses: 4000(8000) + 5010(12000) + 7010(35000) = 55000
+    // NetIncome = 15000 - 55000 = -40000
+    // Balance: Assets(-17587.50) = Liab(22412.50) + NetIncome(-40000) = -17587.50 ✓
+    const { assets, liabilities, revenue, expenses, netIncome } = r.balances;
+    assert(near(revenue, 15000),    `Fortnox: intäkter = 15 000 kr (fick ${revenue.toFixed(2)})`);
+    assert(near(expenses, 55000),   `Fortnox: kostnader = 55 000 kr (fick ${expenses.toFixed(2)})`);
+    assert(near(netIncome, -40000), `Fortnox: nettoresultat = -40 000 kr (fick ${netIncome.toFixed(2)})`);
+    assert(near(assets, liabilities + netIncome),
+      `Fortnox: balansräkningsekvationen stämmer (tillgångar=${assets.toFixed(2)}, skulder+EK=${liabilities.toFixed(2)}, resultat=${netIncome.toFixed(2)})`);
+  }
+
+  // ── visma_export.se ─────────────────────────────────────────────────
+  console.log('\n── Import: visma_export.se ───────────────────────────\n');
+  {
+    const r = await importFile('visma_export.se');
+    assert(r.vouchers === 9, `Visma: 9 verifikationer (fick ${r.vouchers})`);
+    // Rows: 2+3+3+2+3+5+2+2+2 = 24 (inkl. nollbeloppsrad i momsredovisningen)
+    assert(r.transactions === 24, `Visma: 24 transaktionsrader inkl. 0.00 (fick ${r.transactions})`);
+
+    const { revenue, expenses, netIncome, assets, liabilities } = r.balances;
+    // Revenue: 3001(5000) + 3002(2000) + 3040(8000) = 15000
+    assert(near(revenue, 15000),  `Visma: intäkter = 15 000 kr (fick ${revenue.toFixed(2)})`);
+    // Expenses: 5410(1200) + 6570(95) = 1295
+    assert(near(expenses, 1295),  `Visma: kostnader = 1 295 kr (fick ${expenses.toFixed(2)})`);
+    assert(near(netIncome, 13705),`Visma: nettoresultat = 13 705 kr (fick ${netIncome.toFixed(2)})`);
+    assert(near(assets, liabilities + netIncome),
+      `Visma: balansräkningsekvationen stämmer`);
+  }
+
+  // ── edge_cases.se ────────────────────────────────────────────────────
+  console.log('\n── Import: edge_cases.se ─────────────────────────────\n');
+  {
+    const r = await importFile('edge_cases.se');
+    assert(r.vouchers === 5, `Kantfall: 5 verifikationer (fick ${r.vouchers})`);
+    // Rows: 3+2+3+3+3 = 14
+    assert(r.transactions === 14, `Kantfall: 14 transaktionsrader (fick ${r.transactions})`);
+
+    const { assets, liabilities, netIncome } = r.balances;
+    // Revenue: 3000 credit totals = -15000+800 = -(-15000+800) = 14200 display
+    // (ver1 credit -9876.54, ver5 debit +800 = net -9076.54 → display 9076.54)
+    // Expenses: 5420(499) + 6110(49.90) = 548.90
+    // Let's just verify the balance equation holds
+    assert(near(assets, liabilities + netIncome),
+      `Kantfall: balansräkningsekvationen stämmer (A=${assets.toFixed(2)}, L+E=${liabilities.toFixed(2)}, NI=${netIncome.toFixed(2)})`);
+
+    // Verifies öres/decimaler survived intact: 12345.67 should appear in 1930 balance
+    const transactions = await db.transactions.toArray();
+    const has_decimal = transactions.some(t => Math.abs(t.amount) === 12345.67 || Math.abs(t.amount) === 100.01);
+    assert(has_decimal, 'Kantfall: decimalbelopp (12345.67 / 100.01) bevaras korrekt');
+
+    // Kreditnota: ver5 reverses revenue – net should be lower than just ver1 revenue
+    const ver5Debits = transactions.filter(t => t.accountId === 3000 && t.amount > 0);
+    assert(ver5Debits.length > 0, 'Kantfall: kreditnota (positiv trans på intäktskonto) importeras');
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

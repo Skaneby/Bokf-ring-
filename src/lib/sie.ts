@@ -80,7 +80,7 @@ export async function importSIE(fileContent: string): Promise<void> {
           });
         }
       } else if (line.startsWith('#TRANS') && currentVoucherId !== null) {
-        const match = line.match(/#TRANS\s+(\d+)\s+(?:{[^}]*}\s+|""\s+|)([\d.-]+)/);
+        const match = line.match(/#TRANS\s+(\d+)\s+(?:\{[^}]*\}\s*|"[^"]*"\s*)(-?\d+(?:\.\d+)?)/);
         if (match) {
           const accountId = parseInt(match[1], 10);
           const amount = parseFloat(match[2]);
