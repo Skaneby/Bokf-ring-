@@ -23,6 +23,7 @@ export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void
   const [tab, setTab] = useState<Tab>('resultat');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [pendingSieFile, setPendingSieFile] = useState<string | null>(null);
 
   const deleteVoucher = async (id: number) => {
     await db.transaction('rw', db.vouchers, db.transactions, async () => {
@@ -76,15 +77,32 @@ export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async ev => {
-      try {
-        await importSIE(ev.target?.result as string);
-        notify(true, 'SIE-fil importerad.');
-      } catch {
-        notify(false, 'Kunde inte importera SIE-filen.');
+      const content = ev.target?.result as string;
+      const hasData = (await db.vouchers.count()) > 0;
+      if (hasData) {
+        setPendingSieFile(content);
+      } else {
+        try {
+          await importSIE(content, 'merge');
+          notify(true, 'SIE-fil importerad.');
+        } catch {
+          notify(false, 'Kunde inte importera SIE-filen.');
+        }
       }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const doSieImport = async (mode: 'merge' | 'replace') => {
+    if (!pendingSieFile) return;
+    try {
+      await importSIE(pendingSieFile, mode);
+      notify(true, 'SIE-fil importerad.');
+    } catch {
+      notify(false, 'Kunde inte importera SIE-filen.');
+    }
+    setPendingSieFile(null);
   };
 
   // ── Render helpers ────────────────────────────────────────────────────
@@ -295,6 +313,40 @@ export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold text-slate-900">Rapporter</h1>
+
+      {/* SIE import mode modal */}
+      {pendingSieFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-base font-semibold text-slate-900">Importera SIE-fil</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              Det finns redan bokföring i databasen. Hur vill du importera?
+            </p>
+            <div className="mt-5 space-y-2">
+              <button
+                onClick={() => doSieImport('merge')}
+                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+              >
+                <p className="text-sm font-medium text-slate-900">Lägg till</p>
+                <p className="text-xs text-slate-500">Behåll befintlig bokföring och lägg till det nya</p>
+              </button>
+              <button
+                onClick={() => doSieImport('replace')}
+                className="w-full rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-left hover:bg-red-100 transition-colors"
+              >
+                <p className="text-sm font-medium text-red-700">Ersätt allt</p>
+                <p className="text-xs text-red-500">Raderar befintlig bokföring och ersätter med SIE-filens innehåll</p>
+              </button>
+            </div>
+            <button
+              onClick={() => setPendingSieFile(null)}
+              className="mt-4 w-full text-center text-sm text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-slate-200">

@@ -34,12 +34,18 @@ export async function exportSIE(): Promise<string> {
   return sie;
 }
 
-export async function importSIE(fileContent: string): Promise<void> {
+export async function importSIE(fileContent: string, mode: 'merge' | 'replace' = 'merge'): Promise<void> {
   const lines = fileContent.split(/\r?\n/);
-  
+
   let currentVoucherId: number | null = null;
 
   await db.transaction('rw', db.accounts, db.vouchers, db.transactions, async () => {
+    if (mode === 'replace') {
+      await db.transactions.clear();
+      await db.vouchers.clear();
+      await db.accounts.clear();
+    }
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
