@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, ScanLine } from 'lucide-react';
 import { format } from 'date-fns';
+import { scanReceipt } from '../lib/ocr';
 
 const VAT_OUT: Record<number, number> = { 6: 2630, 12: 2620, 25: 2610 };
 const VAT_IN = 2640;
@@ -30,7 +31,26 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
   ]);
   const [error,   setError]   = useState('');
   const [success, setSuccess] = useState('');
-  const [saving,  setSaving]  = useState(false);
+  const [saving,   setSaving]  = useState(false);
+  const [scanning, setScanning] = useState(false);
+
+  const handleScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanning(true); setError('');
+    try {
+      const data = await scanReceipt(file);
+      if (data.date)              setDate(data.date);
+      if (data.vendor)            setDescription(data.vendor);
+      if (data.vatRate !== undefined) setVatRate(data.vatRate);
+      if (data.amount)            setVatGross(String(data.amount));
+    } catch {
+      setError('Kunde inte läsa kvittot. Kontrollera att GEMINI_API_KEY är konfigurerad.');
+    } finally {
+      setScanning(false);
+      e.target.value = '';
+    }
+  };
 
   // Load existing voucher when editId changes
   useEffect(() => {
@@ -142,9 +162,20 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-slate-900">
-        {editId ? `Redigera verifikat ${editId}` : 'Ny verifikation'}
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-slate-900">
+          {editId ? `Redigera verifikat ${editId}` : 'Ny verifikation'}
+        </h1>
+        <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+          scanning
+            ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-wait'
+            : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+        }`}>
+          <ScanLine className="h-4 w-4" />
+          {scanning ? 'Skannar…' : 'Skanna kvitto'}
+          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScan} disabled={scanning} />
+        </label>
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
 
