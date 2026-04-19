@@ -511,6 +511,145 @@ async function runTests() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // 13. SMOKE TEST — verifikationstyper korrelerar med rätt rapportpost
+  // Testar att varje bokningstyp hamnar i rätt kategori i rapporterna,
+  // inte bara att summan stämmer. Fångar fel som "inköp visas som tillgång".
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 13. Smoke test: rapport-korrelation ───────────────\n');
+
+  await resetDb();
+
+  // ── Scenario A: Ägarinsättning ─────────────────────────────────────
+  // Ska öka tillgångar (bank) och eget kapital — INTE intäkter
+  await addVoucher('2026-02-01', 'Ägarinsättning', [
+    { accountId: 1930, amount:  100000 },
+    { accountId: 2018, amount: -100000 },
+  ]);
+  {
+    const b = await getBalances();
+    assert(near(b.assets,      100000), 'Ägarinsättning: tillgångar ökar 100 000 kr');
+    assert(near(b.liabilities, 100000), 'Ägarinsättning: eget kapital ökar 100 000 kr');
+    assert(near(b.revenue,          0), 'Ägarinsättning: påverkar INTE intäkter');
+    assert(near(b.expenses,         0), 'Ägarinsättning: påverkar INTE kostnader');
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Ägarinsättning: balansräkning stämmer');
+  }
+
+  // ── Scenario B: Inköp förbrukningsmaterial med 25% moms (Clas Ohlson-kvitto) ──
+  // Ska öka kostnader (netto) + ingående moms (tillgång) och minska bank
+  // FEL som tidigare hittades: kostnad hamnade som tillgång om kontot saknades
+  await addVoucher('2026-02-03', 'Inköp förbrukningsmaterial', [
+    { accountId: 5410, amount:   534.88 },   // kostnad netto
+    { accountId: 2640, amount:   133.72 },   // ingående moms (tillgång)
+    { accountId: 1930, amount:  -668.60 },   // bank kredit
+  ]);
+  {
+    const b = await getBalances();
+    // Bank: 100000 - 668.60 = 99331.40, Ing.moms: 133.72 → totalt 99465.12
+    assert(near(b.assets, 99465.12),  `Inköp förbrukn: tillgångar = 99 465.12 kr (fick ${b.assets.toFixed(2)})`);
+    assert(near(b.expenses, 534.88),  `Inköp förbrukn: kostnader = 534.88 kr — INTE tillgång (fick ${b.expenses.toFixed(2)})`);
+    assert(near(b.revenue, 0),        'Inköp förbrukn: påverkar INTE intäkter');
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Inköp förbrukn: balansräkning stämmer');
+  }
+
+  // ── Scenario C: Försäljning med 25% moms ──────────────────────────
+  // Ska öka intäkter (netto) och utgående moms (skuld), öka bank (tillgång)
+  await addVoucher('2026-02-05', 'Försäljning med 25% moms', [
+    { accountId: 1930, amount:  12500 },   // bank debet
+    { accountId: 3000, amount: -10000 },   // intäkt kredit
+    { accountId: 2610, amount:  -2500 },   // utgående moms kredit (skuld)
+  ]);
+  {
+    const b = await getBalances();
+    assert(near(b.revenue,  10000), `Försäljning: intäkter = 10 000 kr (fick ${b.revenue.toFixed(2)})`);
+    assert(near(b.expenses, 534.88),`Försäljning: kostnader oförändrade (fick ${b.expenses.toFixed(2)})`);
+    // Bank: 99331.40 + 12500 = 111831.40, Ing.moms: 133.72 → totalt 111965.12
+    assert(near(b.assets, 111965.12), `Försäljning: tillgångar = 111 965.12 kr (fick ${b.assets.toFixed(2)})`);
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Försäljning: balansräkning stämmer');
+  }
+
+  // ── Scenario D: Kostnad utan moms (lokalhyra) ─────────────────────
+  // Ska öka kostnader med hela beloppet, minska bank
+  await addVoucher('2026-02-10', 'Lokalhyra februari', [
+    { accountId: 5010, amount:  15000 },
+    { accountId: 1930, amount: -15000 },
+  ]);
+  {
+    const b = await getBalances();
+    assert(near(b.expenses, 15534.88), `Momsfri kostnad: kostnader = 15 534.88 kr (fick ${b.expenses.toFixed(2)})`);
+    assert(near(b.revenue,  10000),    'Momsfri kostnad: intäkter oförändrade');
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Momsfri kostnad: balansräkning stämmer');
+  }
+
+  // ── Scenario E: Försäljning med 12% moms ──────────────────────────
+  // Ska använda konto 2620, inte 2610
+  await addVoucher('2026-02-12', 'Försäljning 12% moms', [
+    { accountId: 1930, amount:  5600 },
+    { accountId: 3001, amount: -5000 },
+    { accountId: 2620, amount:  -600 },
+  ]);
+  {
+    const txs = await db.transactions.toArray();
+    const has2620 = txs.some(t => t.accountId === 2620 && t.amount === -600);
+    assert(has2620, '12% moms: bokförs på konto 2620 (inte 2610)');
+    const b = await getBalances();
+    assert(near(b.revenue, 15000), `12% moms: intäkter = 15 000 kr (fick ${b.revenue.toFixed(2)})`);
+    assert(near(b.assets, b.liabilities + b.netIncome), '12% moms: balansräkning stämmer');
+  }
+
+  // ── Scenario F: Inköp med 12% moms ───────────────────────────────
+  // Ingående moms ska alltid gå till 2640 oavsett sats
+  await addVoucher('2026-02-14', 'Inköp 12% moms', [
+    { accountId: 4000, amount:  5000 },
+    { accountId: 2640, amount:   600 },
+    { accountId: 1930, amount: -5600 },
+  ]);
+  {
+    const txs = await db.transactions.toArray();
+    const ingMoms = txs.filter(t => t.accountId === 2640);
+    // Två ingående momsposter: 133.72 (25%) + 600 (12%)
+    const totalIngMoms = ingMoms.reduce((s, t) => s + t.amount, 0);
+    assert(near(totalIngMoms, 733.72), `Ingående moms 12%+25%: 2640 totalt = 733.72 kr (fick ${totalIngMoms.toFixed(2)})`);
+    const b = await getBalances();
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Inköp 12%: balansräkning stämmer');
+  }
+
+  // ── Scenario G: Ägaruttag ─────────────────────────────────────────
+  // Ska minska bank och eget kapital — INTE påverka resultat
+  await addVoucher('2026-02-28', 'Ägaruttag', [
+    { accountId: 2013, amount:  10000 },
+    { accountId: 1930, amount: -10000 },
+  ]);
+  {
+    const bBefore = await getBalances();
+    // Hämta balans utan ägaruttaget och jämför
+    const txs = await db.transactions.toArray();
+    const uttag = txs.filter(t => t.accountId === 2013 || (t.accountId === 1930 && t.amount === -10000));
+    assert(uttag.length === 2, 'Ägaruttag: 2 rader bokförda');
+    // Resultatet ska vara detsamma som innan ägaruttaget (inte kostnader)
+    // netIncome = intäkter - kostnader, påverkas inte av eget kapital-rörelser
+    const netBefore = 15000 - 15534.88 - 5600; // rough check — income unchanged
+    assert(near(bBefore.revenue,  15000),    'Ägaruttag: intäkter opåverkade');
+    // 534.88 (förbrukn) + 15000 (hyra) + 5000 (varor 12%) = 20534.88
+    assert(near(bBefore.expenses, 20534.88), `Ägaruttag: kostnader opåverkade (fick ${bBefore.expenses.toFixed(2)})`);
+    assert(near(bBefore.assets, bBefore.liabilities + bBefore.netIncome), 'Ägaruttag: balansräkning stämmer');
+  }
+
+  // ── Slutkontroll: alla scenarion samlade ──────────────────────────
+  {
+    const b = await getBalances();
+    assert(near(b.assets, b.liabilities + b.netIncome),
+      `Slutkontroll: balansräkningsekvationen T(${b.assets.toFixed(2)}) = S+EK(${b.liabilities.toFixed(2)}) + R(${b.netIncome.toFixed(2)})`);
+    assert(b.expenses > 0, 'Slutkontroll: kostnader är positiva');
+    assert(b.revenue  > 0, 'Slutkontroll: intäkter är positiva');
+    // Ingående moms är en tillgång — inte en kostnad
+    const txs  = await db.transactions.toArray();
+    const accs = await db.accounts.toArray();
+    const momsAcc = accs.find(a => a.id === 2640)!;
+    assert(momsAcc.type === 'asset', 'Ingående moms (2640) är kontoart tillgång — aldrig kostnad');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING
   // ═══════════════════════════════════════════════════════════════════════
 
