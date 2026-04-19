@@ -44,6 +44,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
       if (data.vendor)            setDescription(data.vendor);
       if (data.vatRate !== undefined) setVatRate(data.vatRate);
       if (data.amount)            setVatGross(String(data.amount));
+      if (data.vatDir)            setVatDir(data.vatDir);
     } catch {
       setError('Kunde inte läsa kvittot. Kontrollera att GEMINI_API_KEY är konfigurerad.');
     } finally {
