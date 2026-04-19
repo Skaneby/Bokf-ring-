@@ -13,7 +13,7 @@ export async function scanReceipt(file: File): Promise<ReceiptData> {
 
   const base64 = await toBase64(file);
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const prompt = `Du är en assistent som läser kvitton och fakturor.
 Analysera bilden och extrahera följande information i JSON-format:
