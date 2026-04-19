@@ -8,6 +8,7 @@ import { sv } from 'date-fns/locale';
 export function Dashboard() {
   const accounts     = useLiveQuery(() => db.accounts.toArray());
   const transactions = useLiveQuery(() => db.transactions.toArray());
+  const voucherCount = useLiveQuery(() => db.vouchers.count());
 
   if (!accounts || !transactions) {
     return <div className="text-sm text-slate-400">Laddar…</div>;
@@ -71,7 +72,7 @@ export function Dashboard() {
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Verifikationer</p>
           <p className="mt-1 font-semibold text-slate-900">
-            {useLiveQuery(() => db.vouchers.count()) ?? '—'}
+            {voucherCount ?? '—'}
           </p>
         </div>
         <div>
