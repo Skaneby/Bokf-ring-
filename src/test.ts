@@ -3,6 +3,8 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { db, initializeDb } from './db';
 import { exportSIE, importSIE } from './lib/sie';
+import { buildBackupData, applyBackupData } from './lib/backup';
+import { splitVat, vatRows, VAT_OUT, VAT_IN } from './lib/vat';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -28,10 +30,8 @@ async function addVoucher(
   description: string,
   lines: { accountId: number; amount: number }[]
 ) {
-  // amount positive = debit, negative = credit
   const sum = lines.reduce((s, l) => s + l.amount, 0);
   if (!near(sum, 0)) throw new Error(`Voucher "${description}" does not balance (diff ${sum})`);
-
   await db.transaction('rw', db.vouchers, db.transactions, async () => {
     const voucherId = await db.vouchers.add({ date, description, created_at: Date.now() });
     for (const line of lines) {
@@ -41,21 +41,26 @@ async function addVoucher(
 }
 
 async function getBalances() {
-  const accounts = await db.accounts.toArray();
+  const accounts     = await db.accounts.toArray();
   const transactions = await db.transactions.toArray();
-
   const map = new Map<number, number>();
   for (const t of transactions) map.set(t.accountId, (map.get(t.accountId) ?? 0) + t.amount);
-
   let assets = 0, liabilities = 0, revenue = 0, expenses = 0;
   for (const acc of accounts) {
     const bal = map.get(acc.id) ?? 0;
-    if (acc.type === 'asset')                               assets      += bal;
-    if (acc.type === 'liability' || acc.type === 'equity')  liabilities -= bal; // credit = neg
-    if (acc.type === 'revenue')                             revenue     -= bal; // credit = neg
-    if (acc.type === 'expense')                             expenses    += bal;
+    if (acc.type === 'asset')                              assets      += bal;
+    if (acc.type === 'liability' || acc.type === 'equity') liabilities -= bal;
+    if (acc.type === 'revenue')                            revenue     -= bal;
+    if (acc.type === 'expense')                            expenses    += bal;
   }
   return { assets, liabilities, revenue, expenses, netIncome: revenue - expenses };
+}
+
+async function resetDb() {
+  await db.transactions.clear();
+  await db.vouchers.clear();
+  await db.accounts.clear();
+  await initializeDb();
 }
 
 // ─── main ───────────────────────────────────────────────────────────────────
@@ -65,225 +70,360 @@ async function runTests() {
   console.log(' Lokal Bokföring – fullständigt testsvit');
   console.log('════════════════════════════════════════════════════════\n');
 
-  // ── setup ──────────────────────────────────────────────────────────────
-  await db.transactions.clear();
-  await db.vouchers.clear();
-  await db.accounts.clear();
-  await initializeDb();
+  // ═══════════════════════════════════════════════════════════════════════
+  // 1. KONTOPLAN
+  // ═══════════════════════════════════════════════════════════════════════
 
+  console.log('── 1. Kontoplan ──────────────────────────────────────\n');
+
+  await resetDb();
   const accountCount = await db.accounts.count();
-  assert(accountCount > 0, 'Kontoplanen initialiseras med standardkonton');
   assert(accountCount === 21, `Exakt 21 standardkonton (fick ${accountCount})`);
 
+  const accs = await db.accounts.toArray();
+  assert(accs.some(a => a.id === 1930 && a.type === 'asset'),     'Konto 1930 är tillgång');
+  assert(accs.some(a => a.id === 2610 && a.type === 'liability'), 'Konto 2610 är skuld');
+  assert(accs.some(a => a.id === 2640 && a.type === 'asset'),     'Konto 2640 är tillgång (ing. moms)');
+  assert(accs.some(a => a.id === 3000 && a.type === 'revenue'),   'Konto 3000 är intäkt');
+  assert(accs.some(a => a.id === 4000 && a.type === 'expense'),   'Konto 4000 är kostnad');
+
   // ═══════════════════════════════════════════════════════════════════════
-  // 10 VERIFIKATIONER – realistiska affärshändelser
+  // 2. MOMSSPLIT – splitVat()
   // ═══════════════════════════════════════════════════════════════════════
 
-  console.log('\n── Bokför 10 verifikationer ──────────────────────────\n');
+  console.log('\n── 2. Momssplit ──────────────────────────────────────\n');
 
-  // 1. Ägaren sätter in startkapital
+  // 25 %
+  { const r = splitVat(125, 25);
+    assert(near(r.vat, 25),  '25%: moms på 125 kr = 25.00 kr');
+    assert(near(r.net, 100), '25%: netto på 125 kr = 100.00 kr'); }
+
+  // 12 %
+  { const r = splitVat(112, 12);
+    assert(near(r.vat, 12),  '12%: moms på 112 kr = 12.00 kr');
+    assert(near(r.net, 100), '12%: netto på 112 kr = 100.00 kr'); }
+
+  // 6 %
+  { const r = splitVat(106, 6);
+    assert(near(r.vat, 6),   '6%: moms på 106 kr = 6.00 kr');
+    assert(near(r.net, 100), '6%: netto på 106 kr = 100.00 kr'); }
+
+  // Klas Ohlson-kvitto (öresrundning)
+  { const r = splitVat(668.60, 25);
+    assert(near(r.vat, 133.72), 'Öresrundning 25%: 668.60 → moms 133.72 kr');
+    assert(near(r.net, 534.88), 'Öresrundning 25%: 668.60 → netto 534.88 kr');
+    assert(near(r.vat + r.net, 668.60), 'Öresrundning: vat + net = brutto (ingen penningförlust)'); }
+
+  // 12 % med udda belopp
+  { const r = splitVat(560, 12);
+    assert(near(r.vat, 60),  '12%: moms på 560 kr = 60.00 kr');
+    assert(near(r.net, 500), '12%: netto på 560 kr = 500.00 kr'); }
+
+  // 6 % med udda belopp (öresrundning)
+  { const r = splitVat(99.99, 6);
+    assert(near(r.vat + r.net, 99.99), '6% öresrundning: vat + net = brutto'); }
+
+  // Summa vat + net ska alltid = brutto (alla satser)
+  for (const rate of [6, 12, 25] as const) {
+    for (const gross of [100, 233.50, 1999.99, 12500]) {
+      const { vat, net } = splitVat(gross, rate);
+      assert(near(vat + net, gross), `splitVat(${gross}, ${rate}%): vat+net=brutto`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 3. MOMSKONTON – vatRows()
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 3. Momskonton ─────────────────────────────────────\n');
+
+  // Korrekta momskonton per sats
+  assert(VAT_OUT[25] === 2610, 'Utgående moms 25% → konto 2610');
+  assert(VAT_OUT[12] === 2620, 'Utgående moms 12% → konto 2620');
+  assert(VAT_OUT[6]  === 2630, 'Utgående moms 6%  → konto 2630');
+  assert(VAT_IN      === 2640, 'Ingående moms alla satser → konto 2640');
+
+  // Utgående (försäljning) 25%
+  { const rows = vatRows(12500, 25, 'out');
+    const bank = rows.find(r => r.accountId === 1930)!;
+    const moms = rows.find(r => r.accountId === 2610)!;
+    assert(near(bank.debit, 12500), 'Utgående 25%: bank debet 12500');
+    assert(near(moms.credit, 2500), 'Utgående 25%: konto 2610 kredit 2500');
+    assert(rows.length === 3,       'Utgående 25%: 3 rader genereras'); }
+
+  // Ingående (inköp) 25%
+  { const rows = vatRows(6250, 25, 'in');
+    const bank = rows.find(r => r.accountId === 1930)!;
+    const moms = rows.find(r => r.accountId === 2640)!;
+    assert(near(bank.credit, 6250), 'Ingående 25%: bank kredit 6250');
+    assert(near(moms.debit, 1250),  'Ingående 25%: konto 2640 debet 1250');
+    assert(rows.length === 3,       'Ingående 25%: 3 rader genereras'); }
+
+  // Ingående 12%
+  { const rows = vatRows(560, 12, 'in');
+    const moms = rows.find(r => r.accountId === 2640)!;
+    assert(near(moms.debit, 60), 'Ingående 12%: konto 2640 debet 60 kr'); }
+
+  // Ingående 6%
+  { const rows = vatRows(106, 6, 'in');
+    const moms = rows.find(r => r.accountId === 2640)!;
+    assert(near(moms.debit, 6), 'Ingående 6%: konto 2640 debet 6 kr'); }
+
+  // Varje rad: debet - kredit = 0 (balanserad)
+  for (const dir of ['in', 'out'] as const) {
+    for (const rate of [6, 12, 25] as const) {
+      const rows = vatRows(1000, rate, dir);
+      const diff = rows.reduce((s, r) => s + r.debit - r.credit, 0);
+      assert(near(diff, 0), `vatRows(1000, ${rate}%, ${dir}): rader balanserar`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 4. TIO VERIFIKATIONER + BALANSRÄKNING
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 4. Verifikationer & balansräkning ─────────────────\n');
+
+  await resetDb();
+
   await addVoucher('2026-01-01', 'Ägarinsättning startkapital', [
-    { accountId: 1930, amount:  50000 },   // Bank Debet
-    { accountId: 2018, amount: -50000 },   // Egna insättningar Kredit
+    { accountId: 1930, amount:  50000 }, { accountId: 2018, amount: -50000 },
   ]);
-  console.log('  Ver 1 – Ägarinsättning bokförd');
-
-  // 2. Försäljning med 25 % moms
   await addVoucher('2026-01-05', 'Försäljning tjänst, 25% moms', [
-    { accountId: 1930, amount:  12500 },   // Bank Debet
-    { accountId: 3000, amount: -10000 },   // Försäljning 25% moms Kredit
-    { accountId: 2610, amount:  -2500 },   // Utgående moms 25% Kredit
+    { accountId: 1930, amount:  12500 }, { accountId: 3000, amount: -10000 },
+    { accountId: 2610, amount:  -2500 },
   ]);
-  console.log('  Ver 2 – Försäljning m. moms bokförd');
-
-  // 3. Inköp av handelsvaror med 25 % ingående moms
   await addVoucher('2026-01-08', 'Inköp av varor', [
-    { accountId: 4000, amount:  5000 },    // Inköp Debet
-    { accountId: 2640, amount:  1250 },    // Ingående moms Debet
-    { accountId: 1930, amount: -6250 },    // Bank Kredit
+    { accountId: 4000, amount:  5000 }, { accountId: 2640, amount:  1250 },
+    { accountId: 1930, amount: -6250 },
   ]);
-  console.log('  Ver 3 – Varukostnad bokförd');
-
-  // 4. Lokalhyra (ingen moms)
   await addVoucher('2026-01-10', 'Lokalhyra januari', [
-    { accountId: 5010, amount:  8000 },    // Lokalhyra Debet
-    { accountId: 1930, amount: -8000 },    // Bank Kredit
+    { accountId: 5010, amount:  8000 }, { accountId: 1930, amount: -8000 },
   ]);
-  console.log('  Ver 4 – Lokalhyra bokförd');
-
-  // 5. Programvaruinköp med 25 % moms
   await addVoucher('2026-01-12', 'Inköp programvara', [
-    { accountId: 5420, amount:  3000 },    // Programvaror Debet
-    { accountId: 2640, amount:   750 },    // Ingående moms Debet
-    { accountId: 1930, amount: -3750 },    // Bank Kredit
+    { accountId: 5420, amount:  3000 }, { accountId: 2640, amount:   750 },
+    { accountId: 1930, amount: -3750 },
   ]);
-  console.log('  Ver 5 – Programvara bokförd');
-
-  // 6. Kontorsmaterial med 25 % moms
   await addVoucher('2026-01-15', 'Kontorsmaterial', [
-    { accountId: 6110, amount:   500 },    // Kontorsmateriel Debet
-    { accountId: 2640, amount:   125 },    // Ingående moms Debet
-    { accountId: 1930, amount:  -625 },    // Bank Kredit
+    { accountId: 6110, amount:   500 }, { accountId: 2640, amount:   125 },
+    { accountId: 1930, amount:  -625 },
   ]);
-  console.log('  Ver 6 – Kontorsmaterial bokförd');
-
-  // 7. Bankavgift (ingen moms)
   await addVoucher('2026-01-20', 'Bankavgifter januari', [
-    { accountId: 6570, amount:   150 },    // Bankkostnader Debet
-    { accountId: 1930, amount:  -150 },    // Bank Kredit
+    { accountId: 6570, amount:   150 }, { accountId: 1930, amount:  -150 },
   ]);
-  console.log('  Ver 7 – Bankavgift bokförd');
-
-  // 8. Redovisningstjänst med 25 % moms
   await addVoucher('2026-01-22', 'Redovisningstjänst', [
-    { accountId: 6530, amount:  2000 },    // Redovisningstjänster Debet
-    { accountId: 2640, amount:   500 },    // Ingående moms Debet
-    { accountId: 1930, amount: -2500 },    // Bank Kredit
+    { accountId: 6530, amount:  2000 }, { accountId: 2640, amount:   500 },
+    { accountId: 1930, amount: -2500 },
   ]);
-  console.log('  Ver 8 – Redovisningstjänst bokförd');
-
-  // 9. Momsfri försäljning
   await addVoucher('2026-01-25', 'Momsfri försäljning', [
-    { accountId: 1930, amount:  5000 },    // Bank Debet
-    { accountId: 3040, amount: -5000 },    // Försäljning momsfri Kredit
+    { accountId: 1930, amount:  5000 }, { accountId: 3040, amount: -5000 },
   ]);
-  console.log('  Ver 9 – Momsfri försäljning bokförd');
-
-  // 10. Ägaruttag
   await addVoucher('2026-01-31', 'Eget uttag', [
-    { accountId: 2013, amount:  3000 },    // Egna uttag Debet
-    { accountId: 1930, amount: -3000 },    // Bank Kredit
+    { accountId: 2013, amount:  3000 }, { accountId: 1930, amount: -3000 },
   ]);
-  console.log('  Ver 10 – Ägaruttag bokförd');
+
+  assert((await db.vouchers.count())     === 10, '10 verifikationer sparade');
+  assert((await db.transactions.count()) === 25, '25 transaktionsrader sparade');
+
+  const b = await getBalances();
+  assert(near(b.assets,    45850),  `Tillgångar = 45 850 kr (fick ${b.assets.toFixed(2)})`);
+  assert(near(b.liabilities, 49500),`Skulder & EK = 49 500 kr (fick ${b.liabilities.toFixed(2)})`);
+  assert(near(b.revenue,   15000),  `Intäkter = 15 000 kr (fick ${b.revenue.toFixed(2)})`);
+  assert(near(b.expenses,  18650),  `Kostnader = 18 650 kr (fick ${b.expenses.toFixed(2)})`);
+  assert(near(b.netIncome, -3650),  `Nettoresultat = -3 650 kr (fick ${b.netIncome.toFixed(2)})`);
+  assert(near(b.assets, b.liabilities + b.netIncome), 'Balansräkningsekvationen: T = S+EK+R');
 
   // ═══════════════════════════════════════════════════════════════════════
-  // RÄKNEKONTROLL
+  // 5. REDIGERA VERIFIKATION
   // ═══════════════════════════════════════════════════════════════════════
 
-  console.log('\n── Balansräkning & resultat ──────────────────────────\n');
+  console.log('\n── 5. Redigera verifikation ──────────────────────────\n');
 
-  const voucherCount = await db.vouchers.count();
-  const txCount = await db.transactions.count();
-  assert(voucherCount === 10, `10 verifikationer sparade (fick ${voucherCount})`);
-  // rows: 2+3+3+2+3+3+2+3+2+2 = 25
-  assert(txCount === 25, `25 transaktionsrader sparade (fick ${txCount})`);
+  // Hämta ver 2 (försäljning 12500) och ändra till 25000
+  const allV = await db.vouchers.toArray();
+  const ver2 = allV.find(v => v.description === 'Försäljning tjänst, 25% moms');
+  assert(!!ver2?.id, 'Ver 2 hittas i databasen');
 
-  const { assets, liabilities, revenue, expenses, netIncome } = await getBalances();
+  const vid = ver2!.id!;
+  await db.transaction('rw', db.vouchers, db.transactions, async () => {
+    await db.vouchers.update(vid, { description: 'Försäljning tjänst, 25% moms (rättad)' });
+    await db.transactions.where('voucherId').equals(vid).delete();
+    await db.transactions.add({ voucherId: vid, accountId: 1930, amount:  25000 });
+    await db.transactions.add({ voucherId: vid, accountId: 3000, amount: -20000 });
+    await db.transactions.add({ voucherId: vid, accountId: 2610, amount:  -5000 });
+  });
 
-  // Expected values
-  // Bank 1930 = 50000+12500-6250-8000-3750-625-150-2500+5000-3000 = 43225
-  // Ingående moms 2640 = 1250+750+125+500 = 2625
-  // Total tillgångar = 43225 + 2625 = 45850
-  assert(near(assets, 45850), `Tillgångar = 45 850 kr (fick ${assets.toFixed(2)})`);
+  const b2 = await getBalances();
+  // Intäkter ökar med 10 000 (20000 - 10000)
+  assert(near(b2.revenue, 25000),   `Efter redigering: intäkter = 25 000 kr (fick ${b2.revenue.toFixed(2)})`);
+  // Nettoresultat förbättras med 10 000
+  assert(near(b2.netIncome, 6350),  `Efter redigering: nettoresultat = 6 350 kr (fick ${b2.netIncome.toFixed(2)})`);
+  assert(near(b2.assets, b2.liabilities + b2.netIncome), 'Balansräkning stämmer efter redigering');
 
-  // Skulder & EK:
-  //   Egna insättningar 2018 = 50000 (kredit → positiv)
-  //   Egna uttag 2013 = 3000 (debet → negativ i EK) → -3000
-  //   Utgående moms 25% 2610 = 2500 (kredit → positiv skuld)
-  //   Summa = 49500
-  assert(near(liabilities, 49500), `Skulder & EK = 49 500 kr (fick ${liabilities.toFixed(2)})`);
+  const updDesc = await db.vouchers.get(vid);
+  assert(updDesc?.description === 'Försäljning tjänst, 25% moms (rättad)', 'Beskrivning uppdaterades');
 
-  // Intäkter = 10000 + 5000 = 15000
-  assert(near(revenue, 15000), `Intäkter = 15 000 kr (fick ${revenue.toFixed(2)})`);
-
-  // Kostnader = 5000+8000+3000+500+150+2000 = 18650
-  assert(near(expenses, 18650), `Kostnader = 18 650 kr (fick ${expenses.toFixed(2)})`);
-
-  // Nettoresultat = 15000-18650 = -3650 (förlust)
-  assert(near(netIncome, -3650), `Nettoresultat = -3 650 kr (fick ${netIncome.toFixed(2)})`);
-
-  // Balansprincip: Tillgångar = Skulder+EK + Nettoresultat
-  const balanced = near(assets, liabilities + netIncome);
-  assert(balanced,
-    `Balansräkningskontroll: Tillgångar (${assets}) = Skulder+EK (${liabilities}) + Resultat (${netIncome})`,
-    `diff=${(assets - liabilities - netIncome).toFixed(2)}`
-  );
+  const newTx = await db.transactions.where('voucherId').equals(vid).toArray();
+  assert(newTx.length === 3,              'Gamla rader ersattes — fortfarande 3 rader');
+  assert(newTx.some(t => t.amount === 25000), 'Nytt belopp 25000 finns på ver 2');
 
   // ═══════════════════════════════════════════════════════════════════════
-  // VALIDERINGSLOGIK (speglar VoucherEntry.tsx handleSubmit)
+  // 6. TA BORT VERIFIKATION
   // ═══════════════════════════════════════════════════════════════════════
 
-  console.log('\n── Valideringsregler ─────────────────────────────────\n');
+  console.log('\n── 6. Ta bort verifikation ───────────────────────────\n');
 
-  // Obalanserad verifikation ska avvisas
+  const txBefore = await db.transactions.count();
+  const vBefore  = await db.vouchers.count();
+
+  // Ta bort bankavgiften (150 kr, 2 rader)
+  const allV2   = await db.vouchers.toArray();
+  const bankfee = allV2.find(v => v.description === 'Bankavgifter januari');
+  assert(!!bankfee?.id, 'Bankavgiftsverifikation hittas');
+  const bankfeeId = bankfee!.id!;
+
+  await db.transaction('rw', db.vouchers, db.transactions, async () => {
+    await db.transactions.where('voucherId').equals(bankfeeId).delete();
+    await db.vouchers.delete(bankfeeId);
+  });
+
+  assert((await db.vouchers.count())     === vBefore  - 1, 'Antal verifikationer minskar med 1');
+  assert((await db.transactions.count()) === txBefore - 2, 'Antal transaktionsrader minskar med 2');
+
+  const b3 = await getBalances();
+  // Bankavgift 150 kr borttagen → kostnader minskar 150, resultat förbättras 150
+  assert(near(b3.expenses, b2.expenses - 150),    `Kostnader minskar 150 kr efter borttagning (fick ${b3.expenses.toFixed(2)})`);
+  assert(near(b3.netIncome, b2.netIncome + 150),  `Nettoresultat ökar 150 kr efter borttagning (fick ${b3.netIncome.toFixed(2)})`);
+  assert(near(b3.assets, b3.liabilities + b3.netIncome), 'Balansräkning stämmer efter borttagning');
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 7. VALIDERINGSREGLER
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 7. Valideringsregler ──────────────────────────────\n');
+
   const balanceOk = (lines: { amount: number }[]) =>
     near(lines.reduce((s, l) => s + l.amount, 0), 0);
 
-  assert(!balanceOk([{ amount: 1000 }, { amount: -999 }]),
-    'Obalanserad verifikation identifieras korrekt');
-  assert(balanceOk([{ amount: 500 }, { amount: -500 }]),
-    'Balanserad verifikation godkänns');
+  assert(!balanceOk([{ amount: 1000 }, { amount: -999 }]),   'Obalanserad verifikation avvisas');
+  assert( balanceOk([{ amount:  500 }, { amount: -500 }]),   'Balanserad verifikation godkänns');
+  assert( balanceOk([{ amount: 100.01 }, { amount: -100.01 }]), 'Öresbelopp balanserar korrekt');
+  assert(!balanceOk([{ amount: 100 }, { amount: -99.99 }]),  'Differens 0.01 kr avvisas');
 
-  // Minst 2 rader krävs
-  const validRowCount = (rows: { accountId: number; debit: string; credit: string }[]) =>
+  const validRows = (rows: { accountId: number; debit: string; credit: string }[]) =>
     rows.filter(r => r.accountId && (r.debit || r.credit)).length;
 
-  assert(validRowCount([{ accountId: 1930, debit: '100', credit: '' }]) < 2,
-    'En rad räcker inte – krav på minst 2 rader');
-  assert(
-    validRowCount([
-      { accountId: 1930, debit: '100', credit: '' },
-      { accountId: 2018, debit: '',    credit: '100' }
-    ]) >= 2,
-    'Två rader uppfyller minimikravet'
-  );
+  assert(validRows([{ accountId: 1930, debit: '100', credit: '' }]) < 2, 'En rad → underkänd');
+  assert(validRows([
+    { accountId: 1930, debit: '100', credit: '' },
+    { accountId: 2018, debit: '',    credit: '100' },
+  ]) >= 2, 'Två rader → godkänd');
+  assert(validRows([{ accountId: 0, debit: '100', credit: '' }]) < 2, 'Rad utan konto ignoreras');
 
   // ═══════════════════════════════════════════════════════════════════════
-  // SIE-EXPORT
+  // 8. SIE4-EXPORT
   // ═══════════════════════════════════════════════════════════════════════
 
-  console.log('\n── SIE4-export ───────────────────────────────────────\n');
+  console.log('\n── 8. SIE4-export ────────────────────────────────────\n');
 
   const sieData = await exportSIE();
+  assert(sieData.includes('#SIETYP 4'),   'SIE: innehåller #SIETYP 4');
+  assert(sieData.includes('#FLAGGA 0'),   'SIE: innehåller #FLAGGA 0');
+  assert(sieData.includes('#FORMAT PC8'), 'SIE: innehåller #FORMAT PC8');
+  assert(sieData.includes('#KONTO 1930'), 'SIE: innehåller konto 1930');
+  assert(sieData.includes('#KONTO 3000'), 'SIE: innehåller konto 3000');
+  assert(sieData.includes('#KONTO 2610'), 'SIE: innehåller momskonto 2610');
+  assert(sieData.includes('#KONTO 2640'), 'SIE: innehåller momskonto 2640');
 
-  assert(sieData.includes('#SIETYP 4'),   'SIE-fil innehåller #SIETYP 4');
-  assert(sieData.includes('#FLAGGA 0'),   'SIE-fil innehåller #FLAGGA 0');
-  assert(sieData.includes('#FORMAT PC8'), 'SIE-fil innehåller #FORMAT PC8');
-  assert(sieData.includes('#KONTO 1930'), 'SIE-fil innehåller konto 1930');
-  assert(sieData.includes('#KONTO 3000'), 'SIE-fil innehåller konto 3000');
-
-  const verCount = (sieData.match(/#VER/g) ?? []).length;
-  assert(verCount === 10, `SIE-fil innehåller 10 #VER-poster (fick ${verCount})`);
-
+  const verCount   = (sieData.match(/#VER/g)   ?? []).length;
   const transCount = (sieData.match(/#TRANS/g) ?? []).length;
-  assert(transCount === 25, `SIE-fil innehåller 25 #TRANS-rader (fick ${transCount})`);
+  const curVouchers = await db.vouchers.count();
+  const curTx       = await db.transactions.count();
+  assert(verCount   === curVouchers, `SIE: ${curVouchers} #VER-poster (fick ${verCount})`);
+  assert(transCount === curTx,       `SIE: ${curTx} #TRANS-rader (fick ${transCount})`);
 
-  // Kontrollera ett par belopp
-  assert(sieData.includes('50000.00'),  'Belopp 50000.00 finns i SIE-filen');
-  assert(sieData.includes('-10000.00'), 'Belopp -10000.00 finns i SIE-filen');
+  assert(sieData.includes('50000.00'),  'SIE: belopp 50000.00 finns');
+  assert(sieData.includes('-20000.00'), 'SIE: belopp -20000.00 finns (rättad försäljning)');
 
   // ═══════════════════════════════════════════════════════════════════════
-  // SIE-IMPORT (återskapa från exporterad fil)
+  // 9. SIE4-IMPORT — round-trip
   // ═══════════════════════════════════════════════════════════════════════
 
-  console.log('\n── SIE4-import ───────────────────────────────────────\n');
+  console.log('\n── 9. SIE4-import round-trip ─────────────────────────\n');
 
+  const balBeforeImport = await getBalances();
+  await db.transactions.clear();
+  await db.vouchers.clear();
+  await db.accounts.clear();
+  await importSIE(sieData);
+
+  const ai = await getBalances();
+  assert(near(ai.assets,    balBeforeImport.assets),    `Import: tillgångar bevaras (${ai.assets.toFixed(2)})`);
+  assert(near(ai.revenue,   balBeforeImport.revenue),   `Import: intäkter bevaras (${ai.revenue.toFixed(2)})`);
+  assert(near(ai.expenses,  balBeforeImport.expenses),  `Import: kostnader bevaras (${ai.expenses.toFixed(2)})`);
+  assert(near(ai.netIncome, balBeforeImport.netIncome), `Import: nettoresultat bevaras (${ai.netIncome.toFixed(2)})`);
+  assert(near(ai.assets, ai.liabilities + ai.netIncome), 'Import: balansräkning stämmer');
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 10. SIE4-IMPORT — merge vs replace
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 10. SIE-import: merge vs replace ─────────────────\n');
+
+  // Merge: befintlig data + importerad → fler verifikationer
+  const vCountBefore = await db.vouchers.count();
+  await importSIE(sieData, 'merge');
+  const vCountAfterMerge = await db.vouchers.count();
+  assert(vCountAfterMerge === vCountBefore * 2,
+    `Merge: verifikationer fördubblades (${vCountBefore} → ${vCountAfterMerge})`);
+
+  // Replace: ska bara innehålla det som importerades
+  await importSIE(sieData, 'replace');
+  const vCountAfterReplace = await db.vouchers.count();
+  assert(vCountAfterReplace === vCountBefore,
+    `Replace: bara importerade verifikationer kvar (${vCountAfterReplace})`);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 11. BACKUP — JSON round-trip
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 11. Backup JSON round-trip ────────────────────────\n');
+
+  const balBeforeBackup = await getBalances();
+  const vBkp = await db.vouchers.count();
+  const tBkp = await db.transactions.count();
+
+  const backup = await buildBackupData();
+  assert(backup.version === 1, 'Backup: version = 1');
+  assert(Array.isArray(backup.accounts)     && backup.accounts.length > 0,     'Backup: konton inkluderade');
+  assert(Array.isArray(backup.vouchers)     && backup.vouchers.length === vBkp, 'Backup: alla verifikationer inkluderade');
+  assert(Array.isArray(backup.transactions) && backup.transactions.length === tBkp, 'Backup: alla transaktioner inkluderade');
+
+  // Rensa och återställ
   await db.transactions.clear();
   await db.vouchers.clear();
   await db.accounts.clear();
 
-  await importSIE(sieData);
+  const result = await applyBackupData(backup);
+  assert(result.vouchers     === vBkp, `Backup restore: ${vBkp} verifikationer återställda`);
+  assert(result.transactions === tBkp, `Backup restore: ${tBkp} transaktioner återställda`);
 
-  const importedVouchers     = await db.vouchers.count();
-  const importedTransactions = await db.transactions.count();
-  const importedAccounts     = await db.accounts.count();
+  const balAfterBackup = await getBalances();
+  assert(near(balAfterBackup.assets,    balBeforeBackup.assets),    'Backup: tillgångar bevaras');
+  assert(near(balAfterBackup.revenue,   balBeforeBackup.revenue),   'Backup: intäkter bevaras');
+  assert(near(balAfterBackup.expenses,  balBeforeBackup.expenses),  'Backup: kostnader bevaras');
+  assert(near(balAfterBackup.netIncome, balBeforeBackup.netIncome), 'Backup: nettoresultat bevaras');
 
-  assert(importedVouchers     === 10, `Import: 10 verifikationer (fick ${importedVouchers})`);
-  assert(importedTransactions === 25, `Import: 25 transaktioner (fick ${importedTransactions})`);
-  assert(importedAccounts     >  0,   `Import: konton importerades (fick ${importedAccounts})`);
-
-  // Balanserna ska vara identiska efter import
-  const afterImport = await getBalances();
-  assert(near(afterImport.assets,    45850), `Import: tillgångar = 45 850 kr (fick ${afterImport.assets.toFixed(2)})`);
-  assert(near(afterImport.revenue,   15000), `Import: intäkter = 15 000 kr (fick ${afterImport.revenue.toFixed(2)})`);
-  assert(near(afterImport.expenses,  18650), `Import: kostnader = 18 650 kr (fick ${afterImport.expenses.toFixed(2)})`);
-  assert(near(afterImport.netIncome, -3650), `Import: nettoresultat = -3 650 kr (fick ${afterImport.netIncome.toFixed(2)})`);
+  // Ogiltig backup ska kasta fel
+  let threw = false;
+  try { await applyBackupData({ version: 1, exported_at: '', accounts: null as any, vouchers: [], transactions: [] }); }
+  catch { threw = true; }
+  assert(threw, 'Backup: ogiltig fil kastar fel');
 
   // ═══════════════════════════════════════════════════════════════════════
-  // IMPORT AV EXTERNA SIE-TESTFILER
+  // 12. IMPORT AV EXTERNA SIE-TESTFILER
   // ═══════════════════════════════════════════════════════════════════════
 
-  // Helper: load a file, clear db, import, return balances + counts
   async function importFile(filename: string) {
     const content = readFileSync(resolve('testdata', filename), 'utf-8');
     await db.transactions.clear();
@@ -298,81 +438,43 @@ async function runTests() {
     };
   }
 
-  // ── fortnox_export.se ───────────────────────────────────────────────
-  console.log('\n── Import: fortnox_export.se ─────────────────────────\n');
+  console.log('\n── 12. Import: fortnox_export.se ─────────────────────\n');
   {
     const r = await importFile('fortnox_export.se');
-    assert(r.vouchers === 6, `Fortnox: 6 verifikationer (fick ${r.vouchers})`);
-    // Rows: 3+2+3+2+2+4 = 16
+    assert(r.vouchers     === 6,  `Fortnox: 6 verifikationer (fick ${r.vouchers})`);
     assert(r.transactions === 16, `Fortnox: 16 transaktionsrader (fick ${r.transactions})`);
-    assert(r.accounts > 0,        `Fortnox: konton importerade (fick ${r.accounts})`);
-
-    // Bank 1930 = 18750-18750-10000+0-12000-16337.50 = -38337.50
-    // Kundfordran 1510 = 18750-18750 = 0
-    // Ingen tillgångspost utan banksaldot är negativt pga löner + hyra utan intäkt i bank ännu
-    // Verifikat 1 (faktura): 1510 Debit 18750, 3000 Credit -15000, 2610 Credit -3750
-    // Verifikat 2 (betalning): 1930 Debit 18750, 1510 Credit -18750
-    // Verifikat 3 (lev.fakt): 4000 Debit 8000, 2640 Debit 2000, 2440 Credit -10000
-    // Verifikat 4 (betalar lev): 2440 Debit 10000, 1930 Credit -10000
-    // Verifikat 5 (hyra): 5010 Debit 12000, 1930 Credit -12000
-    // Verifikat 6 (lön): 7010 Debit 35000, 2710 Credit -7200, 2731 Credit -11462.50, 1930 Credit -16337.50
-    // Bank = 18750 - 10000 - 12000 - 16337.50 = -19587.50
-    // Assets: 1930(-19587.50) + 2640(2000) = -17587.50  (negative = liability to bank)
-    // Liabilities: 2610(-3750→display +3750) + 2710(-7200→display +7200) + 2731(-11462.50→+11462.50) = +22412.50
-    // Revenue: 3000(-15000→display +15000)
-    // Expenses: 4000(8000) + 5010(12000) + 7010(35000) = 55000
-    // NetIncome = 15000 - 55000 = -40000
-    // Balance: Assets(-17587.50) = Liab(22412.50) + NetIncome(-40000) = -17587.50 ✓
-    const { assets, liabilities, revenue, expenses, netIncome } = r.balances;
-    assert(near(revenue, 15000),    `Fortnox: intäkter = 15 000 kr (fick ${revenue.toFixed(2)})`);
-    assert(near(expenses, 55000),   `Fortnox: kostnader = 55 000 kr (fick ${expenses.toFixed(2)})`);
-    assert(near(netIncome, -40000), `Fortnox: nettoresultat = -40 000 kr (fick ${netIncome.toFixed(2)})`);
-    assert(near(assets, liabilities + netIncome),
-      `Fortnox: balansräkningsekvationen stämmer (tillgångar=${assets.toFixed(2)}, skulder+EK=${liabilities.toFixed(2)}, resultat=${netIncome.toFixed(2)})`);
+    assert(r.accounts      >  0,  `Fortnox: konton importerade (fick ${r.accounts})`);
+    const { revenue, expenses, netIncome, assets, liabilities } = r.balances;
+    assert(near(revenue,   15000), `Fortnox: intäkter = 15 000 kr`);
+    assert(near(expenses,  55000), `Fortnox: kostnader = 55 000 kr`);
+    assert(near(netIncome,-40000), `Fortnox: nettoresultat = -40 000 kr`);
+    assert(near(assets, liabilities + netIncome), 'Fortnox: balansräkningsekvationen stämmer');
   }
 
-  // ── visma_export.se ─────────────────────────────────────────────────
-  console.log('\n── Import: visma_export.se ───────────────────────────\n');
+  console.log('\n── 12. Import: visma_export.se ───────────────────────\n');
   {
     const r = await importFile('visma_export.se');
-    assert(r.vouchers === 9, `Visma: 9 verifikationer (fick ${r.vouchers})`);
-    // Rows: 2+3+3+2+3+5+2+2+2 = 24 (inkl. nollbeloppsrad i momsredovisningen)
-    assert(r.transactions === 24, `Visma: 24 transaktionsrader inkl. 0.00 (fick ${r.transactions})`);
-
+    assert(r.vouchers     === 9,  `Visma: 9 verifikationer (fick ${r.vouchers})`);
+    assert(r.transactions === 24, `Visma: 24 transaktionsrader (fick ${r.transactions})`);
     const { revenue, expenses, netIncome, assets, liabilities } = r.balances;
-    // Revenue: 3001(5000) + 3002(2000) + 3040(8000) = 15000
-    assert(near(revenue, 15000),  `Visma: intäkter = 15 000 kr (fick ${revenue.toFixed(2)})`);
-    // Expenses: 5410(1200) + 6570(95) = 1295
-    assert(near(expenses, 1295),  `Visma: kostnader = 1 295 kr (fick ${expenses.toFixed(2)})`);
-    assert(near(netIncome, 13705),`Visma: nettoresultat = 13 705 kr (fick ${netIncome.toFixed(2)})`);
-    assert(near(assets, liabilities + netIncome),
-      `Visma: balansräkningsekvationen stämmer`);
+    assert(near(revenue,  15000), `Visma: intäkter = 15 000 kr`);
+    assert(near(expenses,  1295), `Visma: kostnader = 1 295 kr`);
+    assert(near(netIncome,13705), `Visma: nettoresultat = 13 705 kr`);
+    assert(near(assets, liabilities + netIncome), 'Visma: balansräkningsekvationen stämmer');
   }
 
-  // ── edge_cases.se ────────────────────────────────────────────────────
-  console.log('\n── Import: edge_cases.se ─────────────────────────────\n');
+  console.log('\n── 12. Import: edge_cases.se ─────────────────────────\n');
   {
     const r = await importFile('edge_cases.se');
-    assert(r.vouchers === 5, `Kantfall: 5 verifikationer (fick ${r.vouchers})`);
-    // Rows: 3+2+3+3+3 = 14
-    assert(r.transactions === 14, `Kantfall: 14 transaktionsrader (fick ${r.transactions})`);
-
+    assert(r.vouchers     === 5,  `Kantfall: 5 verifikationer`);
+    assert(r.transactions === 14, `Kantfall: 14 transaktionsrader`);
     const { assets, liabilities, netIncome } = r.balances;
-    // Revenue: 3000 credit totals = -15000+800 = -(-15000+800) = 14200 display
-    // (ver1 credit -9876.54, ver5 debit +800 = net -9076.54 → display 9076.54)
-    // Expenses: 5420(499) + 6110(49.90) = 548.90
-    // Let's just verify the balance equation holds
-    assert(near(assets, liabilities + netIncome),
-      `Kantfall: balansräkningsekvationen stämmer (A=${assets.toFixed(2)}, L+E=${liabilities.toFixed(2)}, NI=${netIncome.toFixed(2)})`);
-
-    // Verifies öres/decimaler survived intact: 12345.67 should appear in 1930 balance
-    const transactions = await db.transactions.toArray();
-    const has_decimal = transactions.some(t => Math.abs(t.amount) === 12345.67 || Math.abs(t.amount) === 100.01);
-    assert(has_decimal, 'Kantfall: decimalbelopp (12345.67 / 100.01) bevaras korrekt');
-
-    // Kreditnota: ver5 reverses revenue – net should be lower than just ver1 revenue
-    const ver5Debits = transactions.filter(t => t.accountId === 3000 && t.amount > 0);
-    assert(ver5Debits.length > 0, 'Kantfall: kreditnota (positiv trans på intäktskonto) importeras');
+    assert(near(assets, liabilities + netIncome), 'Kantfall: balansräkningsekvationen stämmer');
+    const txs = await db.transactions.toArray();
+    assert(txs.some(t => Math.abs(t.amount) === 12345.67 || Math.abs(t.amount) === 100.01),
+      'Kantfall: decimalbelopp bevaras korrekt');
+    assert(txs.some(t => t.accountId === 3000 && t.amount > 0),
+      'Kantfall: kreditnota (positiv trans på intäktskonto) importeras');
   }
 
   // ═══════════════════════════════════════════════════════════════════════

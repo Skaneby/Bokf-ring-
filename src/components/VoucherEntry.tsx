@@ -4,14 +4,7 @@ import { db } from '../db';
 import { Plus, Trash2, ScanLine } from 'lucide-react';
 import { format } from 'date-fns';
 import { scanReceipt } from '../lib/ocr';
-
-const VAT_OUT: Record<number, number> = { 6: 2630, 12: 2620, 25: 2610 };
-const VAT_IN = 2640;
-
-function splitVat(gross: number, rate: number) {
-  const vat = Math.round(gross * rate / (100 + rate) * 100) / 100;
-  return { net: Math.round((gross - vat) * 100) / 100, vat };
-}
+import { VAT_OUT, VAT_IN, splitVat } from '../lib/vat';
 
 type Row = { accountId: number | string; debit: string; credit: string };
 

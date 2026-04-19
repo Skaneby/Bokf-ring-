@@ -1,6 +1,6 @@
 import { db } from '../db';
 
-interface BackupData {
+export interface BackupData {
   version: number;
   exported_at: string;
   accounts: object[];
@@ -8,21 +8,36 @@ interface BackupData {
   transactions: object[];
 }
 
-export async function exportBackup(): Promise<void> {
+export async function buildBackupData(): Promise<BackupData> {
   const [accounts, vouchers, transactions] = await Promise.all([
     db.accounts.toArray(),
     db.vouchers.toArray(),
     db.transactions.toArray(),
   ]);
+  return { version: 1, exported_at: new Date().toISOString(), accounts, vouchers, transactions };
+}
 
-  const backup: BackupData = {
-    version: 1,
-    exported_at: new Date().toISOString(),
-    accounts,
-    vouchers,
-    transactions,
-  };
+export async function applyBackupData(data: BackupData): Promise<{ vouchers: number; transactions: number }> {
+  if (
+    !Array.isArray(data.accounts) ||
+    !Array.isArray(data.vouchers) ||
+    !Array.isArray(data.transactions)
+  ) {
+    throw new Error('Ogiltig backup-fil – saknar accounts, vouchers eller transactions.');
+  }
+  await db.transaction('rw', db.accounts, db.vouchers, db.transactions, async () => {
+    await db.transactions.clear();
+    await db.vouchers.clear();
+    await db.accounts.clear();
+    await db.accounts.bulkAdd(data.accounts as any[]);
+    await db.vouchers.bulkAdd(data.vouchers as any[]);
+    await db.transactions.bulkAdd(data.transactions as any[]);
+  });
+  return { vouchers: data.vouchers.length, transactions: data.transactions.length };
+}
 
+export async function exportBackup(): Promise<void> {
+  const backup = await buildBackupData();
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -33,25 +48,6 @@ export async function exportBackup(): Promise<void> {
 }
 
 export async function importBackup(file: File): Promise<{ vouchers: number; transactions: number }> {
-  const text = await file.text();
-  const data: BackupData = JSON.parse(text);
-
-  if (
-    !Array.isArray(data.accounts) ||
-    !Array.isArray(data.vouchers) ||
-    !Array.isArray(data.transactions)
-  ) {
-    throw new Error('Ogiltig backup-fil – saknar accounts, vouchers eller transactions.');
-  }
-
-  await db.transaction('rw', db.accounts, db.vouchers, db.transactions, async () => {
-    await db.transactions.clear();
-    await db.vouchers.clear();
-    await db.accounts.clear();
-    await db.accounts.bulkAdd(data.accounts as any[]);
-    await db.vouchers.bulkAdd(data.vouchers as any[]);
-    await db.transactions.bulkAdd(data.transactions as any[]);
-  });
-
-  return { vouchers: data.vouchers.length, transactions: data.transactions.length };
+  const data: BackupData = JSON.parse(await file.text());
+  return applyBackupData(data);
 }
