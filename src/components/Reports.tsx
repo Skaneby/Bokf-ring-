@@ -4,7 +4,7 @@ import { db } from '../db';
 import { formatCurrency } from '../lib/utils';
 import { exportSIE, importSIE } from '../lib/sie';
 import { exportBackup, importBackup } from '../lib/backup';
-import { Download, Upload } from 'lucide-react';
+import { Download, Upload, Pencil } from 'lucide-react';
 
 type Tab = 'resultat' | 'balans' | 'huvudbok' | 'backup';
 
@@ -15,7 +15,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'backup',    label: 'Säkerhetskopiering' },
 ];
 
-export function Reports() {
+export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void }) {
   const accounts     = useLiveQuery(() => db.accounts.toArray());
   const transactions = useLiveQuery(() => db.transactions.toArray());
   const vouchers     = useLiveQuery(() => db.vouchers.orderBy('date').toArray());
@@ -159,9 +159,17 @@ export function Reports() {
               <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 Ver {v.id}
               </span>
-              <span className="text-sm font-medium text-slate-900">
-                {v.date} — {v.description}
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-slate-900">
+                  {v.date} — {v.description}
+                </span>
+                <button
+                  onClick={() => onEditVoucher(v.id!)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                >
+                  <Pencil className="h-3 w-3" /> Redigera
+                </button>
+              </div>
             </div>
             <table className="w-full text-sm">
               <thead>

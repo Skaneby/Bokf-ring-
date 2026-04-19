@@ -22,6 +22,9 @@ export default function App() {
   const [tab, setTab]       = useState<TabId>('dashboard');
   const [mobile, setMobile] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+
+  const editVoucher = (id: number) => { setEditId(id); setTab('voucher'); setMobile(false); };
 
   const handleShare = async () => {
     try {
@@ -118,9 +121,9 @@ export default function App() {
         <main className="flex-1 overflow-auto p-5 md:p-8">
           <div className="mx-auto max-w-5xl">
             {tab === 'dashboard' && <Dashboard />}
-            {tab === 'voucher'   && <VoucherEntry />}
+            {tab === 'voucher'   && <VoucherEntry editId={editId} onEditDone={() => setEditId(null)} />}
             {tab === 'accounts'  && <ChartOfAccounts />}
-            {tab === 'reports'   && <Reports />}
+            {tab === 'reports'   && <Reports onEditVoucher={editVoucher} />}
           </div>
         </main>
       </div>

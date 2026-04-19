@@ -19,7 +19,7 @@ const cls =
   'placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 ' +
   'focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400';
 
-export function VoucherEntry() {
+export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; onEditDone?: () => void }) {
   const accounts = useLiveQuery(() => db.accounts.orderBy('id').toArray());
 
   const [date, setDate]               = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -31,6 +31,24 @@ export function VoucherEntry() {
   const [error,   setError]   = useState('');
   const [success, setSuccess] = useState('');
   const [saving,  setSaving]  = useState(false);
+
+  // Load existing voucher when editId changes
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      const v  = await db.vouchers.get(editId);
+      const ts = await db.transactions.where('voucherId').equals(editId).toArray();
+      if (!v) return;
+      setDate(v.date);
+      setDescription(v.description);
+      setRows(ts.map(t => ({
+        accountId: t.accountId,
+        debit:  t.amount > 0 ? String(t.amount) : '',
+        credit: t.amount < 0 ? String(Math.abs(t.amount)) : '',
+      })));
+      setError(''); setSuccess('');
+    })();
+  }, [editId]);
 
   // VAT helper
   const [vatRate, setVatRate] = useState<0 | 6 | 12 | 25>(0);
@@ -87,20 +105,33 @@ export function VoucherEntry() {
     setSaving(true);
     try {
       await db.transaction('rw', db.vouchers, db.transactions, async () => {
-        const vid = await db.vouchers.add({ date, description, created_at: Date.now() });
-        for (const row of valid) {
-          const d = parseFloat(row.debit  as string) || 0;
-          const c = parseFloat(row.credit as string) || 0;
-          await db.transactions.add({ voucherId: vid, accountId: Number(row.accountId), amount: d > 0 ? d : -c });
+        if (editId) {
+          await db.vouchers.update(editId, { date, description });
+          await db.transactions.where('voucherId').equals(editId).delete();
+          for (const row of valid) {
+            const d = parseFloat(row.debit  as string) || 0;
+            const c = parseFloat(row.credit as string) || 0;
+            await db.transactions.add({ voucherId: editId, accountId: Number(row.accountId), amount: d > 0 ? d : -c });
+          }
+        } else {
+          const vid = await db.vouchers.add({ date, description, created_at: Date.now() });
+          for (const row of valid) {
+            const d = parseFloat(row.debit  as string) || 0;
+            const c = parseFloat(row.credit as string) || 0;
+            await db.transactions.add({ voucherId: vid, accountId: Number(row.accountId), amount: d > 0 ? d : -c });
+          }
         }
       });
-      setSuccess('Verifikation bokförd.');
-      setDescription('');
-      setVatRate(0);
-      setRows([
-        { accountId: '', debit: '', credit: '' },
-        { accountId: '', debit: '', credit: '' },
-      ]);
+      setSuccess(editId ? 'Verifikation uppdaterad.' : 'Verifikation bokförd.');
+      if (!editId) {
+        setDescription('');
+        setVatRate(0);
+        setRows([
+          { accountId: '', debit: '', credit: '' },
+          { accountId: '', debit: '', credit: '' },
+        ]);
+      }
+      onEditDone?.();
       setTimeout(() => setSuccess(''), 4000);
     } catch {
       setError('Kunde inte spara. Försök igen.');
@@ -111,7 +142,9 @@ export function VoucherEntry() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Ny verifikation</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">
+        {editId ? `Redigera verifikat ${editId}` : 'Ny verifikation'}
+      </h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
 
@@ -285,7 +318,7 @@ export function VoucherEntry() {
             disabled={Math.abs(diff) > 0.01 || valid.length < 2 || saving}
             className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {saving ? 'Sparar…' : 'Bokför'}
+            {saving ? 'Sparar…' : editId ? 'Uppdatera' : 'Bokför'}
           </button>
         </div>
 
