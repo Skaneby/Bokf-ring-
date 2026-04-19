@@ -4,7 +4,7 @@ import { db } from '../db';
 import { formatCurrency } from '../lib/utils';
 import { exportSIE, importSIE } from '../lib/sie';
 import { exportBackup, importBackup } from '../lib/backup';
-import { Download, Upload, Pencil } from 'lucide-react';
+import { Download, Upload, Pencil, Trash2 } from 'lucide-react';
 
 type Tab = 'resultat' | 'balans' | 'huvudbok' | 'backup';
 
@@ -22,6 +22,15 @@ export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void
 
   const [tab, setTab] = useState<Tab>('resultat');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+
+  const deleteVoucher = async (id: number) => {
+    await db.transaction('rw', db.vouchers, db.transactions, async () => {
+      await db.transactions.where('voucherId').equals(id).delete();
+      await db.vouchers.delete(id);
+    });
+    setConfirmDelete(null);
+  };
 
   if (!accounts || !transactions || !vouchers) {
     return <div className="text-sm text-slate-400">Laddar…</div>;
@@ -169,6 +178,29 @@ export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void
                 >
                   <Pencil className="h-3 w-3" /> Redigera
                 </button>
+                {confirmDelete === v.id ? (
+                  <span className="flex items-center gap-1">
+                    <button
+                      onClick={() => deleteVoucher(v.id!)}
+                      className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      Bekräfta
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 transition-colors"
+                    >
+                      Avbryt
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(v.id!)}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 className="h-3 w-3" /> Ta bort
+                  </button>
+                )}
               </div>
             </div>
             <table className="w-full text-sm">
