@@ -12,9 +12,11 @@ export async function exportSIE(): Promise<string> {
   sie += '#PROGRAM "Lokal Bokföring AI Studio" 1.0\n';
   sie += `#GEN ${format(new Date(), 'yyyyMMdd')}\n`;
   
-  // Accounts
+  // Accounts – include a non-standard #KONTOTYP line so the type survives
+  // a round-trip (the standard SIE format has no account-type field).
   for (const acc of accounts) {
     sie += `#KONTO ${acc.id} "${acc.name}"\n`;
+    sie += `#KONTOTYP ${acc.id} ${acc.type}\n`;
   }
 
   // Vouchers
@@ -42,12 +44,20 @@ export async function importSIE(fileContent: string): Promise<void> {
       const line = lines[i].trim();
       if (!line) continue;
 
-      if (line.startsWith('#KONTO')) {
+      if (line.startsWith('#KONTOTYP')) {
+        // Non-standard extension: override the type set by the #KONTO line above.
+        const match = line.match(/#KONTOTYP\s+(\d+)\s+(\w+)/);
+        if (match) {
+          const id = parseInt(match[1], 10);
+          const type = match[2] as 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
+          await db.accounts.update(id, { type });
+        }
+      } else if (line.startsWith('#KONTO')) {
         const match = line.match(/#KONTO\s+(\d+)\s+"([^"]+)"/);
         if (match) {
           const id = parseInt(match[1], 10);
           const name = match[2];
-          
+
           let type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense' = 'expense';
           if (id >= 1000 && id <= 1999) type = 'asset';
           else if (id >= 2000 && id <= 2099) type = 'equity';
