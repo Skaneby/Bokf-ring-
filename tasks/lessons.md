@@ -3,7 +3,7 @@
 ## Deployment
 - **loadEnv vs process.env**: `loadEnv()` reads `.env` files only — NOT system env vars. GitHub Actions secrets are system env vars. Always use `process.env.X ?? env.X` for CI secrets.
 - **Case sensitivity**: GitHub Pages URL matches repo name exactly. `Bokf-ring-` ≠ `bokf-ring-`. Always verify base path matches repo name casing.
-- **Branch discipline**: Never manually push to `gh-pages`. Work only on `main`. GitHub Actions handles deployment.
+- **Branch discipline**: Work only on `main`. GitHub Actions handles all deployment automatically via `actions/deploy-pages@v4`. Never create or push to a `gh-pages` branch.
 - **Verify deploy before claiming done**: Always confirm the live URL reflects changes before reporting success.
 
 ## React

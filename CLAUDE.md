@@ -12,7 +12,7 @@
 - **Vite base path:** `/Bokf-ring-/` (måste matcha repo-namnet exakt)
 - **GitHub Actions** bygger och deployer vid push till `main` via `actions/deploy-pages@v4`
 - **Pages source** i GitHub Settings: "GitHub Actions" (inte branch)
-- Jobba **enbart på `main`** — ingen manuell hantering av `gh-pages`
+- Jobba **enbart på `main`** — all deployment sker via GitHub Actions automatiskt
 
 ## Miljövariabler
 - `GEMINI_API_KEY` läses med `process.env.GEMINI_API_KEY ?? env.GEMINI_API_KEY` i vite.config.ts
