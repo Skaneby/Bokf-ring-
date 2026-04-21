@@ -8,7 +8,7 @@ import { initializeDb, db } from './db';
 import { exportBackup } from './lib/backup';
 import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link } from 'lucide-react';
 
-const APP_URL = 'https://skaneby.github.io/bokf-ring-/';
+const APP_URL = 'https://skaneby.github.io/Bokf-ring-/';
 
 const NAV = [
   { id: 'dashboard', label: 'Översikt',   icon: LayoutDashboard },
@@ -141,7 +141,7 @@ export default function App() {
             {tab === 'dashboard' && <Dashboard />}
             {tab === 'voucher'   && <VoucherEntry editId={editId} onEditDone={() => setEditId(null)} />}
             {tab === 'accounts'  && <ChartOfAccounts />}
-            {tab === 'reports'   && <Reports onEditVoucher={editVoucher} />}
+            {tab === 'reports'   && <Reports onEditVoucher={editVoucher} onReset={() => setHasData(false)} />}
           </div>
         </main>
       </div>

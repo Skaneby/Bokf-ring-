@@ -15,7 +15,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'backup',    label: 'Säkerhetskopiering' },
 ];
 
-export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void }) {
+export function Reports({ onEditVoucher, onReset }: { onEditVoucher: (id: number) => void; onReset: () => void }) {
   const accounts     = useLiveQuery(() => db.accounts.toArray());
   const transactions = useLiveQuery(() => db.transactions.toArray());
   const vouchers     = useLiveQuery(() => db.vouchers.orderBy('date').toArray());
@@ -24,6 +24,7 @@ export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [pendingSieFile, setPendingSieFile] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const deleteVoucher = async (id: number) => {
     await db.transaction('rw', db.vouchers, db.transactions, async () => {
@@ -46,6 +47,15 @@ export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void
   };
 
   // ── Handlers ─────────────────────────────────────────────────────────
+
+  const handleReset = async () => {
+    await db.transaction('rw', db.transactions, db.vouchers, db.accounts, async () => {
+      await db.transactions.clear();
+      await db.vouchers.clear();
+      await db.accounts.clear();
+    });
+    onReset();
+  };
 
   const handleJsonExport = () => exportBackup();
 
@@ -284,6 +294,44 @@ export function Reports({ onEditVoucher }: { onEditVoucher: (id: number) => void
             <input type="file" accept=".json" className="hidden" onChange={handleJsonImport} />
           </label>
         </div>
+      </div>
+
+      {/* Byt bokföring */}
+      <div className="rounded-xl border border-red-200 bg-white p-6">
+        <div className="mb-4">
+          <h3 className="font-semibold text-slate-900">Byt bokföring</h3>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Starta om med en annan bokföring. All befintlig data raderas permanent.
+          </p>
+        </div>
+        {!confirmReset ? (
+          <button
+            onClick={() => setConfirmReset(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50"
+          >
+            Ny bokföring / byt företag
+          </button>
+        ) : (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+            <p className="text-sm font-medium text-red-800">
+              All bokföring raderas. Detta går inte att ångra.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleReset}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors"
+              >
+                Ja, radera allt och starta om
+              </button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Avbryt
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* SIE */}

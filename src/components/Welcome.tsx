@@ -1,6 +1,8 @@
-import React, { useRef } from 'react';
-import { BookOpen, FolderOpen, Plus } from 'lucide-react';
-import { importBackup } from '../lib/backup';
+import React, { useRef, useState } from 'react';
+import { BookOpen, FolderOpen, Plus, FileCode } from 'lucide-react';
+import { applyBackupData, buildBackupData } from '../lib/backup';
+import { importSIE } from '../lib/sie';
+import { initializeDb } from '../db';
 
 interface Props {
   onLoaded: () => void;
@@ -8,17 +10,40 @@ interface Props {
 }
 
 export function Welcome({ onLoaded, onStartFresh }: Props) {
-  const fileRef = useRef<HTMLInputElement>(null);
+  const jsonRef = useRef<HTMLInputElement>(null);
+  const sieRef  = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState('');
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setError('');
     try {
-      await importBackup(file);
+      const data = JSON.parse(await file.text());
+      await applyBackupData(data);
       onLoaded();
     } catch {
-      alert('Kunde inte läsa filen. Kontrollera att det är en giltig JSON-backup.');
+      setError('Kunde inte läsa filen. Kontrollera att det är en giltig JSON-backup.');
     }
+    e.target.value = '';
+  };
+
+  const handleSie = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    try {
+      await initializeDb();
+      await importSIE(await file.text(), 'replace');
+      onLoaded();
+    } catch {
+      setError('Kunde inte läsa SIE-filen. Kontrollera att filen är ett giltigt SIE4-format.');
+    }
+    e.target.value = '';
+  };
+
+  const handleFresh = () => {
+    onStartFresh();
   };
 
   return (
@@ -30,23 +55,43 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
           <p className="mt-2 text-sm text-slate-500">Välj hur du vill starta</p>
         </div>
 
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
         <div className="space-y-3">
           <button
-            onClick={() => fileRef.current?.click()}
+            onClick={() => jsonRef.current?.click()}
             className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left hover:border-slate-900 transition-colors group"
           >
             <div className="mt-0.5 rounded-lg bg-slate-100 p-2 group-hover:bg-slate-900 transition-colors">
               <FolderOpen className="h-5 w-5 text-slate-600 group-hover:text-white transition-colors" />
             </div>
             <div>
-              <p className="font-semibold text-slate-900">Ladda in befintlig bokföring</p>
-              <p className="text-sm text-slate-500 mt-0.5">Öppna en JSON-backup från Google Drive eller din enhet</p>
+              <p className="font-semibold text-slate-900">Ladda in JSON-backup</p>
+              <p className="text-sm text-slate-500 mt-0.5">Återställ bokföring från en tidigare sparad JSON-fil</p>
             </div>
           </button>
-          <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFile} />
+          <input ref={jsonRef} type="file" accept=".json" className="hidden" onChange={handleJson} />
 
           <button
-            onClick={onStartFresh}
+            onClick={() => sieRef.current?.click()}
+            className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left hover:border-slate-900 transition-colors group"
+          >
+            <div className="mt-0.5 rounded-lg bg-slate-100 p-2 group-hover:bg-slate-900 transition-colors">
+              <FileCode className="h-5 w-5 text-slate-600 group-hover:text-white transition-colors" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-900">Importera SIE4-fil</p>
+              <p className="text-sm text-slate-500 mt-0.5">Starta från en export ur Fortnox, Visma eller annat system</p>
+            </div>
+          </button>
+          <input ref={sieRef} type="file" accept=".se,.si,.sie" className="hidden" onChange={handleSie} />
+
+          <button
+            onClick={handleFresh}
             className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left hover:border-slate-900 transition-colors group"
           >
             <div className="mt-0.5 rounded-lg bg-slate-100 p-2 group-hover:bg-slate-900 transition-colors">
