@@ -6,7 +6,7 @@ import { Reports } from './components/Reports';
 import { Welcome } from './components/Welcome';
 import { initializeDb, db } from './db';
 import { exportBackup } from './lib/backup';
-import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link } from 'lucide-react';
 
 const APP_URL = 'https://skaneby.github.io/bokf-ring-/';
 
@@ -20,47 +20,26 @@ const NAV = [
 type TabId = typeof NAV[number]['id'];
 
 export default function App() {
-  const [tab, setTab]           = useState<TabId>('dashboard');
-  const [mobile, setMobile]     = useState(false);
-  const [copied, setCopied]     = useState(false);
-  const [editId, setEditId]     = useState<number | null>(null);
-  const [ready,  setReady]      = useState(false);
-  const [hasData, setHasData]   = useState(true);
-  const [companyName, setCompanyName] = useState('');
-  const [confirmReset, setConfirmReset] = useState(false);
-
-  const loadCompanyName = async () => {
-    const s = await db.settings.get('companyName');
-    setCompanyName(s?.value ?? '');
-  };
+  const [tab, setTab]       = useState<TabId>('dashboard');
+  const [mobile, setMobile] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [ready,  setReady]  = useState(false);  // false = show welcome if DB empty
+  const [hasData, setHasData] = useState(true); // assume true until checked
 
   useEffect(() => {
     initializeDb().then(async () => {
       const count = await db.vouchers.count();
       if (count === 0) setHasData(false);
-      await loadCompanyName();
       setReady(true);
     }).catch(console.error);
   }, []);
 
-  const handleReset = async () => {
-    await db.transaction('rw', db.accounts, db.vouchers, db.transactions, db.settings, async () => {
-      await db.transactions.clear();
-      await db.vouchers.clear();
-      await db.accounts.clear();
-      await db.settings.clear();
-    });
-    setConfirmReset(false);
-    setCompanyName('');
-    setTab('dashboard');
-    setHasData(false);
-  };
-
   if (!ready) return null;
   if (!hasData) return (
     <Welcome
-      onLoaded={async () => { await loadCompanyName(); setHasData(true); }}
-      onStartFresh={async () => { await loadCompanyName(); setHasData(true); }}
+      onLoaded={() => setHasData(true)}
+      onStartFresh={() => setHasData(true)}
     />
   );
 
@@ -91,10 +70,8 @@ export default function App() {
       `}>
         {/* Logo */}
         <div className="px-6 py-6 border-b border-slate-800">
-          <p className="text-[10px] font-semibold tracking-[0.15em] text-slate-500 uppercase mb-0.5">Lokal bokföring</p>
-          <h1 className="text-lg font-bold text-white tracking-tight truncate" title={companyName || 'Bokföring'}>
-            {companyName || 'Bokföring'}
-          </h1>
+          <p className="text-[10px] font-semibold tracking-[0.15em] text-slate-500 uppercase mb-0.5">Lokal</p>
+          <h1 className="text-lg font-bold text-white tracking-tight">Bokföring</h1>
         </div>
 
         {/* Nav */}
@@ -138,36 +115,6 @@ export default function App() {
             <Link className="h-4 w-4 shrink-0" />
             {copied ? 'Länk kopierad!' : 'Dela appen'}
           </button>
-
-          <div className="mt-3 pt-3 border-t border-slate-800">
-            {!confirmReset ? (
-              <button
-                onClick={() => setConfirmReset(true)}
-                className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-500 hover:bg-red-900/30 hover:text-red-400 transition-colors"
-              >
-                <RefreshCw className="h-4 w-4 shrink-0" />
-                Ny bokföring
-              </button>
-            ) : (
-              <div className="px-3 py-2 space-y-2">
-                <p className="text-xs text-red-400">Raderar all data. Säker?</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleReset}
-                    className="flex-1 rounded-lg bg-red-700 px-2 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors"
-                  >
-                    Ja, radera
-                  </button>
-                  <button
-                    onClick={() => setConfirmReset(false)}
-                    className="flex-1 rounded-lg bg-slate-700 px-2 py-1.5 text-xs font-semibold text-white hover:bg-slate-600 transition-colors"
-                  >
-                    Avbryt
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </aside>
 

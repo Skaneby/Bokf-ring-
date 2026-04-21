@@ -21,16 +21,10 @@ export interface Transaction {
   amount: number; // Positive = Debit, Negative = Credit
 }
 
-export interface Setting {
-  key: string;
-  value: string;
-}
-
 export class AccountingDB extends Dexie {
   accounts!: Table<Account>;
   vouchers!: Table<Voucher>;
   transactions!: Table<Transaction>;
-  settings!: Table<Setting>;
 
   constructor() {
     super('AccountingDB');
@@ -38,12 +32,6 @@ export class AccountingDB extends Dexie {
       accounts: 'id, type',
       vouchers: '++id, date',
       transactions: '++id, voucherId, accountId'
-    });
-    this.version(2).stores({
-      accounts: 'id, type',
-      vouchers: '++id, date',
-      transactions: '++id, voucherId, accountId',
-      settings: 'key'
     });
   }
 }
