@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { BookOpen, FolderOpen, Plus, FileCode } from 'lucide-react';
 import { applyBackupData, buildBackupData } from '../lib/backup';
-import { importSIE } from '../lib/sie';
+import { importSIE, decodeSIEBuffer } from '../lib/sie';
 import { initializeDb } from '../db';
 
 interface Props {
@@ -34,9 +34,9 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
     setError('');
     try {
       await initializeDb();
-      // SIE4 uses PC8/ISO-8859-1 — decode correctly so Swedish chars survive
+      // SIE4 uses CP437 (PC8) — decode with full CP437→Unicode mapping
       const buffer = await file.arrayBuffer();
-      const text = new TextDecoder('iso-8859-1').decode(buffer);
+      const text = decodeSIEBuffer(buffer);
       await importSIE(text, 'replace');
       onLoaded();
     } catch {

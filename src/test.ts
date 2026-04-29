@@ -1,8 +1,10 @@
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { db, initializeDb } from './db';
-import { exportSIE, importSIE } from './lib/sie';
+import { exportSIE, importSIE, decodeSIEBuffer } from './lib/sie';
 import { buildBackupData, applyBackupData } from './lib/backup';
 import { splitVat, vatRows, VAT_OUT, VAT_IN } from './lib/vat';
 
@@ -647,6 +649,95 @@ async function runTests() {
     const accs = await db.accounts.toArray();
     const momsAcc = accs.find(a => a.id === 2640)!;
     assert(momsAcc.type === 'asset', 'Ingående moms (2640) är kontoart tillgång — aldrig kostnad');
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 14. SIE4-IMPORT FRÅN BL ADMINISTRATION (EXTERN FIL)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 14. SIE4-import BL Administration ────────────────');
+  {
+    await db.transaction('rw', db.accounts, db.vouchers, db.transactions, async () => {
+      await db.transactions.clear(); await db.vouchers.clear(); await db.accounts.clear();
+    });
+
+    // Read with CP437 decoder — same path as browser
+    const siePath = resolve(__dirname, '../src/test-fixtures/Unger_AnnaKarin_.SE');
+    let sieContent: string;
+    try {
+      sieContent = decodeSIEBuffer(readFileSync(siePath));
+    } catch {
+      console.log('  ⚠  Fixture-fil saknas — hoppar över SIE4-import-test');
+      console.log('     Kopiera Unger_AnnaKarin_.SE till src/test-fixtures/');
+      sieContent = '';
+    }
+
+    if (sieContent) {
+      await importSIE(sieContent, 'replace');
+
+      const vouchers     = await db.vouchers.toArray();
+      const transactions = await db.transactions.toArray();
+      const accounts     = await db.accounts.toArray();
+
+      assert(vouchers.length === 92,
+        `92 verifikationer importerade (fick ${vouchers.length})`);
+      assert(accounts.length > 100,
+        `Fler än 100 konton importerade (fick ${accounts.length})`);
+
+      // Kontotypmappning — BAS-kontoplan
+      const a1930 = accounts.find(a => a.id === 1930);
+      const a2610 = accounts.find(a => a.id === 2610);
+      const a3011 = accounts.find(a => a.id === 3011);
+      const a5410 = accounts.find(a => a.id === 5410);
+      const a2010 = accounts.find(a => a.id === 2010);
+      assert(a1930?.type === 'asset',     '1930 Företagskonto = tillgång');
+      assert(a2610?.type === 'liability', '2610 Utgående moms = skuld');
+      assert(a3011?.type === 'revenue',   '3011 Fakturerade tjänster = intäkt');
+      assert(a5410?.type === 'expense',   '5410 Förbrukningsinv = kostnad');
+      assert(a2010?.type === 'equity',    '2010 Eget kapital = eget kapital');
+
+      // Korrekt datum och beskrivning
+      const ver1 = vouchers.find(v => v.description === 'ELGIGANTEN');
+      assert(ver1?.date === '2024-01-02', 'VER 1: datum 2024-01-02');
+
+      // Korrekt transaktionsbelopp VER 1
+      const ver1tx = transactions.filter(t => t.voucherId === ver1?.id);
+      const bank1  = ver1tx.find(t => t.accountId === 1930);
+      const exp1   = ver1tx.find(t => t.accountId === 5410);
+      assert(near(bank1?.amount ?? 0, -1689), 'VER 1: 1930 = -1689.00');
+      assert(near(exp1?.amount  ?? 0,  1689), 'VER 1: 5410 = +1689.00');
+
+      // Försäljningsverifikation: faktura 1
+      const fakt1 = vouchers.find(v => v.description === 'FAKT 1');
+      const fakt1tx = transactions.filter(t => t.voucherId === fakt1?.id);
+      const fakt1bank = fakt1tx.find(t => t.accountId === 1930);
+      const fakt1rev  = fakt1tx.find(t => t.accountId === 3011);
+      const fakt1moms = fakt1tx.find(t => t.accountId === 2610);
+      assert(near(fakt1bank?.amount ?? 0,  7425),  'FAKT 1: bank +7425.00');
+      assert(near(fakt1rev?.amount  ?? 0, -5940),  'FAKT 1: intäkt -5940.00');
+      assert(near(fakt1moms?.amount ?? 0, -1485),  'FAKT 1: moms -1485.00');
+
+      // Stor försäljning (VER 88: SCA 250 000 kr)
+      const sca = vouchers.find(v => v.description === 'SCA');
+      const scatx = transactions.filter(t => t.voucherId === sca?.id);
+      const scaBank = scatx.find(t => t.accountId === 1930);
+      assert(near(scaBank?.amount ?? 0, 250000), 'VER SCA: bank +250 000 kr');
+
+      // Alla verifikationer är balanserade (debet = kredit)
+      let imbalanced = 0;
+      for (const v of vouchers) {
+        const txs = transactions.filter(t => t.voucherId === v.id);
+        const sum = txs.reduce((s, t) => s + t.amount, 0);
+        if (Math.abs(sum) > 0.02) imbalanced++;
+      }
+      assert(imbalanced === 0,
+        `Alla 92 verifikationer balanserade (${imbalanced} obalanserade)`);
+
+      // Svenska tecken — ä/ö ska överleva ISO-8859-1 import
+      const forbruk = accounts.find(a => a.id === 5460);
+      assert(forbruk?.name.includes('Förbrukningsmaterial') ?? false,
+        `Konto 5460 innehåller svenska tecken: "${forbruk?.name}"`);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════

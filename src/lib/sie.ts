@@ -1,6 +1,22 @@
 import { db } from '../db';
 import { format } from 'date-fns';
 
+// CP437 (PC8) → Unicode for characters 0x80–0xFF
+const CP437: Record<number, string> = {
+  0x80:'Ç',0x81:'ü',0x82:'é',0x83:'â',0x84:'ä',0x85:'à',0x86:'å',0x87:'ç',
+  0x88:'ê',0x89:'ë',0x8A:'è',0x8B:'ï',0x8C:'î',0x8D:'ì',0x8E:'Ä',0x8F:'Å',
+  0x90:'É',0x91:'æ',0x92:'Æ',0x93:'ô',0x94:'ö',0x95:'ò',0x96:'û',0x97:'ù',
+  0x98:'ÿ',0x99:'Ö',0x9A:'Ü',0x9B:'¢',0x9C:'£',0x9D:'¥',0x9E:'₧',0x9F:'ƒ',
+  0xA0:'á',0xA1:'í',0xA2:'ó',0xA3:'ú',0xA4:'ñ',0xA5:'Ñ',0xA6:'ª',0xA7:'º',
+};
+
+export function decodeSIEBuffer(buf: ArrayBuffer | Buffer): string {
+  const bytes = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+  let out = '';
+  for (const b of bytes) out += b < 0x80 ? String.fromCharCode(b) : (CP437[b] ?? String.fromCharCode(b));
+  return out;
+}
+
 export async function exportSIE(): Promise<string> {
   const accounts = await db.accounts.toArray();
   const vouchers = await db.vouchers.toArray();

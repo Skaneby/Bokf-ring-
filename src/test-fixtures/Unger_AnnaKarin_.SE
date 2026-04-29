@@ -1,0 +1,972 @@
+#FLAGGA 0
+#PROGRAM "BL Administration" 2026.2.100
+#FORMAT PC8
+#GEN 20260420 "1 Kent Fredriksson"
+#SIETYP 4
+#FNR "dIyv381242Ung"
+#ORGNR 740306-7825
+#ADRESS "" "ôrnsÑtrabacken 180" "127 30 SKéRHOLMEN" "070-8468563"
+#FNAMN "Unger Anna-Karin "
+#FTYP E
+#RAR 0 20240101 20241231
+#TAXAR 2025
+#KPTYP EUBAS97
+#KONTO 1110 "Byggnader"
+#KONTO 1119 "Ackumulerade avskrivningar pÜ byggnader"
+#KONTO 1220 "Inventarier och verktyg"
+#KONTO 1221 "Inventarier Ürets inkîp"
+#KONTO 1229 "Ack avskr pÜ inventarier o verktyg"
+#KONTO 1240 "Bilar och andra transportmedel"
+#KONTO 1249 "Ack avskr pÜ bilar och andra trpt.medel"
+#KONTO 1350 "Aktier, andelar och vÑrdep i andra ftg"
+#KONTO 1380 "Andra lÜngfristiga fordringar"
+#KONTO 1383 "LÑmnade depositioner"
+#KONTO 1410 "Lager av rÜvaror"
+#KONTO 1470 "PÜgÜende arbeten"
+#KONTO 1510 "Kundfordringar"
+#KONTO 1610 "Fordringar hos anstÑllda"
+#KONTO 1650 "Momsfordran"
+#KONTO 1680 "Andra kortfristiga fordringar"
+#KONTO 1710 "Fîrutbetalda hyreskostnader"
+#KONTO 1720 "Fîrutbetalda leasingavgifter"
+#KONTO 1730 "Fîrutbetalda fîrsÑkringspremier"
+#KONTO 1740 "Fîrutbetalda rÑntekostnader"
+#KONTO 1760 "Upplupna rÑnteintÑkter"
+#KONTO 1790 "ôvr fîrutbetalda kostn och upplupna int"
+#KONTO 1910 "Kassa"
+#KONTO 1920 "Plusgiro"
+#KONTO 1930 "Fîretagskonto"
+#KONTO 2010 "Eget kapital"
+#KONTO 2011 "Egna varuuttag"
+#KONTO 2012 "AvrÑkning fîr skatter och avgifter"
+#KONTO 2013 "ôvriga egna uttag"
+#KONTO 2014 "Upplupna egenavgifter m m"
+#KONTO 2017 "èrets kapitaltillskott"
+#KONTO 2019 "èrets resultat"
+#KONTO 2150 "Ackumulerade îveravskrivningar"
+#KONTO 2330 "CheckrÑkningskredit"
+#KONTO 2340 "Byggnadskreditiv"
+#KONTO 2350 "Andra skulder till kreditinstitut"
+#KONTO 2355 "LÜn i utlÑndsk valuta till kreditinst"
+#KONTO 2390 "ôvriga lÜngfristiga skulder"
+#KONTO 2420 "Fîrskott frÜn kunder"
+#KONTO 2440 "Leverantîrsskulder"
+#KONTO 2490 "ôvr kortfr skulder till kreditinst"
+#KONTO 2610 "UtgÜende moms, 25 %"
+#KONTO 2614 "Utg moms omvÑnd skattskyldighet, 25 %"
+#KONTO 2615 "UtgÜende moms import av varor, 25 %"
+#KONTO 2620 "UtgÜende moms, 12 %"
+#KONTO 2630 "UtgÜende moms, 6 %"
+#KONTO 2640 "IngÜende moms"
+#KONTO 2644 "IngÜende moms omvÑnd skattskyldighet"
+#KONTO 2650 "Redovisningskonto fîr moms"
+#KONTO 2660 "SÑrskilda punktskatter"
+#KONTO 2710 "Personalskatt"
+#KONTO 2730 "Lagst soc avg och sÑrskild lîneskatt"
+#KONTO 2760 "Semestermedel"
+#KONTO 2794 "Fackfîreningsavgifter"
+#KONTO 2810 "AvrÑkning fîr factoring"
+#KONTO 2820 "Skulder till anstÑllda"
+#KONTO 2840 "Kortfristiga lÜneskulder"
+#KONTO 2890 "ôvriga kortfristiga skulder"
+#KONTO 2910 "Upplupna lîner"
+#KONTO 2920 "Upplupna semesterlîner"
+#KONTO 2941 "BerÑknade uppl lagstadgade sociala avg"
+#KONTO 2942 "BerÑknad upplupen lîneskatt fîr lîner"
+#KONTO 2960 "Upplupna rÑntekostnader"
+#KONTO 2980 "Upplupna avtalskostnader"
+#KONTO 2990 "ôvr upplupna kostn och fîrutbetalda int"
+#KONTO 2999 "OBS-konto"
+#KONTO 3010 "FîrsÑljning"
+#KONTO 3011 "Fakturerade tjÑnster"
+#KONTO 3100 "FîrsÑljning skogsrum produktion"
+#KONTO 3200 "FîrsÑljning skogsprodukter"
+#KONTO 3500 "Fakturerade kostnader"
+#KONTO 3520 "Fakturerade frakter"
+#KONTO 3540 "Faktureringsavgifter"
+#KONTO 3690 "ôvriga sidointÑkter"
+#KONTO 3740 "ôresutjÑmning"
+#KONTO 3910 "Hyres- och arrendeintÑkter"
+#KONTO 3960 "Valutakursvinster"
+#KONTO 3973 "Vinst vid avyttring av maskiner och inv"
+#KONTO 3981 "ErhÜllna EU-bidrag"
+#KONTO 3985 "ErhÜllna statliga bidrag"
+#KONTO 3987 "ErhÜllna kommunala bidrag"
+#KONTO 3989 "ôvriga erhÜllna offentliga bidrag"
+#KONTO 3990 "ôvriga ersÑttningar, bidrag och intÑkter"
+#KONTO 4010 "Inkîp material och varor"
+#KONTO 4020 "Inkîp foder"
+#KONTO 4021 "Inkîp hundmtrl"
+#KONTO 4022 "FîrsÑkring hund"
+#KONTO 4100 "Inkîp musik/konstnÑrs mtrl"
+#KONTO 4425 "Inkîpta tjÑnster i Sverige, omv.moms 25%"
+#KONTO 4515 "Inkîp av varor frÜn annat EU-land, 25%"
+#KONTO 4600 "Legoarbeten och underentreprenader"
+#KONTO 5010 "Lokalhyra"
+#KONTO 5020 "El fîr belysning"
+#KONTO 5050 "Lokaltillbehîr"
+#KONTO 5060 "StÑdning och renhÜllning"
+#KONTO 5070 "Reparation och underhÜll av lokaler"
+#KONTO 5090 "ôvriga lokalkostnader"
+#KONTO 5170 "Reparation och underhÜll av fastighet"
+#KONTO 5210 "Hyra av maskiner"
+#KONTO 5220 "Hyra av inventarier och verktyg"
+#KONTO 5410 "Fîrbrukningsinventarier"
+#KONTO 5420 "Programvaror"
+#KONTO 5440 "Fîrbrukningsemballage"
+#KONTO 5460 "Fîrbrukningsmaterial"
+#KONTO 5480 "ArbetsklÑder och skyddsmaterial"
+#KONTO 5520 "Reparation och underhÜll av inventarier"
+#KONTO 5580 "UnderhÜll och tvÑtt av arbetsklÑder"
+#KONTO 5610 "Personbilskostnader"
+#KONTO 5611 "Drivmedel fîr personbilar"
+#KONTO 5612 "FîrsÑkring och skatt fîr personbilar"
+#KONTO 5613 "Reparation och underhÜll av personbilar"
+#KONTO 5615 "Leasing av personbilar"
+#KONTO 5616 "TrÑngselskatt, avdragsgill"
+#KONTO 5619 "ôvriga personbilskostnader"
+#KONTO 5710 "Frakter och transporter"
+#KONTO 5810 "Biljetter"
+#KONTO 5820 "Hyrbilskostnader"
+#KONTO 5830 "Kost och logi"
+#KONTO 5890 "ôvriga resekostnader"
+#KONTO 5910 "Annonsering"
+#KONTO 5920 "Utomhus- och trafikreklam"
+#KONTO 5930 "Reklamtrycksaker och direktreklam"
+#KONTO 5940 "UtstÑllningar och mÑssor"
+#KONTO 5960 "Varuprover, reklamgÜvor, presentreklam"
+#KONTO 5990 "ôvriga kostnader fîr reklam och PR"
+#KONTO 6010 "Kataloger, prislistor m m"
+#KONTO 6050 "FîrsÑljningsprovisioner"
+#KONTO 6060 "KreditfîrsÑljningskostnader"
+#KONTO 6071 "Representation, avdragsgill"
+#KONTO 6072 "Representation, ej avdragsgill"
+#KONTO 6090 "ôvriga fîrsÑljningskostnader"
+#KONTO 6110 "Kontorsmateriel"
+#KONTO 6150 "Trycksaker"
+#KONTO 6210 "Telekommunikation"
+#KONTO 6230 "Datakommunikation"
+#KONTO 6250 "Postbefordran"
+#KONTO 6310 "FîretagsfîrsÑkringar"
+#KONTO 6350 "Fîrluster pÜ kundfordringar"
+#KONTO 6360 "Garantikostnader"
+#KONTO 6370 "Kostnader fîr bevakning och larm"
+#KONTO 6420 "ErsÑttningar till revisor"
+#KONTO 6530 "RedovisningstjÑnster"
+#KONTO 6540 "IT-tjÑnster"
+#KONTO 6550 "Konsultarvoden"
+#KONTO 6560 "Serviceavgifter till branschorganisation"
+#KONTO 6570 "Bankkostnader"
+#KONTO 6590 "ôvriga externa tjÑnster"
+#KONTO 6970 "Tidningar, tidskrifter och facklitt"
+#KONTO 6981 "Fîreningsavgifter, avdragsgilla"
+#KONTO 6982 "Fîreningsavgifter, ej avdragsgilla"
+#KONTO 6991 "ôvriga externa kostnader, avdragsgilla"
+#KONTO 6992 "ôvriga externa kostnader, ej avdr.gilla"
+#KONTO 6993 "LÑmnade bidrag och gÜvor"
+#KONTO 7010 "Lîner till kollektivanstÑllda"
+#KONTO 7090 "FîrÑndring av semesterlîneskuld"
+#KONTO 7210 "Lîner till tjÑnstemÑn"
+#KONTO 7220 "Lîner till fîretagsledare"
+#KONTO 7310 "Kontanta extraersÑttningar"
+#KONTO 7321 "Skattefria traktamenten, Sverige"
+#KONTO 7322 "Skattepliktiga traktamenten, Sverige"
+#KONTO 7323 "Skattefria traktamenten, utlandet"
+#KONTO 7324 "Skattepliktiga traktamenten, utlandet"
+#KONTO 7331 "BilersÑttningar, skattefria"
+#KONTO 7332 "BilersÑttningar, skattepliktiga"
+#KONTO 7370 "RepresentationsersÑttningar"
+#KONTO 7380 "Kostnader fîr fîrmÜner till anstÑllda"
+#KONTO 7390 "ôvriga kostnadsersÑttningar och fîrmÜner"
+#KONTO 7410 "PensionsfîrsÑkringspremier"
+#KONTO 7460 "Pensionsutbetalningar"
+#KONTO 7510 "Lagstadgade sociala avgifter"
+#KONTO 7519 "Soc avg fîr semester- och lîneskuld"
+#KONTO 7530 "SÑrskild lîneskatt"
+#KONTO 7570 "Premier fîr arbetsmarknadsfîrsÑkringar"
+#KONTO 7580 "GrupplivfîrsÑkringspremier"
+#KONTO 7590 "ôvr soc och andra avg enligt lag o avtal"
+#KONTO 7610 "Utbildning"
+#KONTO 7620 "Sjuk- och hÑlsovÜrd"
+#KONTO 7631 "Personalrepresentation, avdragsgill"
+#KONTO 7632 "Personalrepresentation, ej avdragsgill"
+#KONTO 7690 "ôvriga personalkostnader"
+#KONTO 7810 "Avskrivningar pÜ immateriella anl.tillg"
+#KONTO 7820 "Avskrivningar pÜ byggnader och markanl"
+#KONTO 7830 "Avskrivningar pÜ maskiner och inv"
+#KONTO 7960 "Valutakursfîrluster"
+#KONTO 7973 "Fîrlust vid avyttring av mask o invent"
+#KONTO 8310 "RÑnteintÑkter frÜn omsÑttningstillgÜngar"
+#KONTO 8311 "RÑnteintÑkter frÜn bank"
+#KONTO 8314 "Skattefria rÑnteintÑkter"
+#KONTO 8390 "ôvriga finansiella intÑkter"
+#KONTO 8410 "RÑntekostnader fîr lÜngfristiga skulder"
+#KONTO 8421 "RÑntekostnader till kreditinstitut"
+#KONTO 8423 "RÑntekostnader fîr skatter och avgifter"
+#KONTO 8490 "ôvriga skuldrelaterade poster"
+#KONTO 8710 "ExtraordinÑra intÑkter"
+#KONTO 8750 "ExtraordinÑra kostnader"
+#KONTO 8811 "AvsÑttning till periodiseringsfond"
+#KONTO 8819 "èterfîring frÜn periodiseringsfond"
+#KONTO 8850 "FîrÑndring av îveravskrivningar"
+#KONTO 8910 "Skatt pÜ Ürets beskattningsbara resultat"
+#KONTO 8999 "èrets resultat"
+#SRU 1110 7210
+#SRU 1119 7210
+#SRU 1220 7212
+#SRU 1221 7212
+#SRU 1229 7212
+#SRU 1240 7212
+#SRU 1249 7212
+#SRU 1350 7213
+#SRU 1380 7213
+#SRU 1383 7213
+#SRU 1410 7240
+#SRU 1470 7240
+#SRU 1510 7250
+#SRU 1610 7260
+#SRU 1650 7260
+#SRU 1680 7260
+#SRU 1710 7260
+#SRU 1720 7260
+#SRU 1730 7260
+#SRU 1740 7260
+#SRU 1760 7260
+#SRU 1790 7260
+#SRU 1910 7280
+#SRU 1920 7280
+#SRU 1930 7280
+#SRU 2010 7300
+#SRU 2011 7300
+#SRU 2012 7300
+#SRU 2013 7300
+#SRU 2014 7300
+#SRU 2017 7300
+#SRU 2019 7300
+#SRU 2150 7320
+#SRU 2330 7380
+#SRU 2340 7380
+#SRU 2350 7380
+#SRU 2355 7380
+#SRU 2390 7380
+#SRU 2420 7383
+#SRU 2440 7382
+#SRU 2490 7383
+#SRU 2610 7381
+#SRU 2614 7381
+#SRU 2615 7381
+#SRU 2620 7381
+#SRU 2630 7381
+#SRU 2640 7381
+#SRU 2644 7381
+#SRU 2650 7381
+#SRU 2660 7381
+#SRU 2710 7381
+#SRU 2730 7381
+#SRU 2760 7383
+#SRU 2794 7383
+#SRU 2810 7383
+#SRU 2820 7383
+#SRU 2840 7383
+#SRU 2890 7383
+#SRU 2910 7383
+#SRU 2920 7383
+#SRU 2941 7383
+#SRU 2942 7383
+#SRU 2960 7383
+#SRU 2980 7383
+#SRU 2990 7383
+#SRU 2999 7383
+#SRU 3010 7400
+#SRU 3011 7400
+#SRU 3100 7400
+#SRU 3200 7400
+#SRU 3500 7400
+#SRU 3520 7400
+#SRU 3540 7400
+#SRU 3690 7400
+#SRU 3740 7400
+#SRU 3910 7400
+#SRU 3960 7401
+#SRU 3973 7400
+#SRU 3981 7401
+#SRU 3985 7401
+#SRU 3987 7401
+#SRU 3989 7401
+#SRU 3990 7401
+#SRU 4010 7500
+#SRU 4020 7500
+#SRU 4021 7500
+#SRU 4022 7500
+#SRU 4100 7500
+#SRU 4425 7500
+#SRU 4515 7500
+#SRU 4600 7500
+#SRU 5010 7501
+#SRU 5020 7501
+#SRU 5050 7501
+#SRU 5060 7501
+#SRU 5070 7501
+#SRU 5090 7501
+#SRU 5170 7501
+#SRU 5210 7501
+#SRU 5220 7501
+#SRU 5410 7501
+#SRU 5420 7501
+#SRU 5440 7501
+#SRU 5460 7501
+#SRU 5480 7501
+#SRU 5520 7501
+#SRU 5580 7501
+#SRU 5610 7501
+#SRU 5611 7501
+#SRU 5612 7501
+#SRU 5613 7501
+#SRU 5615 7501
+#SRU 5616 7501
+#SRU 5619 7501
+#SRU 5710 7501
+#SRU 5810 7501
+#SRU 5820 7501
+#SRU 5830 7501
+#SRU 5890 7501
+#SRU 5910 7501
+#SRU 5920 7501
+#SRU 5930 7501
+#SRU 5940 7501
+#SRU 5960 7501
+#SRU 5990 7501
+#SRU 6010 7501
+#SRU 6050 7501
+#SRU 6060 7501
+#SRU 6071 7501
+#SRU 6072 7501
+#SRU 6072 7601
+#SRU 6090 7501
+#SRU 6110 7501
+#SRU 6150 7501
+#SRU 6210 7501
+#SRU 6230 7501
+#SRU 6250 7501
+#SRU 6310 7501
+#SRU 6350 7501
+#SRU 6360 7501
+#SRU 6370 7501
+#SRU 6420 7501
+#SRU 6530 7501
+#SRU 6540 7501
+#SRU 6550 7501
+#SRU 6560 7501
+#SRU 6570 7501
+#SRU 6590 7501
+#SRU 6970 7501
+#SRU 6981 7501
+#SRU 6982 7501
+#SRU 6982 7601
+#SRU 6991 7501
+#SRU 6992 7501
+#SRU 6992 7601
+#SRU 6993 7501
+#SRU 7010 7502
+#SRU 7090 7502
+#SRU 7210 7502
+#SRU 7220 7502
+#SRU 7310 7502
+#SRU 7321 7502
+#SRU 7322 7502
+#SRU 7323 7502
+#SRU 7324 7502
+#SRU 7331 7502
+#SRU 7332 7502
+#SRU 7370 7502
+#SRU 7380 7502
+#SRU 7390 7502
+#SRU 7410 7502
+#SRU 7460 7502
+#SRU 7510 7502
+#SRU 7519 7502
+#SRU 7530 7502
+#SRU 7570 7502
+#SRU 7580 7502
+#SRU 7590 7502
+#SRU 7610 7502
+#SRU 7620 7502
+#SRU 7631 7502
+#SRU 7632 7502
+#SRU 7632 7601
+#SRU 7690 7502
+#SRU 7810 7505
+#SRU 7820 7504
+#SRU 7830 7505
+#SRU 7960 7503
+#SRU 7973 7503
+#SRU 8310 7403
+#SRU 8311 7403
+#SRU 8314 7403
+#SRU 8314 7700
+#SRU 8390 7403
+#SRU 8410 7503
+#SRU 8421 7503
+#SRU 8423 7503
+#SRU 8423 7601
+#SRU 8490 7403
+#SRU 8710 7403
+#SRU 8750 7403
+#SRU 8811 7503
+#SRU 8819 7403
+#SRU 8819 7608
+#SRU 8850 7504
+#SRU 8910 7503
+#SRU 8999 7440
+#UB 0 1221 45000.00
+#UB 0 1229 -13500.00
+#UB 0 2010 135660.75
+#UB 0 2019 -119781.75
+#UB 0 2650 -47379.00
+#RES 0 3011 -5940.00
+#RES 0 3100 -25600.00
+#RES 0 3200 -200000.00
+#RES 0 3740 0.47
+#RES 0 4010 222.40
+#RES 0 4020 7072.56
+#RES 0 4021 2192.97
+#RES 0 4022 12648.00
+#RES 0 4100 2713.20
+#RES 0 5170 1337.60
+#RES 0 5410 31632.89
+#RES 0 5420 354.00
+#RES 0 5460 4804.14
+#RES 0 5480 199.20
+#RES 0 5611 680.50
+#RES 0 5613 15555.20
+#RES 0 5890 445.28
+#RES 0 6110 509.80
+#RES 0 6550 16750.00
+#RES 0 6970 1140.04
+#RES 0 7830 13500.00
+#RES 0 8999 119781.75
+#VER A 1 20240102 "ELGIGANTEN" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -1689.00 20240102 ""
+#TRANS 5410 {} 1689.00 20240102 ""
+}
+#VER A 2 20240112 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -518.90 20240112 ""
+#TRANS 5410 {} 518.90 20240112 ""
+}
+#VER A 3 20240114 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -129.80 20240114 ""
+#TRANS 5460 {} 129.80 20240114 ""
+}
+#VER A 4 20240114 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -189.90 20240114 ""
+#TRANS 5460 {} 189.90 20240114 ""
+}
+#VER A 5 20240114 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -159.90 20240114 ""
+#TRANS 5460 {} 159.90 20240114 ""
+}
+#VER A 6 20240129 "webhallen" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -449.00 20240129 ""
+#TRANS 5410 {} 449.00 20240129 ""
+}
+#VER A 7 20240129 "GOOGLE WORKSPACE" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -11.00 20240129 ""
+#TRANS 5420 {} 11.00 20240129 ""
+}
+#VER A 8 20240204 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -79.70 20240204 ""
+#TRANS 5460 {} 79.70 20240204 ""
+}
+#VER A 9 20240211 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -499.80 20240211 ""
+#TRANS 5410 {} 499.80 20240211 ""
+}
+#VER A 10 20240211 "SEA HUND O KATT" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -949.00 20240211 ""
+#TRANS 4020 {} 949.00 20240211 ""
+}
+#VER A 11 20240212 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -269.90 20240212 ""
+#TRANS 5460 {} 269.90 20240212 ""
+}
+#VER A 12 20240212 "LUDVIG O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -16750.00 20240212 ""
+#TRANS 6550 {} 16750.00 20240212 ""
+}
+#VER A 13 20240222 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -499.80 20240222 ""
+#TRANS 5410 {} 499.80 20240222 ""
+}
+#VER A 14 20240229 "GOOGLE WOERKSPACE" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -11.00 20240229 ""
+#TRANS 5420 {} 11.00 20240229 ""
+}
+#VER A 15 20240229 "FURBED" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -9039.99 20240229 ""
+#TRANS 5410 {} 9039.99 20240229 ""
+}
+#VER A 16 20240303 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -379.90 20240303 ""
+#TRANS 5410 {} 379.90 20240303 ""
+}
+#VER A 17 20240303 "WEBHALLEN" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -129.00 20240303 ""
+#TRANS 5410 {} 129.00 20240303 ""
+}
+#VER A 18 20240329 "WEBHALLEN" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -503.00 20240329 ""
+#TRANS 5410 {} 503.00 20240329 ""
+}
+#VER A 19 20240413 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -351.40 20240413 ""
+#TRANS 5410 {} 351.40 20240413 ""
+}
+#VER A 20 20240417 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -228.90 20240417 ""
+#TRANS 5410 {} 228.90 20240417 ""
+}
+#VER A 21 20240429 "SEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -899.00 20240429 ""
+#TRANS 4020 {} 899.00 20240429 ""
+}
+#VER A 22 20240430 "DELUX MUSIC" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -803.00 20240430 ""
+#TRANS 5410 {} 803.00 20240430 ""
+}
+#VER A 23 20240430 "GOOGLE WORKSPACE" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -11.00 20240430 ""
+#TRANS 5420 {} 11.00 20240430 ""
+}
+#VER A 24 20240513 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -509.80 20240513 ""
+#TRANS 6110 {} 509.80 20240513 ""
+}
+#VER A 25 20240526 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -79.90 20240526 ""
+#TRANS 5410 {} 79.90 20240526 ""
+}
+#VER A 26 20240528 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -79.90 20240528 ""
+#TRANS 5410 {} 79.90 20240528 ""
+}
+#VER A 27 20240528 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -29.90 20240528 ""
+#TRANS 5460 {} 29.90 20240528 ""
+}
+#VER A 28 20240531 "GOOGLE WORKSPACE" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -11.00 20240531 ""
+#TRANS 5420 {} 11.00 20240531 ""
+}
+#VER A 29 20240614 "SEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -932.00 20240614 ""
+#TRANS 2013 {} 32.00 20240614 ""
+#TRANS 4020 {} 720.00 20240614 ""
+#TRANS 2640 {} 180.00 20240614 ""
+}
+#VER A 30 20240614 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -29.90 20240614 ""
+#TRANS 5460 {} 29.90 20240614 ""
+}
+#VER A 31 20240620 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -569.85 20240620 ""
+#TRANS 5410 {} 455.88 20240620 ""
+#TRANS 2640 {} 113.97 20240620 ""
+}
+#VER A 32 20240627 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -448.90 20240627 ""
+#TRANS 5410 {} 359.12 20240627 ""
+#TRANS 2640 {} 89.78 20240627 ""
+}
+#VER A 33 20240630 "GOOGLE WORKSPACE" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -11.00 20240630 ""
+#TRANS 5420 {} 11.00 20240630 ""
+}
+#VER A 34 20240706 "FAKT 1" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} 7425.00 20240706 ""
+#TRANS 3011 {} -5940.00 20240706 ""
+#TRANS 2610 {} -1485.00 20240706 ""
+}
+#VER A 35 20240708 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -308.70 20240708 ""
+#TRANS 5410 {} 246.96 20240708 ""
+#TRANS 2640 {} 61.74 20240708 ""
+}
+#VER A 36 20240710 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -100.00 20240710 ""
+#TRANS 5410 {} 100.00 20240710 ""
+}
+#VER A 37 20240718 "BAUHAUS" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -119.00 20240718 ""
+#TRANS 5460 {} 95.20 20240718 ""
+#TRANS 2640 {} 23.80 20240718 ""
+}
+#VER A 38 20240724 "BAUHAUS" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -244.85 20240724 ""
+#TRANS 5460 {} 195.88 20240724 ""
+#TRANS 2640 {} 48.97 20240724 ""
+}
+#VER A 39 20240731 "GOOGLE WORKSPACE" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -11.00 20240731 ""
+#TRANS 5420 {} 11.00 20240731 ""
+}
+#VER A 40 20240807 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -61.60 20240807 ""
+#TRANS 5460 {} 47.68 20240807 ""
+#TRANS 2640 {} 11.92 20240807 ""
+#TRANS 2013 {} 2.00 20240807 ""
+}
+#VER A 41 20240814 "ZOO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -278.00 20240814 ""
+#TRANS 4010 {} 222.40 20240814 ""
+#TRANS 2640 {} 55.60 20240814 ""
+}
+#VER A 42 20240816 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -260.80 20240816 ""
+#TRANS 5460 {} 207.04 20240816 ""
+#TRANS 2640 {} 51.76 20240816 ""
+#TRANS 2013 {} 2.00 20240816 ""
+}
+#VER A 43 20240830 "SEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -1188.50 20240830 ""
+#TRANS 4020 {} 950.80 20240830 ""
+#TRANS 2640 {} 237.70 20240830 ""
+}
+#VER A 44 20240831 "ARKEN ZOO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -348.90 20240831 ""
+#TRANS 4020 {} 279.12 20240831 ""
+#TRANS 2640 {} 69.78 20240831 ""
+}
+#VER A 45 20240831 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -856.70 20240831 ""
+#TRANS 5410 {} 685.36 20240831 ""
+#TRANS 2640 {} 171.34 20240831 ""
+}
+#VER A 46 20240910 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -648.70 20240910 ""
+#TRANS 5410 {} 518.96 20240910 ""
+#TRANS 2640 {} 129.74 20240910 ""
+}
+#VER A 47 20240911 "SCANDINAVIAN PHOTO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -4464.00 20240911 ""
+#TRANS 5410 {} 3571.20 20240911 ""
+#TRANS 2640 {} 892.80 20240911 ""
+}
+#VER A 48 20240913 "POCKET SHOP" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -228.00 20240913 ""
+#TRANS 6970 {} 215.09 20240913 ""
+#TRANS 2640 {} 12.91 20240913 ""
+}
+#VER A 49 20240926 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -99.70 20240926 ""
+#TRANS 5460 {} 79.76 20240926 ""
+#TRANS 2640 {} 19.94 20240926 ""
+}
+#VER A 50 20240930 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -333.70 20240930 ""
+#TRANS 5480 {} 199.20 20240930 ""
+#TRANS 2640 {} 49.80 20240930 ""
+#TRANS 2013 {} 84.70 20240930 ""
+}
+#VER A 51 20241010 "BILTEMA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -1479.70 20241010 ""
+#TRANS 5460 {} 1183.76 20241010 ""
+#TRANS 2640 {} 295.94 20241010 ""
+}
+#VER A 52 20241017 "IKEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -379.00 20241017 ""
+#TRANS 5410 {} 303.20 20241017 ""
+#TRANS 2640 {} 75.80 20241017 ""
+}
+#VER A 53 20241017 "IKEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -1141.00 20241017 ""
+#TRANS 5460 {} 912.80 20241017 ""
+#TRANS 2640 {} 228.20 20241017 ""
+}
+#VER A 54 20241019 "ARKEN ZOO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -276.75 20241019 ""
+#TRANS 4020 {} 221.40 20241019 ""
+#TRANS 2640 {} 55.35 20241019 ""
+}
+#VER A 55 20241029 "SEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -749.00 20241029 ""
+#TRANS 4020 {} 599.20 20241029 ""
+#TRANS 2640 {} 149.80 20241029 ""
+}
+#VER A 56 20241109 "TAXI" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -472.00 20241109 ""
+#TRANS 2640 {} 26.72 20241109 ""
+#TRANS 5890 {} 445.28 20241109 ""
+}
+#VER A 57 20241109 "OKQ8" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -199.00 20241109 ""
+#TRANS 5460 {} 159.20 20241109 ""
+#TRANS 2640 {} 39.80 20241109 ""
+}
+#VER A 58 20241109 "BILKôP NISSAN PBD213" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -45000.00 20241109 ""
+#TRANS 1221 {} 45000.00 20241109 ""
+}
+#VER A 59 20241110 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -199.00 20241110 ""
+#TRANS 5410 {} 159.20 20241110 ""
+#TRANS 2640 {} 39.80 20241110 ""
+}
+#VER A 60 20241116 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -387.90 20241116 ""
+#TRANS 5410 {} 159.20 20241116 ""
+#TRANS 2640 {} 39.80 20241116 ""
+#TRANS 2013 {} 188.90 20241116 ""
+}
+#VER A 61 20241117 "SECOND HAND" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -187.50 20241117 ""
+#TRANS 5460 {} 187.50 20241117 ""
+}
+#VER A 62 20241121 "HôGA KUSTEN PLèTSLAGERI" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -1672.00 20241121 ""
+#TRANS 5170 {} 1337.60 20241121 ""
+#TRANS 2640 {} 334.40 20241121 ""
+}
+#VER A 63 20241129 "BEMZ" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -6639.20 20241129 ""
+#TRANS 5410 {} 5311.36 20241129 "Soffa"
+#TRANS 2640 {} 1327.84 20241129 ""
+}
+#VER A 64 20241130 "SEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -1016.50 20241130 ""
+#TRANS 4020 {} 813.20 20241130 ""
+#TRANS 2640 {} 203.30 20241130 ""
+}
+#VER A 65 20241130 "HôôK" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -917.80 20241130 ""
+#TRANS 4021 {} 734.24 20241130 ""
+#TRANS 2640 {} 183.56 20241130 ""
+}
+#VER A 66 20241130 "SEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -1016.50 20241130 ""
+#TRANS 4021 {} 813.20 20241130 ""
+#TRANS 2640 {} 203.30 20241130 ""
+}
+#VER A 67 20241130 "NORTH TRACKER" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -2004.00 20241130 ""
+#TRANS 5613 {} 1603.20 20241130 ""
+#TRANS 2640 {} 400.80 20241130 ""
+}
+#VER A 68 20241202 "AKADEMIBOKHANDELN" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -678.00 20241202 ""
+#TRANS 6970 {} 582.41 20241202 ""
+#TRANS 2640 {} 95.59 20241202 ""
+}
+#VER A 69 20241205 "MECA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -17440.00 20241205 ""
+#TRANS 5613 {} 13952.00 20241205 ""
+#TRANS 2640 {} 3488.00 20241205 ""
+}
+#VER A 70 20241208 "DOLLARSTORE" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -944.00 20241208 ""
+#TRANS 2013 {} 260.00 20241208 ""
+#TRANS 5460 {} 547.20 20241208 ""
+#TRANS 2640 {} 136.80 20241208 ""
+}
+#VER A 71 20241209 "MACMINI 2020" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -4000.00 20241209 ""
+#TRANS 5410 {} 4000.00 20241209 ""
+}
+#VER A 72 20241210 "APOTEKET" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -645.53 20241210 ""
+#TRANS 4021 {} 645.53 20241210 ""
+}
+#VER A 73 20241211 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -369.70 20241211 ""
+#TRANS 5410 {} 295.76 20241211 ""
+#TRANS 2640 {} 73.94 20241211 ""
+}
+#VER A 74 20241214 "THOMANN" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -2090.00 20241214 ""
+#TRANS 4100 {} 2090.00 20241214 ""
+}
+#VER A 75 20241214 "IB WAHLSTRôM" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -1640.00 20241214 ""
+#TRANS 4100 {} 512.00 20241214 ""
+#TRANS 2640 {} 128.00 20241214 ""
+#TRANS 2013 {} 1000.00 20241214 ""
+}
+#VER A 76 20241217 "KJELL O CO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -139.00 20241217 ""
+#TRANS 4100 {} 111.20 20241217 ""
+#TRANS 2640 {} 27.80 20241217 ""
+}
+#VER A 77 20241218 "AKADEMIBOKHANDELN" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -364.00 20241218 ""
+#TRANS 2640 {} 21.46 20241218 ""
+#TRANS 6970 {} 342.54 20241218 ""
+}
+#VER A 78 20241219 "INET" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -269.00 20241219 ""
+#TRANS 5410 {} 215.20 20241219 ""
+#TRANS 2640 {} 53.80 20241219 ""
+}
+#VER A 79 20241220 "Fakt 2" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} 32000.00 20241220 ""
+#TRANS 3100 {} -25600.00 20241220 ""
+#TRANS 2610 {} -6400.00 20241220 ""
+}
+#VER A 80 20241222 "JULA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -418.60 20241222 ""
+#TRANS 5460 {} 191.12 20241222 ""
+#TRANS 2640 {} 47.78 20241222 ""
+#TRANS 2013 {} 179.70 20241222 ""
+}
+#VER A 81 20241224 "ST1" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -850.62 20241224 ""
+#TRANS 5611 {} 680.50 20241224 ""
+#TRANS 2640 {} 170.12 20241224 ""
+}
+#VER A 82 20241230 "SEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -980.58 20241230 ""
+#TRANS 4020 {} 784.46 20241230 ""
+#TRANS 2640 {} 196.12 20241230 ""
+}
+#VER A 83 20241230 "DOLLARSTORE" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -453.00 20241230 ""
+#TRANS 5460 {} 108.00 20241230 ""
+#TRANS 2640 {} 27.00 20241230 ""
+#TRANS 2013 {} 318.00 20241230 ""
+}
+#VER A 84 20241230 "SEA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -980.58 20241230 ""
+#TRANS 4020 {} 784.46 20241230 ""
+#TRANS 2640 {} 196.12 20241230 ""
+}
+#VER A 85 20241231 "ARKEN ZOO" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -89.90 20241231 ""
+#TRANS 4020 {} 71.92 20241231 ""
+#TRANS 2640 {} 17.98 20241231 ""
+}
+#VER A 86 20241231 "HUNDFôRSéKRING" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -12648.00 20241231 ""
+#TRANS 4022 {} 12648.00 20241231 ""
+}
+#VER A 87 20241231 "loopia domÑn" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 1930 {} -288.00 20241231 ""
+#TRANS 5420 {} 288.00 20241231 ""
+}
+#VER A 88 20241231 "SCA" 20250609 "#7 èsa Vestin ôberg"
+{
+#TRANS 3200 {} -200000.00 20241231 ""
+#TRANS 2610 {} -50000.00 20241231 ""
+#TRANS 1930 {} 250000.00 20241231 ""
+}
+#VER A 89 20241231 "Avskrivning" 20250609 "#6 Kent Fredriksson"
+{
+#TRANS 1229 {} -13500.00 20241231 ""
+#TRANS 7830 {} 13500.00 20241231 ""
+}
+#VER A 90 20241231 "Omfîring resultat" 20250609 "#6 Kent Fredriksson"
+{
+#TRANS 2013 {} -2067.30 20241231 ""
+#TRANS 2010 {} 2067.30 20241231 ""
+#TRANS 8999 {} 119782.22 20241231 ""
+#TRANS 2019 {} -119782.22 20241231 ""
+#TRANS 1930 {} -133593.45 20241231 ""
+#TRANS 2010 {} 133593.45 20241231 ""
+#TRANS 2010 {} 0.00 20241231 ""
+}
+#VER A 91 20241231 "Momsîverfîring" 20250609 "#6 Kent Fredriksson"
+{
+#TRANS 2610 {} 57885.00 20241231 "1 Huvudredovisning 202412"
+#TRANS 2640 {} -10506.47 20241231 "1 Huvudredovisning 202412"
+#TRANS 2650 {} -47379.00 20241231 "1 Huvudredovisning 202412"
+#TRANS 3740 {} 0.47 20241231 "1 Huvudredovisning 202412"
+}
+#VER A 92 20241231 "" 20250611 "#6 Kent Fredriksson"
+{
+#TRANS 2019 {} 0.47 20241231 ""
+#TRANS 8999 {} -0.47 20241231 ""
+}
