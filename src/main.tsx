@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// ?reset=1 → nuke all SWs and caches, then reload clean
+// ?reset=1 → nuke all SWs, caches, and IndexedDB, then reload clean
 if (new URLSearchParams(location.search).has('reset')) {
   (async () => {
     if ('serviceWorker' in navigator) {
@@ -12,6 +12,7 @@ if (new URLSearchParams(location.search).has('reset')) {
     }
     const keys = await caches.keys();
     await Promise.all(keys.map(k => caches.delete(k)));
+    indexedDB.deleteDatabase('AccountingDB');
     location.replace(location.pathname);
   })();
 } else {

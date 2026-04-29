@@ -4,9 +4,9 @@ import { VoucherEntry } from './components/VoucherEntry';
 import { ChartOfAccounts } from './components/ChartOfAccounts';
 import { Reports } from './components/Reports';
 import { Welcome } from './components/Welcome';
-import { initializeDb, db } from './db';
+import { db } from './db';
 import { exportBackup } from './lib/backup';
-import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link } from 'lucide-react';
+import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, RefreshCw } from 'lucide-react';
 
 const APP_URL = 'https://skaneby.github.io/Bokf-ring-/';
 
@@ -28,8 +28,7 @@ export default function App() {
   const [hasData, setHasData] = useState(true); // assume true until checked
 
   useEffect(() => {
-    initializeDb().then(async () => {
-      const count = await db.accounts.count();
+    db.accounts.count().then(count => {
       if (count === 0) setHasData(false);
       setReady(true);
     }).catch(console.error);
@@ -55,6 +54,17 @@ export default function App() {
     setTimeout(() => setCopied(false), 2500);
   };
 
+
+  const handleSwitchBooks = async () => {
+    if (!window.confirm('Byt bokföring? All befintlig data raderas.')) return;
+    await db.transaction('rw', db.transactions, db.vouchers, db.accounts, async () => {
+      await db.transactions.clear();
+      await db.vouchers.clear();
+      await db.accounts.clear();
+    });
+    setMobile(false);
+    setHasData(false);
+  };
 
   const go = (id: TabId) => { setTab(id); setMobile(false); };
 
@@ -114,6 +124,13 @@ export default function App() {
           >
             <Link className="h-4 w-4 shrink-0" />
             {copied ? 'Länk kopierad!' : 'Dela appen'}
+          </button>
+          <button
+            onClick={handleSwitchBooks}
+            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-red-900/40 hover:text-red-400 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4 shrink-0" />
+            Byt bokföring
           </button>
         </div>
       </aside>

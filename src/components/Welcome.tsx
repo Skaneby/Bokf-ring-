@@ -33,7 +33,6 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
     if (!file) return;
     setError('');
     try {
-      await initializeDb();
       // SIE4 uses CP437 (PC8) — decode with full CP437→Unicode mapping
       const buffer = await file.arrayBuffer();
       const text = decodeSIEBuffer(buffer);
@@ -45,7 +44,8 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
     e.target.value = '';
   };
 
-  const handleFresh = () => {
+  const handleFresh = async () => {
+    await initializeDb();
     onStartFresh();
   };
 
