@@ -9,7 +9,7 @@ export async function exportSIE(): Promise<string> {
   let sie = '#FLAGGA 0\n';
   sie += '#FORMAT PC8\n';
   sie += '#SIETYP 4\n';
-  sie += '#PROGRAM "Lokal Bokföring AI Studio" 1.0\n';
+  sie += '#PROGRAM "Lokal Bokföring" 1.0\n';
   sie += `#GEN ${format(new Date(), 'yyyyMMdd')}\n`;
   
   // Accounts – include a non-standard #KONTOTYP line so the type survives
