@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { formatCurrency } from '../lib/utils';
-import { exportSIE, importSIE } from '../lib/sie';
+import { exportSIE, importSIE, decodeSIEBuffer } from '../lib/sie';
 import { exportBackup, importBackup } from '../lib/backup';
 import { Download, Upload, Pencil, Trash2 } from 'lucide-react';
 
@@ -85,22 +85,18 @@ export function Reports({ onEditVoucher, onReset }: { onEditVoucher: (id: number
   const handleSieImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async ev => {
-      const content = ev.target?.result as string;
-      const hasData = (await db.vouchers.count()) > 0;
-      if (hasData) {
+    try {
+      const content = decodeSIEBuffer(await file.arrayBuffer());
+      const hasExisting = (await db.accounts.count()) > 0;
+      if (hasExisting) {
         setPendingSieFile(content);
       } else {
-        try {
-          await importSIE(content, 'merge');
-          notify(true, 'SIE-fil importerad.');
-        } catch {
-          notify(false, 'Kunde inte importera SIE-filen.');
-        }
+        await importSIE(content, 'merge');
+        notify(true, 'SIE-fil importerad.');
       }
-    };
-    reader.readAsText(file);
+    } catch {
+      notify(false, 'Kunde inte importera SIE-filen.');
+    }
     e.target.value = '';
   };
 
