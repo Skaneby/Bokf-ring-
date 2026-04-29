@@ -737,6 +737,22 @@ async function runTests() {
       const forbruk = accounts.find(a => a.id === 5460);
       assert(forbruk?.name.includes('Förbrukningsmaterial') ?? false,
         `Konto 5460 innehåller svenska tecken: "${forbruk?.name}"`);
+
+      // Konto 8999 "Årets resultat" är bokslutskonto → eget kapital, ej kostnad
+      const a8999 = accounts.find(a => a.id === 8999);
+      assert(a8999?.type === 'equity',
+        `8999 Årets resultat = eget kapital, ej kostnad (fick "${a8999?.type}")`);
+
+      // P&L-beräkning — intäkter ≠ kostnader (tidigare bug: 8999 blåste upp kostnader)
+      const bl = await getBalances();
+      assert(near(bl.revenue,   231539.53),
+        `Intäkter = 231 539,53 kr (fick ${bl.revenue.toFixed(2)})`);
+      assert(near(bl.expenses,  111757.78),
+        `Kostnader = 111 757,78 kr (fick ${bl.expenses.toFixed(2)})`);
+      assert(near(bl.netIncome, 119781.75),
+        `Årets resultat = 119 781,75 kr (fick ${bl.netIncome.toFixed(2)})`);
+      assert(bl.revenue > bl.expenses,
+        'Intäkter > Kostnader (ej lika p.g.a. 8999-klassificering)');
     }
   }
 
