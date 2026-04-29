@@ -1,198 +1,196 @@
 # Lokal Bokföring — projektöversikt
 
 ## Stack
-- React 19 + TypeScript + Vite + Tailwind CSS v4
-- Dexie.js (IndexedDB) — all data lagras lokalt i webbläsaren
-- @google/generative-ai (Gemini Vision) — OCR-skanning av kvitton
+- React 19 + TypeScript + Vite 6 + Tailwind CSS v4
+- Dexie.js (IndexedDB) — all data lagras lokalt i webbläsaren, ingen backend
+- @google/generative-ai (Gemini 2.5 Flash) — OCR-skanning av kvitton
+- vite-plugin-pwa — PWA med auto-uppdatering via service worker
 - date-fns med svenska locale
 
+---
+
 ## Deployment
-- **Repo:** `Skaneby/Bokf-ring-` (publikt, stort B i namnet)
-- **Live URL:** `https://skaneby.github.io/Bokf-ring-/` (stort B — skiftlägeskänsligt)
-- **Vite base path:** `/Bokf-ring-/` (måste matcha repo-namnet exakt)
-- **GitHub Actions** bygger och deployer vid push till `main` via `actions/deploy-pages@v4`
-- **Pages source** i GitHub Settings: "GitHub Actions" (inte branch)
-- Jobba **enbart på `main`** — all deployment sker via GitHub Actions automatiskt
+
+| Parameter | Värde |
+|-----------|-------|
+| Repo | `Skaneby/Bokf-ring-` (stort B — skiftlägeskänsligt) |
+| Live URL | `https://skaneby.github.io/Bokf-ring-/` (stort B) |
+| Vite base path | `/Bokf-ring-/` (måste matcha repo-namnet exakt) |
+| Branch | `main` — all deployment sker härifrån |
+| GitHub Pages source | **"GitHub Actions"** (inte "Deploy from branch") |
+
+**Deployment-flöde:**
+```
+git push origin main
+  → GitHub Actions triggas (.github/workflows/deploy.yml)
+  → npm ci && npm run build
+  → actions/upload-pages-artifact@v3 (dist/)
+  → actions/deploy-pages@v4
+  → Live på GitHub Pages (~40 sekunder)
+```
+
+**KRITISKT:** GitHub Pages MÅSTE vara konfigurerat till "GitHub Actions" som source i repo Settings → Pages. Om det är satt till "Deploy from branch" ignoreras alla Actions-deployments.
+
+**Förbjudna branches:** `gh-pages`, `gh-pages-clean` — ska inte existera. Om de dyker upp, ta bort dem.
+
+---
 
 ## Miljövariabler
 - `GEMINI_API_KEY` läses med `process.env.GEMINI_API_KEY ?? env.GEMINI_API_KEY` i vite.config.ts
-  - `process.env` fångar GitHub Actions secrets under bygget
-  - `env` (loadEnv) fångar lokala `.env`-filer — OBS: `loadEnv` läser INTE systemmiljövariabler
-- Nyckeln bäddas in i JS-bundelns byggtid (statisk app, ingen backend)
+  - `process.env` — fångar GitHub Actions secrets under bygget
+  - `env` (loadEnv) — fångar lokala `.env`-filer
+  - OBS: `loadEnv` läser INTE systemmiljövariabler — måste använda `process.env.X ?? env.X`
+- Nyckeln bäddas in i JS-bundelns vid byggtid (statisk app, ingen backend)
+
+---
 
 ## Arkitektur
 ```
 src/
-  App.tsx              — routing, editId-state, välkomstskärm-logik
+  App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema (accounts, vouchers, transactions)
+  main.tsx             — React-root mount
+  test.ts              — 156 enhetstester (Node + fake-indexeddb)
   components/
-    Welcome.tsx        — visas vid tom DB; ladda JSON-fil eller starta nytt
-    Dashboard.tsx      — KPI-kort, använd useLiveQuery i toppen (INTE i JSX)
+    Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
+    Dashboard.tsx      — KPI-kort; använd useLiveQuery i toppen (INTE i JSX)
     VoucherEntry.tsx   — bokföringsformulär, momshjälp, OCR-skanning
-    ChartOfAccounts.tsx
-    Reports.tsx        — flikar: Resultat, Balans, Huvudbok, Säkerhetskopiering
+    ChartOfAccounts.tsx — kontoplan CRUD
+    Reports.tsx        — flikar: Resultat, Balans, Huvudbok, Säkerhetskopiering + Byt bokföring
   lib/
-    backup.ts          — exportBackup() / importBackup(file)
-    sie.ts             — exportSIE() / importSIE(content, mode) — mode: merge|replace
+    backup.ts          — buildBackupData() / applyBackupData() / exportBackup()
+    sie.ts             — exportSIE() / importSIE(content, 'merge'|'replace')
+    vat.ts             — splitVat() / vatRows() / VAT_OUT / VAT_IN — testbar logik
     ocr.ts             — scanReceipt(file) via Gemini Vision
     utils.ts           — formatCurrency()
 ```
 
-## Kända fallgropar
-- **Hooks i JSX är förbjudet** — `useLiveQuery` måste anropas i toppen av komponenten, aldrig inuti return-satsen
-- **Repo-namnet har stort B** — `Bokf-ring-` inte `bokf-ring-`, påverkar base path och GitHub Pages URL
-- **`loadEnv` läser inte `process.env`** — använd `process.env.X ?? env.X` för secrets som sätts av CI
-- **SIE-import mode** — `importSIE(content, 'merge')` eller `'replace'`; frågar användaren om DB inte är tom
-- **Verifikationer** redigeras/raderas från Rapporter → Huvudbok; state lyfts via `editId` i App.tsx
+---
 
-## Viktig affärslogik
-- Debet = positivt belopp, Kredit = negativt i databasen
-- Momskonton: 2610 (25% utg.), 2620 (12% utg.), 2630 (6% utg.), 2640 (ing. moms)
-- `useLiveQuery` — alla vyer uppdateras automatiskt när DB ändras, ingen manuell refresh behövs
-- JSON-backup är primär säkerhetskopia; SIE4 för export till revisorer/andra system
+## Kända fallgropar
+
+### React
+- **Hooks i JSX är förbjudet** — `useLiveQuery` måste anropas i toppen av komponenten, aldrig inuti return-satsen eller villkorssatser
+- **useLiveQuery auto-uppdaterar** — ingen manuell refresh behövs efter DB-ändringar
+
+### Deployment
+- **Repo-namnet har stort B** — `Bokf-ring-` inte `bokf-ring-` — påverkar base path och URL
+- **`loadEnv` läser inte `process.env`** — använd `process.env.X ?? env.X` för CI-secrets
+- **Aldrig pusha till gh-pages manuellt** — deploy-pages@v4 hanterar allt
+- **PWA service worker** — använd `registerType: 'autoUpdate'` + `skipWaiting: true` + `clientsClaim: true` — annars fastnar gamla SW och servar stale cache på användarens enhet
+
+### Bokföring
+- **Balanscheck på sparade rader** — beräkna debet/kredit-diff ENBART på rader med valt konto (samma set som sparas), inte alla formulärrader
+- **SIE-import mode** — `importSIE(content, 'merge')` eller `'replace'`
+- **Verifikationer** redigeras/raderas från Rapporter → Huvudbok; state lyfts via `editId` i App.tsx
 
 ---
 
-## Bokföringsdomän — vad tjänsten måste förstå
+## Bokföringsdomän
 
-Du är en AI-tjänst som bygger och underhåller ett bokföringsprogram. Du måste förstå den underliggande bokföringslogiken på djupet — inte bara implementera UI. Nedan är de regler och begrepp som styr ALL kod du skriver i det här projektet.
+Du är en AI-tjänst som bygger och underhåller ett bokföringsprogram. Bokföringslogiken styr ALL kod du skriver.
 
 ### Grundprincipen: dubbelbokföring
 
-Varje ekonomisk händelse registreras som en **verifikation** med minst ett debetbelopp och ett kreditbelopp. Regeln är absolut:
+> **Summa debet = Summa kredit — alltid, utan undantag.**
 
-> **Summa debet = Summa kredit** — alltid, utan undantag.
+### Kontoarter
 
-Om du skriver kod som tillåter att en obalanserad verifikation sparas är det ett allvarligt fel. Balanskontrollen ska göras på de rader som faktiskt sparas (rader med valt konto), inte på alla rader i formuläret.
+| Kontoart | Svenska | Debet | Kredit |
+|----------|---------|-------|--------|
+| `asset` | Tillgång | Ökar | Minskar |
+| `liability` | Skuld | Minskar | Ökar |
+| `equity` | Eget kapital | Minskar | Ökar |
+| `revenue` | Intäkt | Minskar | Ökar |
+| `expense` | Kostnad | Ökar | Minskar |
 
-### Kontoarter och deras logik
+I databasen: positivt tal = debet, negativt tal = kredit. För att visa intäkt som positivt i rapport: negera databassaldot.
 
-Varje konto tillhör en kontoart. Kontoarten avgör hur saldot tolkas i rapporterna:
+### Typiska verifikationer
 
-| Kontoart | Svenska | Debet ökar/minskar | Kredit ökar/minskar |
-|----------|---------|-------------------|---------------------|
-| `asset` | Tillgång | Ökar (+) | Minskar (−) |
-| `liability` | Skuld | Minskar (−) | Ökar (+) |
-| `equity` | Eget kapital | Minskar (−) | Ökar (+) |
-| `revenue` | Intäkt | Minskar (−) | Ökar (+) |
-| `expense` | Kostnad | Ökar (+) | Minskar (−) |
+**Inköp med moms:**
+- Kostnadskonto (5410 etc.) Debet: netto
+- 2640 Ingående moms Debet: moms
+- 1930 Bank Kredit: brutto
 
-I databasen lagras alla belopp som ett signerat tal: positivt = debet, negativt = kredit. För att visa ett intäktssaldo som positivt tal i rapporterna måste du negera databassaldot (`revenue -= bal`).
-
-### Verifikation — vad som ska bokföras
-
-En verifikation är en ekonomisk händelse. Exempel på vanliga händelser och hur de bokförs:
-
-**Inköp med moms (ingående moms):**
-- Kostnadskonto (t.ex. 5410) Debet: nettobelopp
-- 2640 Ingående moms Debet: momsbelopp
-- 1930 Bank Kredit: bruttobelopp
-
-**Försäljning med moms (utgående moms):**
-- 1930 Bank Debet: bruttobelopp
-- Intäktskonto (t.ex. 3000) Kredit: nettobelopp
-- 2610/2620/2630 Utgående moms Kredit: momsbelopp
-
-En bokning med bara 2 av 3 rader ovan är **alltid fel** — det är ett tecken på att kostnadskontot eller intäktskontot saknas.
+**Försäljning med moms:**
+- 1930 Bank Debet: brutto
+- Intäktskonto (3000 etc.) Kredit: netto
+- 2610/2620/2630 Utgående moms Kredit: moms
 
 ### Momsberäkning
-
-Moms beräknas alltid från bruttobeloppet (inkl. moms):
-
 ```
-moms = round(brutto × sats / (100 + sats), 2 decimaler)
-netto = round(brutto − moms, 2 decimaler)
+moms  = round(brutto × sats / (100 + sats), 2)
+netto = round(brutto − moms, 2)
 ```
-
-Momssatser: 6%, 12%, 25%. Kontomappning:
-- 25% utgående → 2610, 12% → 2620, 6% → 2630
-- Ingående moms (alla satser) → 2640
-
-### Huvudboken
-
-Huvudboken är summan av alla transaktioner per konto. Det är grunden för alla rapporter — resultaträkning, balansräkning och momsrapport är olika filter på samma underliggande data. Du ska aldrig beräkna en rapport från något annat än huvudboken.
+Satser: 6% → 2630, 12% → 2620, 25% → 2610 (utgående). Ingående alltid 2640.
 
 ### Balansräkningsekvationen
-
-Denna ekvation ska alltid stämma i databasen:
-
 > **Tillgångar = Skulder + Eget kapital + Årets resultat**
 
-Om ekvationen inte stämmer finns det ett fel i bokföringen. Testerna kontrollerar detta efter varje operation.
+### Rapporter är vyer på samma data
+Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportdatabas.
 
-### Resultaträkning
-
-- **Intäkter** = summan av kreditbokningar på intäktskonton (negerat databassaldo)
-- **Kostnader** = summan av debetbokningar på kostnadskonton (databassaldo direkt)
-- **Årets resultat** = Intäkter − Kostnader
-
-### Rapporter är vyer — inte separat data
-
-Alla rapporter (resultat, balans, huvudbok, moms) läser samma `transactions`-tabell. Det finns ingen separat "rapportdatabas". När du ändrar en verifikation uppdateras alla rapporter automatiskt via `useLiveQuery`.
+---
 
 ## Utvecklingsflöde
 ```bash
-npm run dev    # lokal dev
-npm run build  # produktionsbygge — verifiera alltid innan push
-git push origin main  # triggar deploy automatiskt
+npm run dev          # lokal dev (http://localhost:5173/)
+npm run test         # kör 156 enhetstester
+npm run build        # produktionsbygge — verifiera alltid innan push
+git push origin main # triggar deploy automatiskt (~40 sek)
 ```
 
 ---
 
 ## Workflow Orchestration
 
-### 1. Plan Node Default
-- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
-- If something goes sideways, STOP and re-plan immediately — don't keep pushing
-- Use plan mode for verification steps, not just building
-- Write detailed specs upfront to reduce ambiguity
+### 1. Plan First
+- Gå in i plan-läge för ALLA icke-triviala uppgifter (3+ steg eller arkitekturella beslut)
+- Om något går fel — STOPPA och omplanera omedelbart, fortsätt inte att trycka på
+- Skriv detaljerade specs i förväg för att minska tvetydighet
 
-### 2. Subagent Strategy
-- Use subagents liberally to keep main context window clean
-- Offload research, exploration, and parallel analysis to subagents
-- For complex problems, throw more compute at it via subagents
-- One task per subagent for focused execution
+### 2. Subagent-strategi
+- Använd subagenter liberalt för att hålla huvudkontextfönstret rent
+- Delegera research, utforskning och parallell analys till subagenter
+- En uppgift per subagent för fokuserad exekvering
 
 ### 3. Self-Improvement Loop
-- After ANY correction from the user: update `tasks/lessons.md` with the pattern
-- Write rules that prevent the same mistake from recurring
-- Ruthlessly iterate on lessons until mistake rate drops
-- Review lessons at session start for relevant context
+- Efter VARJE korrigering från användaren: uppdatera `tasks/lessons.md` med mönstret
+- Skriv regler som förhindrar samma misstag från att återupprepas
+- Granska lessons.md i början av varje session
 
-### 4. Verification Before Done
-- Never mark a task complete without proving it works
-- Diff behavior between main and your changes when relevant
-- Ask: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness
+### 4. Verifiera innan klart
+- Markera ALDRIG en uppgift som klar utan att bevisa att det fungerar
+- Kör tester, kolla loggar, visa korrekthet
+- Fråga dig själv: "Skulle en senior ingenjör godkänna detta?"
 
-### 5. Demand Elegance (Balanced)
-- For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
-- Skip this for simple, obvious fixes — don't over-engineer
-- Challenge your own work before presenting it
+### 5. Kräv elegans (balanserat)
+- För icke-triviala ändringar: pausa och fråga "finns det ett mer elegant sätt?"
+- Om en fix känns hackig: implementera den eleganta lösningen istället
+- Hoppa över detta för enkla, uppenbara fixar — överkonstruera inte
 
-### 6. Autonomous Bug Fixing
-- When given a bug report: just fix it — don't ask for hand-holding
-- Point at logs, errors, failing tests then resolve them
-- Zero context switching required from the user
-- Fix failing CI tests without being told how
+### 6. Autonom buggfix
+- Vid buggrapport: fixa den direkt — fråga inte om hand-holding
+- Peka på loggar, fel, misslyckade tester och lös dem
+- Fixa misslyckade CI-tester utan att bli tillsagd
 
----
+## Arbetsregler
 
-## Task Management
+1. **Jobba enbart på `main`** — inga feature branches, inga gh-pages branches
+2. **Bygg alltid innan push** — `npm run build` måste lyckas
+3. **Kör tester** — `npm run test` ska vara grönt
+4. **Verifiera deployment** — kolla GitHub Actions efter push (~40 sek)
+5. **Minsta möjliga förändring** — rör bara det som behövs för uppgiften
+6. **Inga kommentarer** om inte WHY är icke-uppenbar
+7. **Uppdatera lessons.md** efter varje korrigering från användaren
+8. **Planera i todo.md** — checklistor, markera klart vartefter
 
-1. **Plan First** — write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan** — check in before starting implementation
-3. **Track Progress** — mark items complete as you go
-4. **Explain Changes** — high-level summary at each step
-5. **Document Results** — add review section to `tasks/todo.md`
-6. **Capture Lessons** — update `tasks/lessons.md` after any correction
+## Uppgiftshantering
 
----
-
-## Core Principles
-
-- **Simplicity First** — make every change as simple as possible; impact minimal code
-- **No Laziness** — find root causes; no temporary fixes; senior developer standards
-- **Minimal Impact** — changes should only touch what's necessary; avoid introducing bugs
-- **Comment on Code** — write clear, understandable comments so developers can follow the logic
+1. **Planera först** — skriv plan till `tasks/todo.md` med checkbara punkter
+2. **Verifiera plan** — checka in innan implementation påbörjas
+3. **Spåra progress** — markera punkter klara vartefter
+4. **Förklara ändringar** — hög-nivå-sammanfattning vid varje steg
+5. **Dokumentera resultat** — lägg till review-sektion i `tasks/todo.md`
+6. **Fånga lärdomar** — uppdatera `tasks/lessons.md` efter korrigeringar
