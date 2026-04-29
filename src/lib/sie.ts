@@ -85,6 +85,8 @@ export async function importSIE(fileContent: string, mode: 'merge' | 'replace' =
           else if (id >= 2000 && id <= 2099) type = 'equity';
           else if (id >= 2100 && id <= 2999) type = 'liability';
           else if (id >= 3000 && id <= 3999) type = 'revenue';
+          // 8900-8999: year-end closing accounts (Årets resultat etc) → equity, not expense
+          else if (id >= 8900 && id <= 8999) type = 'equity';
 
           await db.accounts.put({ id, name, type });
         }
