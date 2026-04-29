@@ -29,7 +29,7 @@ export default function App() {
 
   useEffect(() => {
     initializeDb().then(async () => {
-      const count = await db.vouchers.count();
+      const count = await db.accounts.count();
       if (count === 0) setHasData(false);
       setReady(true);
     }).catch(console.error);
