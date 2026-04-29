@@ -73,11 +73,12 @@ export async function importSIE(fileContent: string, mode: 'merge' | 'replace' =
           await db.accounts.put({ id, name, type });
         }
       } else if (line.startsWith('#VER')) {
-        const match = line.match(/#VER\s+"[^"]*"\s+"[^"]*"\s+(\d{8})\s+"([^"]+)"/);
+        // Handles both quoted ("" "") and bare (A 1) series/number fields
+        const match = line.match(/#VER\s+(?:"[^"]*"|\S+)\s+(?:"[^"]*"|\S+)\s+(\d{8})\s*(?:"([^"]*)")?/);
         if (match) {
           const dateStr = match[1];
           const date = `${dateStr.substring(0,4)}-${dateStr.substring(4,6)}-${dateStr.substring(6,8)}`;
-          const description = match[2];
+          const description = match[2] ?? '';
           
           currentVoucherId = await db.vouchers.add({
             date,

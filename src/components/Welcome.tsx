@@ -34,7 +34,10 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
     setError('');
     try {
       await initializeDb();
-      await importSIE(await file.text(), 'replace');
+      // SIE4 uses PC8/ISO-8859-1 — decode correctly so Swedish chars survive
+      const buffer = await file.arrayBuffer();
+      const text = new TextDecoder('iso-8859-1').decode(buffer);
+      await importSIE(text, 'replace');
       onLoaded();
     } catch {
       setError('Kunde inte läsa SIE-filen. Kontrollera att filen är ett giltigt SIE4-format.');
@@ -88,7 +91,7 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
               <p className="text-sm text-slate-500 mt-0.5">Starta från en export ur Fortnox, Visma eller annat system</p>
             </div>
           </button>
-          <input ref={sieRef} type="file" accept=".se,.si,.sie" className="hidden" onChange={handleSie} />
+          <input ref={sieRef} type="file" accept=".se,.si,.sie,.SE,.SI,.SIE" className="hidden" onChange={handleSie} />
 
           <button
             onClick={handleFresh}
