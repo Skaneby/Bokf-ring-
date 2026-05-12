@@ -1,11 +1,11 @@
-import { db } from '../db';
+import { db, Account, Voucher, Transaction } from '../db';
 
 export interface BackupData {
   version: number;
   exported_at: string;
-  accounts: object[];
-  vouchers: object[];
-  transactions: object[];
+  accounts: Account[];
+  vouchers: Voucher[];
+  transactions: Transaction[];
 }
 
 export async function buildBackupData(): Promise<BackupData> {
@@ -26,12 +26,12 @@ export async function applyBackupData(data: BackupData): Promise<{ vouchers: num
     throw new Error('Ogiltig backup-fil – saknar accounts, vouchers eller transactions.');
   }
   await db.transaction('rw', db.accounts, db.vouchers, db.transactions, async () => {
-    await db.transactions.clear();
-    await db.vouchers.clear();
-    await db.accounts.clear();
-    await db.accounts.bulkAdd(data.accounts as any[]);
-    await db.vouchers.bulkAdd(data.vouchers as any[]);
-    await db.transactions.bulkAdd(data.transactions as any[]);
+    await Promise.all([db.transactions.clear(), db.vouchers.clear(), db.accounts.clear()]);
+    await Promise.all([
+      db.accounts.bulkAdd(data.accounts),
+      db.vouchers.bulkAdd(data.vouchers),
+      db.transactions.bulkAdd(data.transactions),
+    ]);
   });
   return { vouchers: data.vouchers.length, transactions: data.transactions.length };
 }

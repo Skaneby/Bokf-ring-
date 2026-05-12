@@ -4,7 +4,7 @@ import { VoucherEntry } from './components/VoucherEntry';
 import { ChartOfAccounts } from './components/ChartOfAccounts';
 import { Reports } from './components/Reports';
 import { Welcome } from './components/Welcome';
-import { initializeDb, db } from './db';
+import { initializeDb } from './db';
 import { exportBackup } from './lib/backup';
 import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link } from 'lucide-react';
 
@@ -24,15 +24,13 @@ export default function App() {
   const [mobile, setMobile] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const [ready,  setReady]  = useState(false);  // false = show welcome if DB empty
-  const [hasData, setHasData] = useState(true); // assume true until checked
+  const [ready,   setReady]   = useState(false);
+  const [hasData, setHasData] = useState(false);
 
   useEffect(() => {
-    initializeDb().then(async () => {
-      const count = await db.vouchers.count();
-      if (count === 0) setHasData(false);
-      setReady(true);
-    }).catch(console.error);
+    initializeDb()
+      .then(({ hasData }) => { setHasData(hasData); setReady(true); })
+      .catch(console.error);
   }, []);
 
   if (!ready) return null;
@@ -45,6 +43,12 @@ export default function App() {
 
   const editVoucher = (id: number) => { setEditId(id); setTab('voucher'); setMobile(false); };
 
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 2500);
+    return () => clearTimeout(id);
+  }, [copied]);
+
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(APP_URL);
@@ -52,7 +56,6 @@ export default function App() {
       prompt('Kopiera länken:', APP_URL);
     }
     setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
   };
 
 

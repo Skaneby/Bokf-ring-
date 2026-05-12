@@ -63,9 +63,13 @@ export const defaultAccounts: Account[] = [
   { id: 6570, name: 'Bankkostnader', type: 'expense' },
 ];
 
-export async function initializeDb() {
-  const count = await db.accounts.count();
-  if (count === 0) {
+export async function initializeDb(): Promise<{ hasData: boolean }> {
+  const [accountCount, voucherCount] = await Promise.all([
+    db.accounts.count(),
+    db.vouchers.count(),
+  ]);
+  if (accountCount === 0) {
     await db.accounts.bulkAdd(defaultAccounts);
   }
+  return { hasData: voucherCount > 0 };
 }
