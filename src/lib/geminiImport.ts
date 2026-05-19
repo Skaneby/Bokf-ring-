@@ -1,0 +1,189 @@
+import { db } from '../db';
+import { splitVat, VAT_OUT, VAT_IN } from './vat';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type VatRate = 0 | 6 | 12 | 25;
+
+export interface GeminiRow {
+  date: string;                          // YYYY-MM-DD
+  description: string;
+  amount: number;                        // gross (inkl. moms)
+  vat_rate: VatRate;
+  category?: string;
+  suggested_account?: number;
+  type?: 'expense' | 'revenue';          // default: expense
+}
+
+export type ResolveSource = 'gemini' | 'dict' | 'history' | 'none';
+
+export interface DraftRow {
+  row: GeminiRow;
+  resolvedAccount: number | null;
+  resolveSource: ResolveSource;
+}
+
+// ── Parser ────────────────────────────────────────────────────────────────────
+
+// Strips optional ```json … ``` markdown fences, then JSON.parse
+export function parseGeminiJson(raw: string): unknown[] {
+  const stripped = raw.trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/,           '')
+    .trim();
+  const parsed = JSON.parse(stripped);
+  if (!Array.isArray(parsed)) throw new Error('JSON måste vara en array av objekt [ … ].');
+  return parsed;
+}
+
+const VALID_VAT = new Set([0, 6, 12, 25]);
+
+export function validateRows(rows: unknown[]): GeminiRow[] {
+  return rows.map((r, i) => {
+    const n = i + 1;
+    if (typeof r !== 'object' || r === null) throw new Error(`Rad ${n}: inte ett objekt.`);
+    const o = r as Record<string, unknown>;
+
+    if (typeof o.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.date))
+      throw new Error(`Rad ${n}: 'date' saknas eller har fel format (YYYY-MM-DD).`);
+    if (typeof o.description !== 'string' || !o.description.trim())
+      throw new Error(`Rad ${n}: 'description' saknas.`);
+    if (typeof o.amount !== 'number' || o.amount <= 0)
+      throw new Error(`Rad ${n}: 'amount' måste vara ett positivt tal.`);
+
+    const vat = Number(o.vat_rate ?? 0);
+    if (!VALID_VAT.has(vat))
+      throw new Error(`Rad ${n}: 'vat_rate' måste vara 0, 6, 12 eller 25.`);
+
+    return {
+      date:              o.date as string,
+      description:       (o.description as string).trim(),
+      amount:            o.amount as number,
+      vat_rate:          vat as VatRate,
+      category:          typeof o.category === 'string' ? o.category.toLowerCase() : undefined,
+      suggested_account: typeof o.suggested_account === 'number' ? o.suggested_account : undefined,
+      type:              o.type === 'revenue' ? 'revenue' : 'expense',
+    };
+  });
+}
+
+// ── Account mapping ───────────────────────────────────────────────────────────
+
+// Keyword → BAS account. Matched against category + description (case-insensitive).
+export const CATEGORY_MAP: Record<string, number> = {
+  representation: 5990, fika:         5990, kaffe:    5990,
+  lunch:          5990, middag:       5990, restaurang: 5990,
+  programvara:    5420, mjukvara:     5420, saas:     5420,
+  abonnemang:     5420, prenumeration:5420, licens:   5420,
+  kontorsmaterial:6110, papper:       6110,
+  telefon:        6212, mobiltelefon: 6212,
+  internet:       6211, bredband:     6211,
+  hyra:           5010, lokalhyra:    5010, lokal:    5010,
+  bank:           6570, bankkostnad:  6570, bankavgift:6570,
+  redovisning:    6530, bokföring:    6530, revisor:  6530,
+  transport:      5800, resa:         5800, tåg:      5800,
+  flyg:           5800, taxi:         5800, buss:     5800,
+  marknadsföring: 6100, reklam:       6100, annonsering:6100,
+  försäljning:    3000, intäkt:       3000,
+  inköp:          4000, varor:        4000, material: 4000,
+  förbrukning:    5410, inventarier:  5410,
+};
+
+export function lookupDict(row: GeminiRow): number | null {
+  const text = `${row.category ?? ''} ${row.description}`.toLowerCase();
+  for (const [kw, acc] of Object.entries(CATEGORY_MAP)) {
+    if (text.includes(kw)) return acc;
+  }
+  return null;
+}
+
+// Accounts that carry VAT/system postings — never suggested as main account.
+const SYSTEM_ACCOUNTS = new Set([1930, 1910, 2610, 2620, 2630, 2640, 2514, 8422]);
+
+export async function lookupHistory(description: string): Promise<number | null> {
+  const words = description.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+  if (words.length === 0) return null;
+
+  const vouchers = await db.vouchers.toArray();
+  const matched  = vouchers.filter(v => words.some(w => v.description.toLowerCase().includes(w)));
+  if (matched.length === 0) return null;
+
+  const txs = await db.transactions
+    .where('voucherId').anyOf(matched.map(v => v.id!)).toArray();
+
+  const freq = new Map<number, number>();
+  for (const t of txs) {
+    if (!SYSTEM_ACCOUNTS.has(t.accountId))
+      freq.set(t.accountId, (freq.get(t.accountId) ?? 0) + 1);
+  }
+  if (freq.size === 0) return null;
+  return [...freq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+export async function resolveAccount(
+  row: GeminiRow,
+): Promise<{ account: number | null; source: ResolveSource }> {
+  if (row.suggested_account) return { account: row.suggested_account, source: 'gemini' };
+  const dict = lookupDict(row);
+  if (dict !== null)           return { account: dict, source: 'dict' };
+  const hist = await lookupHistory(row.description);
+  if (hist !== null)           return { account: hist, source: 'history' };
+  return { account: null, source: 'none' };
+}
+
+export async function toDraftRows(rows: GeminiRow[]): Promise<DraftRow[]> {
+  return Promise.all(rows.map(async row => {
+    const { account, source } = await resolveAccount(row);
+    return { row, resolvedAccount: account, resolveSource: source };
+  }));
+}
+
+// ── Voucher builder ───────────────────────────────────────────────────────────
+
+export function buildVoucherLines(
+  row: GeminiRow,
+  mainAccount: number,
+): { accountId: number; amount: number }[] {
+  const gross     = row.amount;
+  const rate      = row.vat_rate;
+  const isRevenue = mainAccount >= 3000 && mainAccount <= 3999;
+
+  if (rate === 0) {
+    return isRevenue
+      ? [{ accountId: 1930, amount: gross }, { accountId: mainAccount, amount: -gross }]
+      : [{ accountId: mainAccount, amount: gross }, { accountId: 1930, amount: -gross }];
+  }
+
+  const { net, vat } = splitVat(gross, rate);
+  if (isRevenue) {
+    return [
+      { accountId: 1930,        amount:  gross },
+      { accountId: mainAccount, amount: -net   },
+      { accountId: VAT_OUT[rate], amount: -vat },
+    ];
+  }
+  return [
+    { accountId: mainAccount, amount:  net  },
+    { accountId: VAT_IN,      amount:  vat  },
+    { accountId: 1930,        amount: -gross },
+  ];
+}
+
+// ── Persist ───────────────────────────────────────────────────────────────────
+
+export async function bookDraftRows(
+  approved: { row: GeminiRow; account: number }[],
+): Promise<number> {
+  let count = 0;
+  await db.transaction('rw', db.vouchers, db.transactions, async () => {
+    for (const { row, account } of approved) {
+      const lines = buildVoucherLines(row, account);
+      const vid   = await db.vouchers.add({
+        date: row.date, description: row.description, created_at: Date.now(),
+      });
+      await db.transactions.bulkAdd(lines.map(l => ({ ...l, voucherId: vid })));
+      count++;
+    }
+  });
+  return count;
+}

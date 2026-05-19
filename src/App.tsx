@@ -4,9 +4,10 @@ import { VoucherEntry } from './components/VoucherEntry';
 import { ChartOfAccounts } from './components/ChartOfAccounts';
 import { Reports } from './components/Reports';
 import { Welcome } from './components/Welcome';
+import { GeminiImport } from './components/GeminiImport';
 import { initializeDb } from './db';
 import { exportBackup } from './lib/backup';
-import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link } from 'lucide-react';
+import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson } from 'lucide-react';
 
 const APP_URL = 'https://skaneby.github.io/bokf-ring-/';
 
@@ -15,6 +16,7 @@ const NAV = [
   { id: 'voucher',   label: 'Bokför',     icon: BookOpen },
   { id: 'accounts',  label: 'Kontoplan',  icon: List },
   { id: 'reports',   label: 'Rapporter',  icon: FileText },
+  { id: 'import',    label: 'Importera',  icon: FileJson },
 ] as const;
 
 type TabId = typeof NAV[number]['id'];
@@ -145,6 +147,7 @@ export default function App() {
             {tab === 'voucher'   && <VoucherEntry editId={editId} onEditDone={() => setEditId(null)} />}
             {tab === 'accounts'  && <ChartOfAccounts />}
             {tab === 'reports'   && <Reports onEditVoucher={editVoucher} />}
+            {tab === 'import'    && <GeminiImport />}
           </div>
         </main>
       </div>
