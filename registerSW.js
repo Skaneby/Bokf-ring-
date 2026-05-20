@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/Bokf-ring-/sw.js', { scope: '/Bokf-ring-/' })})}
