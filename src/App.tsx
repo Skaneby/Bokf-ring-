@@ -5,9 +5,9 @@ import { ChartOfAccounts } from './components/ChartOfAccounts';
 import { Reports } from './components/Reports';
 import { Welcome } from './components/Welcome';
 import { GeminiImport } from './components/GeminiImport';
-import { initializeDb } from './db';
+import { initializeDb, db } from './db';
 import { exportBackup } from './lib/backup';
-import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson } from 'lucide-react';
+import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw } from 'lucide-react';
 
 const APP_URL = 'https://skaneby.github.io/Bokf-ring-/';
 
