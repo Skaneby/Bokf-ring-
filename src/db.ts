@@ -45,6 +45,7 @@ export const defaultAccounts: Account[] = [
   { id: 2010, name: 'Eget kapital', type: 'equity' },
   { id: 2013, name: 'Egna uttag', type: 'equity' },
   { id: 2018, name: 'Egna insättningar', type: 'equity' },
+  { id: 2514, name: 'Beräknade egenavgifter', type: 'liability' },
   { id: 2610, name: 'Utgående moms, 25%', type: 'liability', vatCode: '10' },
   { id: 2620, name: 'Utgående moms, 12%', type: 'liability', vatCode: '11' },
   { id: 2630, name: 'Utgående moms, 6%', type: 'liability', vatCode: '12' },
@@ -61,11 +62,16 @@ export const defaultAccounts: Account[] = [
   { id: 6110, name: 'Kontorsmateriel', type: 'expense' },
   { id: 6530, name: 'Redovisningstjänster', type: 'expense' },
   { id: 6570, name: 'Bankkostnader', type: 'expense' },
+  { id: 8422, name: 'Egenavgifter', type: 'expense' },
 ];
 
-export async function initializeDb() {
-  const count = await db.accounts.count();
-  if (count === 0) {
+export async function initializeDb(): Promise<{ hasData: boolean }> {
+  const [accountCount, voucherCount] = await Promise.all([
+    db.accounts.count(),
+    db.vouchers.count(),
+  ]);
+  if (accountCount === 0) {
     await db.accounts.bulkAdd(defaultAccounts);
   }
+  return { hasData: voucherCount > 0 };
 }

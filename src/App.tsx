@@ -4,9 +4,10 @@ import { VoucherEntry } from './components/VoucherEntry';
 import { ChartOfAccounts } from './components/ChartOfAccounts';
 import { Reports } from './components/Reports';
 import { Welcome } from './components/Welcome';
-import { db } from './db';
+import { GeminiImport } from './components/GeminiImport';
+import { initializeDb } from './db';
 import { exportBackup } from './lib/backup';
-import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson } from 'lucide-react';
 
 const APP_URL = 'https://skaneby.github.io/Bokf-ring-/';
 
@@ -15,6 +16,7 @@ const NAV = [
   { id: 'voucher',   label: 'Bokför',     icon: BookOpen },
   { id: 'accounts',  label: 'Kontoplan',  icon: List },
   { id: 'reports',   label: 'Rapporter',  icon: FileText },
+  { id: 'import',    label: 'Importera',  icon: FileJson },
 ] as const;
 
 type TabId = typeof NAV[number]['id'];
@@ -24,14 +26,13 @@ export default function App() {
   const [mobile, setMobile] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const [ready,  setReady]  = useState(false);  // false = show welcome if DB empty
-  const [hasData, setHasData] = useState(true); // assume true until checked
+  const [ready,   setReady]   = useState(false);
+  const [hasData, setHasData] = useState(false);
 
   useEffect(() => {
-    db.accounts.count().then(count => {
-      if (count === 0) setHasData(false);
-      setReady(true);
-    }).catch(console.error);
+    initializeDb()
+      .then(({ hasData }) => { setHasData(hasData); setReady(true); })
+      .catch(console.error);
   }, []);
 
   if (!ready) return null;
@@ -44,6 +45,12 @@ export default function App() {
 
   const editVoucher = (id: number) => { setEditId(id); setTab('voucher'); setMobile(false); };
 
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 2500);
+    return () => clearTimeout(id);
+  }, [copied]);
+
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(APP_URL);
@@ -51,7 +58,6 @@ export default function App() {
       prompt('Kopiera länken:', APP_URL);
     }
     setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
   };
 
 
@@ -159,6 +165,7 @@ export default function App() {
             {tab === 'voucher'   && <VoucherEntry editId={editId} onEditDone={() => setEditId(null)} />}
             {tab === 'accounts'  && <ChartOfAccounts />}
             {tab === 'reports'   && <Reports onEditVoucher={editVoucher} onReset={() => setHasData(false)} />}
+            {tab === 'import'    && <GeminiImport />}
           </div>
         </main>
       </div>

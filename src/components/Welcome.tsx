@@ -1,12 +1,34 @@
 import React, { useRef, useState } from 'react';
-import { BookOpen, FolderOpen, Plus, FileCode } from 'lucide-react';
-import { applyBackupData, buildBackupData } from '../lib/backup';
+import { FolderOpen, Plus, FileCode, LucideIcon } from 'lucide-react';
+import { applyBackupData } from '../lib/backup';
 import { importSIE, decodeSIEBuffer } from '../lib/sie';
 import { initializeDb } from '../db';
 
 interface Props {
   onLoaded: () => void;
   onStartFresh: () => void;
+}
+
+function OptionButton({ icon: Icon, title, subtitle, onClick }: {
+  icon: LucideIcon;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left hover:border-slate-900 transition-colors group"
+    >
+      <div className="mt-0.5 rounded-lg bg-slate-100 p-2 group-hover:bg-slate-900 transition-colors">
+        <Icon className="h-5 w-5 text-slate-600 group-hover:text-white transition-colors" />
+      </div>
+      <div>
+        <p className="font-semibold text-slate-900">{title}</p>
+        <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>
+      </div>
+    </button>
+  );
 }
 
 export function Welcome({ onLoaded, onStartFresh }: Props) {
@@ -33,7 +55,6 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
     if (!file) return;
     setError('');
     try {
-      // SIE4 uses CP437 (PC8) — decode with full CP437→Unicode mapping
       const buffer = await file.arrayBuffer();
       const text = decodeSIEBuffer(buffer);
       await importSIE(text, 'replace');
@@ -65,46 +86,28 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
         )}
 
         <div className="space-y-3">
-          <button
+          <OptionButton
+            icon={FolderOpen}
+            title="Ladda in JSON-backup"
+            subtitle="Återställ bokföring från en tidigare sparad JSON-fil"
             onClick={() => jsonRef.current?.click()}
-            className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left hover:border-slate-900 transition-colors group"
-          >
-            <div className="mt-0.5 rounded-lg bg-slate-100 p-2 group-hover:bg-slate-900 transition-colors">
-              <FolderOpen className="h-5 w-5 text-slate-600 group-hover:text-white transition-colors" />
-            </div>
-            <div>
-              <p className="font-semibold text-slate-900">Ladda in JSON-backup</p>
-              <p className="text-sm text-slate-500 mt-0.5">Återställ bokföring från en tidigare sparad JSON-fil</p>
-            </div>
-          </button>
+          />
           <input ref={jsonRef} type="file" accept=".json" className="hidden" onChange={handleJson} />
 
-          <button
+          <OptionButton
+            icon={FileCode}
+            title="Importera SIE4-fil"
+            subtitle="Starta från en export ur Fortnox, Visma eller annat system"
             onClick={() => sieRef.current?.click()}
-            className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left hover:border-slate-900 transition-colors group"
-          >
-            <div className="mt-0.5 rounded-lg bg-slate-100 p-2 group-hover:bg-slate-900 transition-colors">
-              <FileCode className="h-5 w-5 text-slate-600 group-hover:text-white transition-colors" />
-            </div>
-            <div>
-              <p className="font-semibold text-slate-900">Importera SIE4-fil</p>
-              <p className="text-sm text-slate-500 mt-0.5">Starta från en export ur Fortnox, Visma eller annat system</p>
-            </div>
-          </button>
+          />
           <input ref={sieRef} type="file" accept=".se,.si,.sie,.SE,.SI,.SIE" className="hidden" onChange={handleSie} />
 
-          <button
+          <OptionButton
+            icon={Plus}
+            title="Starta ny bokföring"
+            subtitle="Börja från scratch med tom databas"
             onClick={handleFresh}
-            className="w-full flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-5 text-left hover:border-slate-900 transition-colors group"
-          >
-            <div className="mt-0.5 rounded-lg bg-slate-100 p-2 group-hover:bg-slate-900 transition-colors">
-              <Plus className="h-5 w-5 text-slate-600 group-hover:text-white transition-colors" />
-            </div>
-            <div>
-              <p className="font-semibold text-slate-900">Starta ny bokföring</p>
-              <p className="text-sm text-slate-500 mt-0.5">Börja från scratch med tom databas</p>
-            </div>
-          </button>
+          />
         </div>
 
         <p className="text-xs text-slate-400 text-center">

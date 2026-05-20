@@ -5,6 +5,7 @@ import { Plus, Trash2, ScanLine } from 'lucide-react';
 import { format } from 'date-fns';
 import { scanReceipt } from '../lib/ocr';
 import { VAT_OUT, VAT_IN, splitVat } from '../lib/vat';
+import { uttaqTemplates } from '../lib/tax';
 
 type Row = { accountId: number | string; debit: string; credit: string };
 
@@ -178,6 +179,24 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
     }
   };
 
+  // ── Uttags-guide ─────────────────────────────────────────────────────────
+  const [quickAmount, setQuickAmount] = useState('');
+
+  const applyTemplate = (idx: number) => {
+    const amount = parseFloat(quickAmount) || 0;
+    if (!amount) return;
+    const tmpl = uttaqTemplates(amount)[idx];
+    setDescription(tmpl.description);
+    setRows(tmpl.rows.map(r => ({
+      accountId: r.accountId,
+      debit:  r.debit  > 0 ? String(r.debit)  : '',
+      credit: r.credit > 0 ? String(r.credit) : '',
+    })));
+    setQuickAmount('');
+  };
+
+  const QUICK = ['Eget uttag', 'F-skatt', 'Eget insättning', 'Egenavgifter'];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -194,6 +213,39 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
           <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScan} disabled={scanning} />
         </label>
       </div>
+
+      {/* Uttags-guide */}
+      {!editId && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Snabbval — egna uttag &amp; skatt</p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">Belopp (kr)</label>
+              <input
+                type="number" step="0.01" min="0"
+                value={quickAmount}
+                onChange={e => setQuickAmount(e.target.value)}
+                placeholder="0.00"
+                className={cls + ' w-36'}
+              />
+            </div>
+            {QUICK.map((label, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => applyTemplate(i)}
+                disabled={!quickAmount || parseFloat(quickAmount) <= 0}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-900 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-400">
+            Ange ett belopp och klicka på snabbvalet för att fylla i konteringsrader automatiskt.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
 

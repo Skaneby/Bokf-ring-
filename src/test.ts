@@ -7,6 +7,11 @@ import { db, initializeDb } from './db';
 import { exportSIE, importSIE, decodeSIEBuffer } from './lib/sie';
 import { buildBackupData, applyBackupData } from './lib/backup';
 import { splitVat, vatRows, VAT_OUT, VAT_IN } from './lib/vat';
+import { calculateEgenavgifter, calcNELines, calcMomsLines, EGENAVGIFTER_RATE } from './lib/tax';
+import {
+  parseGeminiJson, validateRows, lookupDict, buildVoucherLines,
+  GeminiRow,
+} from './lib/geminiImport';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -80,7 +85,7 @@ async function runTests() {
 
   await resetDb();
   const accountCount = await db.accounts.count();
-  assert(accountCount === 21, `Exakt 21 standardkonton (fick ${accountCount})`);
+  assert(accountCount === 23, `Exakt 23 standardkonton (fick ${accountCount})`);
 
   const accs = await db.accounts.toArray();
   assert(accs.some(a => a.id === 1930 && a.type === 'asset'),     'Konto 1930 är tillgång');
@@ -755,6 +760,260 @@ async function runTests() {
         'Intäkter > Kostnader (ej lika p.g.a. 8999-klassificering)');
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 15. SKATTELOGIK — egenavgifter, NE-bilaga, momsdeklaration
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 15. Skattelogik ───────────────────────────────────\n');
+
+  // ── Egenavgifter: calculateEgenavgifter() ─────────────────────────────
+
+  // Korrekt sats: 28.97% för åldersgrupp 'full'
+  assert(near(EGENAVGIFTER_RATE.full,   0.2897), 'Egenavgifter: full-sats = 28.97 %');
+  assert(near(EGENAVGIFTER_RATE.young,  0.1489), 'Egenavgifter: young-sats = 14.89 %');
+  assert(near(EGENAVGIFTER_RATE.senior, 0.1488), 'Egenavgifter: senior-sats = 14.88 %');
+
+  // Grundberäkning
+  { const eg = calculateEgenavgifter(100000, 'full');
+    assert(near(eg, 28970), `Egenavgifter 100 000 kr × 28.97% = 28 970 kr (fick ${eg})`); }
+
+  // Negativt överskott → 0 kr
+  { const eg = calculateEgenavgifter(-5000, 'full');
+    assert(eg === 0, 'Egenavgifter vid underskott = 0 kr'); }
+
+  // Noll → 0 kr
+  { const eg = calculateEgenavgifter(0, 'full');
+    assert(eg === 0, 'Egenavgifter vid nollresultat = 0 kr'); }
+
+  // Young-bracket
+  { const eg = calculateEgenavgifter(100000, 'young');
+    assert(near(eg, 14890), `Egenavgifter young 100 000 kr = 14 890 kr (fick ${eg})`); }
+
+  // Senior-bracket
+  { const eg = calculateEgenavgifter(100000, 'senior');
+    assert(near(eg, 14880), `Egenavgifter senior 100 000 kr = 14 880 kr (fick ${eg})`); }
+
+  // Öresrundning
+  { const eg = calculateEgenavgifter(75333, 'full');
+    const expected = Math.round(75333 * 0.2897 * 100) / 100;
+    assert(near(eg, expected), `Egenavgifter öresrundning 75 333 kr → ${expected} kr (fick ${eg})`); }
+
+  // ── NE-bilagan: calcNELines() ─────────────────────────────────────────
+
+  await resetDb();
+
+  // Scenario: enkel bokföring med intäkter + kostnader
+  await addVoucher('2026-01-05', 'Försäljning tjänst 25% moms', [
+    { accountId: 1930, amount:  125000 },
+    { accountId: 3000, amount: -100000 },
+    { accountId: 2610, amount:  -25000 },
+  ]);
+  await addVoucher('2026-01-10', 'Lokalhyra', [
+    { accountId: 5010, amount:  12000 },
+    { accountId: 1930, amount: -12000 },
+  ]);
+  await addVoucher('2026-01-15', 'Inköp material', [
+    { accountId: 4000, amount:  30000 },
+    { accountId: 2640, amount:   7500 },
+    { accountId: 1930, amount: -37500 },
+  ]);
+  await addVoucher('2026-01-31', 'Avsättning egenavgifter', [
+    { accountId: 8422, amount:  16826 },   // 58000 × 28.97% ≈ 16802 (approximation)
+    { accountId: 2514, amount: -16826 },
+  ]);
+
+  const ne14accs = await db.accounts.toArray();
+  const ne14txs  = await db.transactions.toArray();
+  const ne   = calcNELines(ne14accs, ne14txs);
+
+  assert(near(ne.nettoomsattning, 100000), `NE R1 = 100 000 kr (fick ${ne.nettoomsattning})`);
+  assert(near(ne.handelvaror,      30000), `NE R10 = 30 000 kr (fick ${ne.handelvaror})`);
+  assert(near(ne.ovrigaExterna,    12000), `NE R11 = 12 000 kr (fick ${ne.ovrigaExterna})`);
+  assert(near(ne.summaIntakter,   100000), `NE R9 summa intäkter = 100 000 kr (fick ${ne.summaIntakter})`);
+  assert(near(ne.summaKostnader,   42000), `NE R17 summa kostnader = 42 000 kr (fick ${ne.summaKostnader})`);
+  assert(near(ne.rorelseresultat,  58000), `NE R18 rörelseresultat = 58 000 kr (fick ${ne.rorelseresultat})`);
+  // Egenavgifter bokförs på 8422 (8400-serien = finansiella kostnader)
+  assert(near(ne.finansiellaKostnader, 16826), `NE R20 finansiella kostnader = 16 826 kr (fick ${ne.finansiellaKostnader})`);
+  assert(near(ne.aretsResultat, 58000 - 16826), `NE årets resultat = ${58000 - 16826} kr (fick ${ne.aretsResultat})`);
+
+  // ── Momsdeklaration: calcMomsLines() ─────────────────────────────────
+
+  const moms = calcMomsLines(ne14txs);
+
+  assert(near(moms.box05, 100000), `Moms ruta 05 = 100 000 kr (fick ${moms.box05})`);
+  assert(near(moms.box10,  25000), `Moms ruta 10 = 25 000 kr utgående moms 25% (fick ${moms.box10})`);
+  assert(near(moms.box11,      0), `Moms ruta 11 = 0 kr (ingen 12%-försäljning) (fick ${moms.box11})`);
+  assert(near(moms.box12,      0), `Moms ruta 12 = 0 kr (ingen 6%-försäljning) (fick ${moms.box12})`);
+  assert(near(moms.box48,   7500), `Moms ruta 48 = 7 500 kr ingående moms (fick ${moms.box48})`);
+  assert(near(moms.box49,  17500), `Moms ruta 49 = 17 500 kr att betala (25000 − 7500) (fick ${moms.box49})`);
+
+  // Ingen moms → alla rutor noll
+  await resetDb();
+  const emptyTxs = await db.transactions.toArray();
+  const emptyMoms = calcMomsLines(emptyTxs);
+  assert(emptyMoms.box49 === 0, 'Moms ruta 49 = 0 kr vid ingen bokföring');
+
+  // ── Egna uttag påverkar inte NE-bilagan ──────────────────────────────
+
+  await resetDb();
+  await addVoucher('2026-02-01', 'Försäljning', [
+    { accountId: 1930, amount:  50000 },
+    { accountId: 3000, amount: -50000 },
+  ]);
+  const resBefore = calcNELines(await db.accounts.toArray(), await db.transactions.toArray()).aretsResultat;
+  assert(near(resBefore, 50000), `NE resultat före uttag = 50 000 kr (fick ${resBefore})`);
+
+  await addVoucher('2026-02-28', 'Eget uttag', [
+    { accountId: 2013, amount:  20000 },
+    { accountId: 1930, amount: -20000 },
+  ]);
+  const resAfter = calcNELines(await db.accounts.toArray(), await db.transactions.toArray()).aretsResultat;
+  assert(near(resAfter, 50000), `NE resultat opåverkat av egna uttag (fick ${resAfter})`);
+  assert(near(resBefore, resAfter), 'Egna uttag (konto 2013) påverkar INTE NE-bilagan');
+
+  // ── Kontona 2514 och 8422 finns i standardkontoplanen ─────────────────
+
+  await resetDb();
+  const allAccs = await db.accounts.toArray();
+  assert(allAccs.some(a => a.id === 2514 && a.type === 'liability'), 'Konto 2514 Beräknade egenavgifter är skuld');
+  assert(allAccs.some(a => a.id === 8422 && a.type === 'expense'),   'Konto 8422 Egenavgifter är kostnad');
+  assert(allAccs.some(a => a.id === 2013 && a.type === 'equity'),    'Konto 2013 Egna uttag är eget kapital');
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 16. GEMINI IMPORT — parser, validator, buildVoucherLines
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 16. Gemini import ─────────────────────────────────\n');
+
+  // ── parseGeminiJson ───────────────────────────────────────────────────
+
+  // Ren JSON-array
+  { const rows = parseGeminiJson('[{"date":"2026-01-01","description":"Test","amount":100,"vat_rate":0}]');
+    assert(Array.isArray(rows) && rows.length === 1, 'parseGeminiJson: parsar ren JSON-array'); }
+
+  // Markdown-block med ```json
+  { const md = '```json\n[{"date":"2026-01-01","description":"Test","amount":100,"vat_rate":0}]\n```';
+    const rows = parseGeminiJson(md);
+    assert(Array.isArray(rows) && rows.length === 1, 'parseGeminiJson: strippar ```json ... ``` block'); }
+
+  // Markdown-block utan json-suffix
+  { const md = '```\n[{"date":"2026-01-01","description":"Test","amount":100,"vat_rate":0}]\n```';
+    const rows = parseGeminiJson(md);
+    assert(Array.isArray(rows) && rows.length === 1, 'parseGeminiJson: strippar ``` ... ``` block utan json-suffix'); }
+
+  // Icke-array → fel
+  { let threw = false;
+    try { parseGeminiJson('{"date":"2026-01-01"}'); } catch { threw = true; }
+    assert(threw, 'parseGeminiJson: kastar fel om JSON inte är en array'); }
+
+  // ── validateRows ──────────────────────────────────────────────────────
+
+  const validRaw: GeminiRow = {
+    date: '2026-05-15', description: 'Kontorsmaterial',
+    amount: 250, vat_rate: 25, category: 'kontorsmaterial', suggested_account: 6110,
+  };
+
+  // Giltig rad → passerar
+  { const rows = validateRows([validRaw]);
+    assert(rows.length === 1 && rows[0].description === 'Kontorsmaterial',
+      'validateRows: giltig rad passerar validering'); }
+
+  // Saknat datum → fel
+  { let threw = false;
+    try { validateRows([{ ...validRaw, date: '' }]); } catch { threw = true; }
+    assert(threw, 'validateRows: kastar fel vid tomt date'); }
+
+  // Fel datumformat → fel
+  { let threw = false;
+    try { validateRows([{ ...validRaw, date: '15/05/2026' }]); } catch { threw = true; }
+    assert(threw, 'validateRows: kastar fel vid datum i fel format'); }
+
+  // Negativt belopp → fel
+  { let threw = false;
+    try { validateRows([{ ...validRaw, amount: -100 }]); } catch { threw = true; }
+    assert(threw, 'validateRows: kastar fel vid negativt amount'); }
+
+  // Nollbelopp → fel
+  { let threw = false;
+    try { validateRows([{ ...validRaw, amount: 0 }]); } catch { threw = true; }
+    assert(threw, 'validateRows: kastar fel vid amount = 0'); }
+
+  // Ogiltig momssats → fel
+  { let threw = false;
+    try { validateRows([{ ...validRaw, vat_rate: 10 as 0 }]); } catch { threw = true; }
+    assert(threw, 'validateRows: kastar fel vid ogiltig vat_rate (10)'); }
+
+  // Alla giltiga momssatser passerar
+  for (const rate of [0, 6, 12, 25] as const) {
+    const rows = validateRows([{ ...validRaw, vat_rate: rate }]);
+    assert(rows.length === 1, `validateRows: vat_rate ${rate} är giltig`);
+  }
+
+  // Type-fält: revenue bevaras, default är expense
+  { const rows = validateRows([{ ...validRaw, type: 'revenue' }]);
+    assert(rows[0].type === 'revenue', 'validateRows: type=revenue bevaras'); }
+  { const rows = validateRows([{ ...validRaw }]);
+    assert(rows[0].type === 'expense', 'validateRows: type default = expense'); }
+
+  // ── lookupDict ────────────────────────────────────────────────────────
+
+  { const acc = lookupDict({ ...validRaw, category: 'kontorsmaterial', description: 'papper' });
+    assert(acc === 6110, `lookupDict: 'kontorsmaterial' → konto 6110 (fick ${acc})`); }
+
+  { const acc = lookupDict({ ...validRaw, category: 'programvara', description: 'SaaS' });
+    assert(acc === 5420, `lookupDict: 'programvara' → konto 5420 (fick ${acc})`); }
+
+  { const acc = lookupDict({ ...validRaw, category: 'lunch', description: 'restaurang' });
+    assert(acc === 5990, `lookupDict: 'lunch' → konto 5990 (fick ${acc})`); }
+
+  { const acc = lookupDict({ ...validRaw, category: undefined, description: 'okänd kostnad xyz' });
+    assert(acc === null, 'lookupDict: okänd beskrivning → null'); }
+
+  // ── buildVoucherLines ─────────────────────────────────────────────────
+
+  // Hjälpfunktion: kontrollera att alla rader summerar till noll (dubbelbokföring)
+  function isBalanced(lines: { accountId: number; amount: number }[]) {
+    return Math.abs(lines.reduce((s, l) => s + l.amount, 0)) < 0.01;
+  }
+
+  // Kostnad utan moms: mainAccount debet + 1930 kredit
+  { const row: GeminiRow = { date: '2026-01-01', description: 'Hyra', amount: 10000, vat_rate: 0 };
+    const lines = buildVoucherLines(row, 5010);
+    assert(isBalanced(lines), 'buildVoucherLines: kostnad 0% moms — balanserad');
+    assert(lines.length === 2, 'buildVoucherLines: kostnad 0% moms — 2 rader');
+    assert(lines.some(l => l.accountId === 5010 && l.amount > 0), 'buildVoucherLines: kostnad 0% moms — debet på kostnadskonto');
+    assert(lines.some(l => l.accountId === 1930 && l.amount < 0), 'buildVoucherLines: kostnad 0% moms — kredit på bank'); }
+
+  // Kostnad med 25% moms: mainAccount (netto) + 2640 (moms) + 1930 kredit (brutto)
+  { const row: GeminiRow = { date: '2026-01-01', description: 'Material', amount: 12500, vat_rate: 25 };
+    const lines = buildVoucherLines(row, 4000);
+    assert(isBalanced(lines), 'buildVoucherLines: kostnad 25% moms — balanserad');
+    assert(lines.length === 3, 'buildVoucherLines: kostnad 25% moms — 3 rader');
+    assert(lines.some(l => l.accountId === 2640 && l.amount > 0), 'buildVoucherLines: kostnad 25% moms — debet 2640 ingående moms');
+    assert(lines.some(l => l.accountId === 1930 && near(l.amount, -12500)), 'buildVoucherLines: kostnad 25% moms — kredit 1930 = -12 500 kr'); }
+
+  // Intäkt utan moms: 1930 debet + mainAccount kredit
+  { const row: GeminiRow = { date: '2026-01-01', description: 'Konsulttjänst', amount: 5000, vat_rate: 0 };
+    const lines = buildVoucherLines(row, 3001);
+    assert(isBalanced(lines), 'buildVoucherLines: intäkt 0% moms — balanserad');
+    assert(lines.length === 2, 'buildVoucherLines: intäkt 0% moms — 2 rader');
+    assert(lines.some(l => l.accountId === 1930 && l.amount > 0), 'buildVoucherLines: intäkt 0% moms — debet bank');
+    assert(lines.some(l => l.accountId === 3001 && l.amount < 0), 'buildVoucherLines: intäkt 0% moms — kredit intäktskonto'); }
+
+  // Intäkt med 25% moms: 1930 debet + mainAccount kredit (netto) + 2610 kredit (moms)
+  { const row: GeminiRow = { date: '2026-01-01', description: 'Försäljning', amount: 12500, vat_rate: 25 };
+    const lines = buildVoucherLines(row, 3000);
+    assert(isBalanced(lines), 'buildVoucherLines: intäkt 25% moms — balanserad');
+    assert(lines.length === 3, 'buildVoucherLines: intäkt 25% moms — 3 rader');
+    assert(lines.some(l => l.accountId === 2610 && l.amount < 0), 'buildVoucherLines: intäkt 25% moms — kredit 2610 utgående moms');
+    assert(lines.some(l => l.accountId === 1930 && near(l.amount, 12500)), 'buildVoucherLines: intäkt 25% moms — debet 1930 = 12 500 kr'); }
+
+  // Intäkt med 12% moms: ska använda 2620 (inte 2610)
+  { const row: GeminiRow = { date: '2026-01-01', description: 'Livsmedel', amount: 11200, vat_rate: 12 };
+    const lines = buildVoucherLines(row, 3002);
+    assert(isBalanced(lines), 'buildVoucherLines: intäkt 12% moms — balanserad');
+    assert(lines.some(l => l.accountId === 2620 && l.amount < 0), 'buildVoucherLines: intäkt 12% moms — kredit 2620 (inte 2610)'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING
