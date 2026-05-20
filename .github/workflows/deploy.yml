@@ -6,37 +6,38 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: npm
-
       - run: npm ci
-
       - run: npm run build
         env:
           NODE_ENV: production
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
 
-      - name: Deploy to gh-pages
-        run: |
-          cd dist
-          git init
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
-          touch .nojekyll
-          git add -A
-          git commit -m "Deploy $(date -u '+%Y-%m-%d %H:%M')"
-          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/Skaneby/Bokf-ring-.git" HEAD:gh-pages
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

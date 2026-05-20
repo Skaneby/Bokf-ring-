@@ -32,7 +32,7 @@ export default function App() {
   useEffect(() => {
     initializeDb()
       .then(({ hasData }) => { setHasData(hasData); setReady(true); })
-      .catch(console.error);
+      .catch(err => { console.error(err); setReady(true); });
   }, []);
 
   if (!ready) return null;
