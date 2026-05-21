@@ -35,6 +35,12 @@ export default function App() {
       .catch(err => { console.error(err); setReady(true); });
   }, []);
 
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 2500);
+    return () => clearTimeout(id);
+  }, [copied]);
+
   if (!ready) return null;
   if (!hasData) return (
     <Welcome
@@ -44,12 +50,6 @@ export default function App() {
   );
 
   const editVoucher = (id: number) => { setEditId(id); setTab('voucher'); setMobile(false); };
-
-  useEffect(() => {
-    if (!copied) return;
-    const id = setTimeout(() => setCopied(false), 2500);
-    return () => clearTimeout(id);
-  }, [copied]);
 
   const handleShare = async () => {
     try {
