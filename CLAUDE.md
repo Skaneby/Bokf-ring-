@@ -50,18 +50,21 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema (accounts, vouchers, transactions)
   main.tsx             — React-root mount
-  test.ts              — 156 enhetstester (Node + fake-indexeddb)
+  test.ts              — 245 enhetstester (Node + fake-indexeddb)
   components/
     Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
     Dashboard.tsx      — KPI-kort; använd useLiveQuery i toppen (INTE i JSX)
-    VoucherEntry.tsx   — bokföringsformulär, momshjälp, OCR-skanning
+    VoucherEntry.tsx   — bokföringsformulär, momshjälp, OCR-skanning, snabbval
     ChartOfAccounts.tsx — kontoplan CRUD
-    Reports.tsx        — flikar: Resultat, Balans, Huvudbok, Säkerhetskopiering + Byt bokföring
+    Reports.tsx        — flikar: Resultat, Balans, Huvudbok, Skatt, Säkerhetskopiering
+    GeminiImport.tsx   — importera verifikationer från Gemini JSON-export
   lib/
     backup.ts          — buildBackupData() / applyBackupData() / exportBackup()
     sie.ts             — exportSIE() / importSIE(content, 'merge'|'replace')
     vat.ts             — splitVat() / vatRows() / VAT_OUT / VAT_IN — testbar logik
     ocr.ts             — scanReceipt(file) via Gemini Vision
+    tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
+    geminiImport.ts    — parseGeminiJson() / validateRows() / bookDraftRows()
     utils.ts           — formatCurrency()
 ```
 
@@ -70,7 +73,7 @@ src/
 ## Kända fallgropar
 
 ### React
-- **Hooks i JSX är förbjudet** — `useLiveQuery` måste anropas i toppen av komponenten, aldrig inuti return-satsen eller villkorssatser
+- **Hooks måste anropas före conditional returns** — alla hooks (useState, useEffect, useLiveQuery) måste stå överst i komponenten, INNAN alla `if (!x) return` — annars ändras hook-ordningen mellan renders och React kraschar med vit skärm
 - **useLiveQuery auto-uppdaterar** — ingen manuell refresh behövs efter DB-ändringar
 
 ### Deployment
@@ -87,8 +90,6 @@ src/
 ---
 
 ## Bokföringsdomän
-
-Du är en AI-tjänst som bygger och underhåller ett bokföringsprogram. Bokföringslogiken styr ALL kod du skriver.
 
 ### Grundprincipen: dubbelbokföring
 
@@ -136,61 +137,126 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 156 enhetstester
+npm run test         # kör 245 enhetstester
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
 ```
 
 ---
 
+## Effort Levels
+
+Select effort based on task complexity — state which level you're using and why.
+
+| Task type | Effort |
+|---|---|
+| Typos, simple renames, obvious one-liners | standard |
+| New features, bug investigation, refactors | high |
+| Architecture decisions, migrations, unknown failure modes, cross-cutting changes | xhigh |
+
+Drop back to `high` after a heavy task is done. Do not run `xhigh` on routine work.
+
+---
+
 ## Workflow Orchestration
 
 ### 1. Plan First
-- Gå in i plan-läge för ALLA icke-triviala uppgifter (3+ steg eller arkitekturella beslut)
-- Om något går fel — STOPPA och omplanera omedelbart, fortsätt inte att trycka på
-- Skriv detaljerade specs i förväg för att minska tvetydighet
 
-### 2. Subagent-strategi
-- Använd subagenter liberalt för att hålla huvudkontextfönstret rent
-- Delegera research, utforskning och parallell analys till subagenter
-- En uppgift per subagent för fokuserad exekvering
+Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions).
 
-### 3. Self-Improvement Loop
-- Efter VARJE korrigering från användaren: uppdatera `tasks/lessons.md` med mönstret
-- Skriv regler som förhindrar samma misstag från att återupprepas
-- Granska lessons.md i början av varje session
+If something goes sideways: STOP and re-plan immediately — do not keep pushing.
 
-### 4. Verifiera innan klart
-- Markera ALDRIG en uppgift som klar utan att bevisa att det fungerar
-- Kör tester, kolla loggar, visa korrekthet
-- Fråga dig själv: "Skulle en senior ingenjör godkänna detta?"
+Use plan mode for verification steps, not just building.
 
-### 5. Kräv elegans (balanserat)
-- För icke-triviala ändringar: pausa och fråga "finns det ett mer elegant sätt?"
-- Om en fix känns hackig: implementera den eleganta lösningen istället
-- Hoppa över detta för enkla, uppenbara fixar — överkonstruera inte
+Write detailed specs upfront to reduce ambiguity.
 
-### 6. Autonom buggfix
-- Vid buggrapport: fixa den direkt — fråga inte om hand-holding
-- Peka på loggar, fel, misslyckade tester och lös dem
-- Fixa misslyckade CI-tester utan att bli tillsagd
+### 2. Extended Thinking for Hard Problems
 
-## Arbetsregler
+For architectural decisions, non-obvious bugs, or unfamiliar failure modes:
+reason through at least 3 approaches before recommending one.
+Show trade-offs explicitly. Do not jump to the first solution that comes to mind.
 
-1. **Jobba enbart på `main`** — inga feature branches, inga gh-pages branches
-2. **Bygg alltid innan push** — `npm run build` måste lyckas
-3. **Kör tester** — `npm run test` ska vara grönt
-4. **Verifiera deployment** — kolla GitHub Actions efter push (~40 sek)
-5. **Minsta möjliga förändring** — rör bara det som behövs för uppgiften
-6. **Inga kommentarer** om inte WHY är icke-uppenbar
-7. **Uppdatera lessons.md** efter varje korrigering från användaren
-8. **Planera i todo.md** — checklistor, markera klart vartefter
+### 3. When to Suggest a Dynamic Workflow
 
-## Uppgiftshantering
+If a task spans 5+ files, requires parallel investigation, or involves a migration:
+suggest running as a Dynamic Workflow before starting.
+Include the word "workflow" in the plan summary so Claude Code can trigger orchestration.
 
-1. **Planera först** — skriv plan till `tasks/todo.md` med checkbara punkter
-2. **Verifiera plan** — checka in innan implementation påbörjas
-3. **Spåra progress** — markera punkter klara vartefter
-4. **Förklara ändringar** — hög-nivå-sammanfattning vid varje steg
-5. **Dokumentera resultat** — lägg till review-sektion i `tasks/todo.md`
-6. **Fånga lärdomar** — uppdatera `tasks/lessons.md` efter korrigeringar
+### 4. Subagent Strategy
+
+Use subagents to keep the main context window clean.
+
+Offload research, exploration, and parallel analysis to subagents.
+
+One task per subagent for focused execution.
+
+For complex problems: throw more compute at it via subagents rather than cramming into one context.
+
+### 5. Self-Improvement Loop
+
+After ANY correction from the user: update `tasks/lessons.md` with the pattern.
+
+Write rules that prevent the same mistake from recurring.
+
+Ruthlessly iterate on these lessons until mistake rate drops.
+
+Review lessons at session start for relevant context.
+
+### 6. Verification Before Done
+
+Never mark a task complete without proving it works.
+
+**Mandatory checklist before marking done:**
+- [ ] Tests pass
+- [ ] No regressions introduced
+- [ ] Edge cases considered
+- [ ] Diff reviewed against main
+
+If any item fails: re-enter planning. Do NOT patch around it.
+
+Ask yourself: "Would a staff engineer approve this?"
+
+### 7. Demand Elegance (Balanced)
+
+For non-trivial changes: pause and ask "is there a more elegant way?"
+
+If a fix feels hacky: "Knowing everything I know now, implement the elegant solution."
+
+Skip this for simple, obvious fixes — do not over-engineer.
+
+Challenge your own work before presenting it.
+
+### 8. Autonomous Bug Fixing
+
+When given a bug report: just fix it. Do not ask for hand-holding.
+
+Point at logs, errors, failing tests — then resolve them.
+
+Zero context switching required from the user.
+
+Go fix failing CI tests without being told how.
+
+---
+
+## Task Management
+
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+
+---
+
+## Core Principles
+
+**Simplicity First**: Make every change as simple as possible. Impact minimal code.
+
+**No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+
+**Minimal Impact**: Changes should only touch what is necessary. Avoid introducing bugs.
+
+**Comment on Code**: Write clear and understandable comments for developers to follow.
+
+**Think Before Proposing**: For architectural decisions or non-obvious bugs, reason through trade-offs before presenting a solution. Show your reasoning when it matters.
