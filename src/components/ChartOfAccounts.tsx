@@ -43,8 +43,16 @@ export function ChartOfAccounts() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Radera kontot?')) await db.accounts.delete(id);
+    if (!confirm('Radera kontot?')) return;
+    const txCount = await db.transactions.where('accountId').equals(id).count();
+    if (txCount > 0) {
+      alert(`Kan inte radera: kontot har ${txCount} bokförda transaktioner.`);
+      return;
+    }
+    await db.accounts.delete(id);
   };
+
+  if (!accounts) return <div className="text-sm text-slate-400">Laddar…</div>;
 
   return (
     <div className="space-y-6">

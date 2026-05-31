@@ -85,7 +85,7 @@ async function runTests() {
 
   await resetDb();
   const accountCount = await db.accounts.count();
-  assert(accountCount === 23, `Exakt 23 standardkonton (fick ${accountCount})`);
+  assert(accountCount === 24, `Exakt 24 standardkonton (fick ${accountCount})`);
 
   const accs = await db.accounts.toArray();
   assert(accs.some(a => a.id === 1930 && a.type === 'asset'),     'Konto 1930 är tillgång');
@@ -823,9 +823,8 @@ async function runTests() {
     { accountId: 2514, amount: -16826 },
   ]);
 
-  const ne14accs = await db.accounts.toArray();
   const ne14txs  = await db.transactions.toArray();
-  const ne   = calcNELines(ne14accs, ne14txs);
+  const ne   = calcNELines(ne14txs);
 
   assert(near(ne.nettoomsattning, 100000), `NE R1 = 100 000 kr (fick ${ne.nettoomsattning})`);
   assert(near(ne.handelvaror,      30000), `NE R10 = 30 000 kr (fick ${ne.handelvaror})`);
@@ -861,14 +860,14 @@ async function runTests() {
     { accountId: 1930, amount:  50000 },
     { accountId: 3000, amount: -50000 },
   ]);
-  const resBefore = calcNELines(await db.accounts.toArray(), await db.transactions.toArray()).aretsResultat;
+  const resBefore = calcNELines(await db.transactions.toArray()).aretsResultat;
   assert(near(resBefore, 50000), `NE resultat före uttag = 50 000 kr (fick ${resBefore})`);
 
   await addVoucher('2026-02-28', 'Eget uttag', [
     { accountId: 2013, amount:  20000 },
     { accountId: 1930, amount: -20000 },
   ]);
-  const resAfter = calcNELines(await db.accounts.toArray(), await db.transactions.toArray()).aretsResultat;
+  const resAfter = calcNELines(await db.transactions.toArray()).aretsResultat;
   assert(near(resAfter, 50000), `NE resultat opåverkat av egna uttag (fick ${resAfter})`);
   assert(near(resBefore, resAfter), 'Egna uttag (konto 2013) påverkar INTE NE-bilagan');
 

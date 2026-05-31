@@ -45,6 +45,7 @@ export const defaultAccounts: Account[] = [
   { id: 2010, name: 'Eget kapital', type: 'equity' },
   { id: 2013, name: 'Egna uttag', type: 'equity' },
   { id: 2018, name: 'Egna insättningar', type: 'equity' },
+  { id: 2510, name: 'Skatteskulder (F-skatt)', type: 'liability' },
   { id: 2514, name: 'Beräknade egenavgifter', type: 'liability' },
   { id: 2610, name: 'Utgående moms, 25%', type: 'liability', vatCode: '10' },
   { id: 2620, name: 'Utgående moms, 12%', type: 'liability', vatCode: '11' },
@@ -65,13 +66,26 @@ export const defaultAccounts: Account[] = [
   { id: 8422, name: 'Egenavgifter', type: 'expense' },
 ];
 
+// Accounts added after initial release — patched into existing databases on startup
+const PATCH_ACCOUNTS: Account[] = [
+  { id: 2013, name: 'Egna uttag', type: 'equity' },
+  { id: 2018, name: 'Egna insättningar', type: 'equity' },
+  { id: 2510, name: 'Skatteskulder (F-skatt)', type: 'liability' },
+  { id: 2514, name: 'Beräknade egenavgifter', type: 'liability' },
+  { id: 8422, name: 'Egenavgifter', type: 'expense' },
+];
+
 export async function initializeDb(): Promise<{ hasData: boolean }> {
-  const [accountCount, voucherCount] = await Promise.all([
-    db.accounts.count(),
-    db.vouchers.count(),
-  ]);
+  const accountCount = await db.accounts.count();
+
   if (accountCount === 0) {
     await db.accounts.bulkAdd(defaultAccounts);
+  } else {
+    // Silently add any accounts introduced after the user's initial setup
+    for (const acc of PATCH_ACCOUNTS) {
+      if (!(await db.accounts.get(acc.id))) await db.accounts.put(acc);
+    }
   }
-  return { hasData: voucherCount > 0 };
+
+  return { hasData: accountCount > 0 };
 }

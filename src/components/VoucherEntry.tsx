@@ -5,7 +5,7 @@ import { Plus, Trash2, ScanLine } from 'lucide-react';
 import { format } from 'date-fns';
 import { scanReceipt } from '../lib/ocr';
 import { VAT_OUT, VAT_IN, splitVat } from '../lib/vat';
-import { uttaqTemplates } from '../lib/tax';
+import { uttaqTemplates, TEMPLATE_LABELS } from '../lib/tax';
 
 type Row = { accountId: number | string; debit: string; credit: string };
 
@@ -195,7 +195,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
     setQuickAmount('');
   };
 
-  const QUICK = ['Eget uttag', 'F-skatt', 'Eget insättning', 'Egenavgifter'];
+  const QUICK = TEMPLATE_LABELS;
 
   return (
     <div className="space-y-6">

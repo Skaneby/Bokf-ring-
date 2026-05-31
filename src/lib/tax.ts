@@ -42,7 +42,7 @@ function sumRange(balMap: Map<number, number>, from: number, to: number): number
   return total;
 }
 
-export function calcNELines(_accounts: Account[], transactions: Transaction[]): NELines {
+export function calcNELines(transactions: Transaction[]): NELines {
   const balMap = new Map<number, number>();
   for (const t of transactions) {
     balMap.set(t.accountId, (balMap.get(t.accountId) ?? 0) + t.amount);
@@ -107,6 +107,9 @@ export interface UttaqTemplate {
   rows: { accountId: number; debit: number; credit: number }[];
 }
 
+// Derived lazily so label list is always in sync with template definitions
+export const TEMPLATE_LABELS = ['Eget uttag', 'F-skatt', 'Eget insättning', 'Egenavgifter'] as const;
+
 export function uttaqTemplates(amount: number): UttaqTemplate[] {
   return [
     {
@@ -121,7 +124,7 @@ export function uttaqTemplates(amount: number): UttaqTemplate[] {
       label: 'F-skatt',
       description: 'F-skatt betalning',
       rows: [
-        { accountId: 2013, debit: amount, credit: 0 },
+        { accountId: 2510, debit: amount, credit: 0 },
         { accountId: 1930, debit: 0, credit: amount },
       ],
     },

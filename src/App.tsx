@@ -162,7 +162,7 @@ export default function App() {
         <main className="flex-1 overflow-auto p-5 md:p-8">
           <div className="mx-auto max-w-5xl">
             {tab === 'dashboard' && <Dashboard />}
-            {tab === 'voucher'   && <VoucherEntry editId={editId} onEditDone={() => setEditId(null)} />}
+            {tab === 'voucher'   && <VoucherEntry editId={editId} onEditDone={() => { setEditId(null); if (editId) setTab('reports'); }} />}
             {tab === 'accounts'  && <ChartOfAccounts />}
             {tab === 'reports'   && <Reports onEditVoucher={editVoucher} onReset={() => setHasData(false)} />}
             {tab === 'import'    && <GeminiImport />}
