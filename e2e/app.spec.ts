@@ -217,6 +217,41 @@ test('@desktop gemini-import, AI-gate utan nyckel och backupnedladdning', async 
   await expect(page.getByText(/kan inte raderas/)).toBeVisible();
 });
 
+test('@desktop kvittobilagor: bifoga vid bokning → syns i huvudbok → radera', async ({ page }) => {
+  await freshStart(page);
+
+  // Bokför med bifogad kvittobild
+  await gotoTab(page, 'Bokför');
+  await page.getByPlaceholder('T.ex. Inköp kontorsmaterial').fill('Inköp med kvitto');
+  await page.getByLabel('Bifoga kvitto').setInputFiles({
+    name: 'kvitto.png', mimeType: 'image/png', buffer: Buffer.from([137, 80, 78, 71, 1, 2, 3]),
+  });
+  await expect(page.getByText('kvitto.png')).toBeVisible(); // chip i formuläret
+
+  await page.getByLabel('Konto rad 1').selectOption('5410');
+  await page.getByLabel('Debet rad 1').fill('100');
+  await page.getByLabel('Konto rad 2').selectOption('1930');
+  await page.getByLabel('Kredit rad 2').fill('100');
+  await page.locator('form').getByRole('button', { name: 'Bokför', exact: true }).click();
+  await expect(page.getByText('Verifikation bokförd.')).toBeVisible();
+
+  // Huvudboken visar bilagan på verifikatet
+  await gotoTab(page, 'Rapporter');
+  await page.getByRole('button', { name: 'Huvudbok' }).click();
+  await expect(page.getByLabel('Öppna bilagan kvitto.png')).toBeVisible();
+
+  // Bifoga ytterligare en direkt i huvudboken
+  await page.getByLabel(/Bifoga kvitto till verifikat/).setInputFiles({
+    name: 'faktura.pdf', mimeType: 'application/pdf', buffer: Buffer.from([37, 80, 68, 70]),
+  });
+  await expect(page.getByLabel('Öppna bilagan faktura.pdf')).toBeVisible();
+
+  // Radera en bilaga
+  await page.getByLabel('Radera bilagan kvitto.png').click();
+  await expect(page.getByLabel('Öppna bilagan kvitto.png')).not.toBeVisible();
+  await expect(page.getByLabel('Öppna bilagan faktura.pdf')).toBeVisible();
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MOBIL — responsivitet
 // ═══════════════════════════════════════════════════════════════════════════

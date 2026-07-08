@@ -48,9 +48,9 @@ git push origin main
 ```
 src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
-  db.ts                — Dexie-schema v3 (accounts, vouchers, transactions, invoices, settings, declarations) + PATCH_ACCOUNTS
+  db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 470 enhetstester (Node + fake-indexeddb)
+  test.ts              — 484 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -86,6 +86,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     invoice.ts         — nummerserie, invoiceTotals(), bokning (faktura/kontant), renderInvoiceHtml()
     period.ts          — periodRange/splitByPeriod: resultat = period, balans = ackumulerat t.o.m. periodslut
     yearEnd.ts         — årsavslut: 8999→2019 (31/12) + omföring till 2010 (1/1); 8999 exkluderas ur resultatrapporter
+    attachments.ts     — kvittobilagor: ArrayBuffer i IndexedDB, 8 MB-gräns, base64 för backup, kaskadradering
     declaration.ts     — NE-blankettvy: B1-B16 (ackumulerat) + R1-R48 (år), justeringar, inlämningssteg, utskrift
     neSru.ts           — NE→SRU; B/R-fältkoder VERIFIERADE (BAS kopplingstabell); justeringsrader exporteras ej
     ink2.ts            — INK2R officiella poster 2.1-3.27, VERIFIERADE koder (BAS); INK2S exporteras ej
@@ -117,6 +118,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
 - **SIE-import mode** — `importSIE(content, 'merge')` eller `'replace'`
 - **Verifikationer** redigeras/raderas från Rapporter → Huvudbok; state lyfts via `editId` i App.tsx; efter redigering navigeras användaren tillbaka till Rapporter
 - **Mallkonton måste vara korrekta BAS-konton** — F-skatt = 2510 Skatteskulder (inte 2013 Egna uttag); slå upp kontot innan en mall skapas
+- **Bilagor lagras som ArrayBuffer, inte Blob** — ArrayBuffer strukturklonas säkert i alla miljöer (inkl. fake-indexeddb i testerna); Blob skapas först vid visning. Bilagor måste rensas i ALLA raderingsflöden: verifikatradering, byt bokföring, backup-återställning, SIE-replace
 - **8999 är reserverat för årsavslutet** — exkluderas ur resultaträkning/Översikt (RESULT_EXCLUDED_ACCOUNTS) men INGÅR i balansens beräknade resultat; NE/INK2/moms exkluderar det via sina intervall
 
 ---
@@ -169,7 +171,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 470 enhetstester
+npm run test         # kör 484 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)

@@ -19,10 +19,11 @@ export function BackupTab({ onReset }: Props) {
   };
 
   const handleReset = async () => {
-    await db.transaction('rw', db.transactions, db.vouchers, db.accounts, async () => {
+    await db.transaction('rw', db.transactions, db.vouchers, db.accounts, db.attachments, async () => {
       await db.transactions.clear();
       await db.vouchers.clear();
       await db.accounts.clear();
+      await db.attachments.clear();
     });
     onReset();
   };

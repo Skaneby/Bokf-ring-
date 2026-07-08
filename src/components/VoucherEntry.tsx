@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { Plus, Trash2, ScanLine } from 'lucide-react';
+import { Plus, Trash2, ScanLine, Paperclip, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { scanReceipt } from '../lib/ocr';
 import { VAT_OUT, VAT_IN, splitVat } from '../lib/vat';
 import { uttaqTemplates, TEMPLATE_LABELS } from '../lib/tax';
+import { addAttachment, validateAttachmentFile, AttachmentError } from '../lib/attachments';
 
 type Row = { accountId: number | string; debit: string; credit: string };
 
@@ -27,6 +28,17 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
   const [success, setSuccess] = useState('');
   const [saving,   setSaving]  = useState(false);
   const [scanning, setScanning] = useState(false);
+  // Kvittobilagor som sparas tillsammans med verifikatet (P5)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+  const addPendingFile = (file: File) => {
+    try {
+      validateAttachmentFile(file);
+      setPendingFiles(p => [...p, file]);
+    } catch (e) {
+      setError(e instanceof AttachmentError ? e.message : 'Kunde inte läsa filen.');
+    }
+  };
 
   const handleScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -34,6 +46,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
     setScanning(true); setError('');
     try {
       const data = await scanReceipt(file);
+      addPendingFile(file); // kvittobilden sparas som bilaga när verifikatet bokförs
       if (data.date)   setDate(data.date);
       if (data.vendor) setDescription(data.vendor);
 
@@ -142,6 +155,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
       return;
     }
     setSaving(true);
+    let savedVoucherId: number | null = editId ?? null;
     try {
       await db.transaction('rw', db.vouchers, db.transactions, async () => {
         if (editId) {
@@ -154,6 +168,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
           }
         } else {
           const vid = await db.vouchers.add({ date, description, created_at: Date.now() });
+          savedVoucherId = vid as number;
           for (const row of valid) {
             const d = parseFloat(row.debit  as string) || 0;
             const c = parseFloat(row.credit as string) || 0;
@@ -161,6 +176,11 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
           }
         }
       });
+      // Bilagor sparas efter verifikatet (egen tabell)
+      for (const f of pendingFiles) {
+        await addAttachment(savedVoucherId!, f);
+      }
+      setPendingFiles([]);
       setSuccess(editId ? 'Verifikation uppdaterad.' : 'Verifikation bokförd.');
       if (!editId) {
         setDescription('');
@@ -264,6 +284,46 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
               className={cls}
             />
           </div>
+        </div>
+
+        {/* Bilagor (P5) */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Kvittobilagor</p>
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+              <Paperclip className="h-4 w-4" /> Bifoga kvitto
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                multiple
+                className="hidden"
+                aria-label="Bifoga kvitto"
+                onChange={e => {
+                  for (const f of Array.from(e.target.files ?? [])) addPendingFile(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <span className="text-xs text-slate-400">Bild eller PDF, max 8 MB — sparas med verifikatet</span>
+          </div>
+          {pendingFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {pendingFiles.map((f, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                  <Paperclip className="h-3 w-3 text-slate-400" />
+                  {f.name}
+                  <button
+                    type="button"
+                    onClick={() => setPendingFiles(p => p.filter((_, j) => j !== i))}
+                    aria-label={`Ta bort bilagan ${f.name}`}
+                    className="rounded p-0.5 text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* VAT helper */}

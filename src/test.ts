@@ -37,6 +37,10 @@ import {
 import { matchesSearch } from './components/reports/shared';
 import { periodRange, periodLabel, splitByPeriod } from './lib/period';
 import { calcYearEnd, performYearEnd, RESULT_DISPOSITION_ACCOUNT } from './lib/yearEnd';
+import {
+  addAttachment, deleteAttachment, deleteAttachmentsForVoucher, attachmentCounts,
+  validateAttachmentFile, bufferToBase64, base64ToBuffer, AttachmentError,
+} from './lib/attachments';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -95,6 +99,7 @@ async function resetDb() {
   await db.invoices.clear();
   await db.settings.clear();
   await db.declarations.clear();
+  await db.attachments.clear();
   await initializeDb();
 }
 
@@ -462,7 +467,7 @@ async function runTests() {
   const tBkp = await db.transactions.count();
 
   const backup = await buildBackupData();
-  assert(backup.version === 1, 'Backup: version = 1');
+  assert(backup.version === 2, 'Backup: version = 2 (med bilagor)');
   assert(Array.isArray(backup.accounts)     && backup.accounts.length > 0,     'Backup: konton inkluderade');
   assert(Array.isArray(backup.vouchers)     && backup.vouchers.length === vBkp, 'Backup: alla verifikationer inkluderade');
   assert(Array.isArray(backup.transactions) && backup.transactions.length === tBkp, 'Backup: alla transaktioner inkluderade');
@@ -1945,6 +1950,82 @@ async function runTests() {
       return true; // hela datasetet — 8999 ska inte påverka
     }));
     assert(near(ne.aretsResultat, 40000 + 7000), 'Årsavslut: calcNELines opåverkad av 8999'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 26. KVITTOBILAGOR (P5)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 26. Kvittobilagor ─────────────────────────────────\n');
+
+  await resetDb();
+
+  // Node 22 har File globalt — samma API som webbläsaren
+  const makeFile = (name: string, type: string, bytes: number[]) =>
+    new File([new Uint8Array(bytes)], name, { type });
+
+  // ── base64 round-trip (används av backupen) ────────────────────────────
+  { const cases: number[][] = [[], [0], [1, 2, 3], [255, 0, 128, 64], Array.from({ length: 100 }, (_, i) => i % 256)];
+    let ok = true;
+    for (const c of cases) {
+      const buf = new Uint8Array(c).buffer;
+      const back = new Uint8Array(base64ToBuffer(bufferToBase64(buf)));
+      if (back.length !== c.length || !c.every((v, i) => back[i] === v)) ok = false;
+    }
+    assert(ok, 'Bilagor: base64 round-trip för alla padding-fall (0/1/2 utfyllnadstecken)'); }
+
+  // ── Validering ─────────────────────────────────────────────────────────
+  { let threw = false;
+    try { validateAttachmentFile({ name: 'virus.exe', type: 'application/x-msdownload', size: 100 }); }
+    catch (e) { threw = e instanceof AttachmentError; }
+    assert(threw, 'Bilagor: otillåten filtyp avvisas');
+    threw = false;
+    try { validateAttachmentFile({ name: 'stor.jpg', type: 'image/jpeg', size: 9 * 1024 * 1024 }); }
+    catch (e) { threw = e instanceof AttachmentError; }
+    assert(threw, 'Bilagor: fil över 8 MB avvisas');
+    validateAttachmentFile({ name: 'kvitto.pdf', type: 'application/pdf', size: 1000 });
+    validateAttachmentFile({ name: 'kvitto.jpg', type: 'image/jpeg', size: 1000 });
+    assert(true, 'Bilagor: PDF och bild godkänns'); }
+
+  // ── CRUD + kaskad ──────────────────────────────────────────────────────
+  await addVoucher('2026-03-01', 'Inköp med kvitto', [
+    { accountId: 5410, amount: 100 }, { accountId: 1930, amount: -100 },
+  ]);
+  const attVoucherId = (await db.vouchers.toArray()).find(v => v.description === 'Inköp med kvitto')!.id!;
+
+  const attId = await addAttachment(attVoucherId, makeFile('kvitto.jpg', 'image/jpeg', [1, 2, 3, 4, 5]));
+  await addAttachment(attVoucherId, makeFile('kvitto2.pdf', 'application/pdf', [9, 8, 7]));
+  { const atts = await db.attachments.toArray();
+    assert(atts.length === 2, 'Bilagor: två bilagor sparade');
+    const first = atts.find(a => a.id === attId)!;
+    assert(first.size === 5 && first.type === 'image/jpeg' && first.voucherId === attVoucherId,
+      'Bilagor: metadata (storlek, typ, verifikat) korrekt');
+    assert(new Uint8Array(first.data)[4] === 5, 'Bilagor: binärdata intakt i IndexedDB');
+    const counts = attachmentCounts(atts);
+    assert(counts.get(attVoucherId) === 2, 'Bilagor: räknare per verifikat'); }
+
+  await deleteAttachment(attId);
+  assert((await db.attachments.count()) === 1, 'Bilagor: enskild bilaga raderad');
+
+  // ── Backup v2: bilagor följer med ──────────────────────────────────────
+  { const backup = await buildBackupData();
+    assert(backup.version === 2, 'Backup v2: versionsstämpel');
+    assert(backup.attachments?.length === 1 && backup.attachments[0].name === 'kvitto2.pdf',
+      'Backup v2: bilagan ingår som base64');
+    // Återställ och verifiera binärdata
+    await applyBackupData(JSON.parse(JSON.stringify(backup)));
+    const restored = await db.attachments.toArray();
+    assert(restored.length === 1 && new Uint8Array(restored[0].data)[0] === 9,
+      'Backup v2: bilagan återställd med intakt binärdata');
+    // v1-backup (utan attachments) återställs utan fel och tömmer bilagorna
+    const v1 = { ...backup, version: 1 } as Record<string, unknown>;
+    delete v1.attachments;
+    await applyBackupData(v1 as never);
+    assert((await db.attachments.count()) === 0, 'Backup v1: äldre backup utan bilagor fungerar (bilagor töms)'); }
+
+  // ── Kaskadradering med verifikat ───────────────────────────────────────
+  { await addAttachment(attVoucherId, makeFile('igen.png', 'image/png', [1]));
+    await deleteAttachmentsForVoucher(attVoucherId);
+    assert((await db.attachments.count()) === 0, 'Bilagor: kaskadradering vid verifikatradering'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

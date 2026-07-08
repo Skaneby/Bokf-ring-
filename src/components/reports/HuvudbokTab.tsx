@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Account, Transaction, Voucher, db } from '../../db';
-import { Pencil, Trash2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Search, Paperclip } from 'lucide-react';
 import { matchesSearch } from './shared';
+import {
+  addAttachment, deleteAttachment, deleteAttachmentsForVoucher,
+  openAttachment, AttachmentError,
+} from '../../lib/attachments';
 
 const PAGE_SIZE = 25;
 
@@ -18,13 +23,29 @@ interface Props {
 }
 
 export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }: Props) {
+  const attachments = useLiveQuery(() => db.attachments.toArray()) ?? [];
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
+  const [attError, setAttError] = useState('');
 
   useEffect(() => {
     setPage(0);
   }, [search]);
+
+  const attachmentsFor = (voucherId: number) =>
+    attachments.filter(a => a.voucherId === voucherId);
+
+  const handleAddAttachment = async (voucherId: number, files: FileList | null) => {
+    setAttError('');
+    for (const f of Array.from(files ?? [])) {
+      try {
+        await addAttachment(voucherId, f);
+      } catch (e) {
+        setAttError(e instanceof AttachmentError ? e.message : 'Kunde inte spara bilagan.');
+      }
+    }
+  };
 
   const filteredVouchers = search.trim() === ''
     ? vouchers
@@ -41,9 +62,10 @@ export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }:
   }
 
   const deleteVoucher = async (id: number) => {
-    await db.transaction('rw', db.vouchers, db.transactions, async () => {
+    await db.transaction('rw', db.vouchers, db.transactions, db.attachments, async () => {
       await db.transactions.where('voucherId').equals(id).delete();
       await db.vouchers.delete(id);
+      await deleteAttachmentsForVoucher(id);
     });
     setConfirmDelete(null);
   };
@@ -72,6 +94,10 @@ export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }:
           </p>
         )}
       </div>
+
+      {attError && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{attError}</p>
+      )}
 
       {filteredVouchers.length === 0 && (
         <p className="text-sm text-slate-400">Inga verifikationer matchar sökningen.</p>
@@ -145,6 +171,39 @@ export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }:
                 })}
               </tbody>
             </table>
+
+            {/* Kvittobilagor (P5) */}
+            <div className="flex flex-wrap items-center gap-2 border-t border-slate-50 bg-slate-50/50 px-5 py-2">
+              {attachmentsFor(v.id!).map(att => (
+                <span key={att.id} className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-2.5 py-1 text-xs text-slate-700">
+                  <button
+                    onClick={() => openAttachment(att)}
+                    className="inline-flex items-center gap-1 hover:text-slate-900 transition-colors"
+                    aria-label={`Öppna bilagan ${att.name}`}
+                  >
+                    <Paperclip className="h-3 w-3 text-slate-400" /> {att.name}
+                  </button>
+                  <button
+                    onClick={() => deleteAttachment(att.id!)}
+                    aria-label={`Radera bilagan ${att.name}`}
+                    className="rounded p-0.5 text-slate-300 hover:text-red-500 transition-colors"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <label className="inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-1 text-xs text-slate-400 hover:text-slate-700 transition-colors">
+                <Paperclip className="h-3 w-3" /> Bifoga
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  className="hidden"
+                  aria-label={`Bifoga kvitto till verifikat ${v.id}`}
+                  onChange={e => { handleAddAttachment(v.id!, e.target.files); e.target.value = ''; }}
+                />
+              </label>
+            </div>
           </div>
         );
       })}

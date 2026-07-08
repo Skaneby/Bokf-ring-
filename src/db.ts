@@ -55,6 +55,18 @@ export interface Setting {
   value: unknown;
 }
 
+// Kvittobilaga kopplad till ett verifikat. Lagras som ArrayBuffer (inte Blob)
+// — klonas säkert av IndexedDB i alla miljöer inkl. testernas fake-indexeddb.
+export interface Attachment {
+  id?: number;
+  voucherId: number;
+  name: string;
+  type: string;   // MIME, t.ex. image/jpeg eller application/pdf
+  size: number;   // bytes
+  data: ArrayBuffer;
+  created_at: number;
+}
+
 // Manuella justeringar per blankettrad — bokförda värden räknas alltid om
 export interface DeclarationField {
   value: number;
@@ -88,6 +100,7 @@ export class AccountingDB extends Dexie {
   invoices!: Table<Invoice>;
   settings!: Table<Setting>;
   declarations!: Table<Declaration>;
+  attachments!: Table<Attachment>;
 
   constructor() {
     super('AccountingDB');
@@ -112,6 +125,16 @@ export class AccountingDB extends Dexie {
       invoices: '++id, number, status, date',
       settings: 'key',
       declarations: '++id, taxYear'
+    });
+    // v4: kvittobilagor per verifikat
+    this.version(4).stores({
+      accounts: 'id, type',
+      vouchers: '++id, date',
+      transactions: '++id, voucherId, accountId',
+      invoices: '++id, number, status, date',
+      settings: 'key',
+      declarations: '++id, taxYear',
+      attachments: '++id, voucherId'
     });
   }
 }

@@ -24,6 +24,10 @@
 
 - **hasData ska baseras på konton, inte verifikationer**: En användare med kontoplan men noll verifikationer är en aktiv användare — visa inte välkomstskärmen (risk att de raderar sin kontoplan via "Starta ny bokföring").
 
+- **Binärdata i IndexedDB: välj ArrayBuffer före Blob** — ArrayBuffer fungerar i både webbläsare och fake-indexeddb (Node-tester); Blob-kloning är miljöberoende. Skapa Blob först vid visning (URL.createObjectURL).
+
+- **Ny tabell = inventera alla raderingsflöden** — bilagor måste rensas vid verifikatradering, "byt bokföring", backup-återställning OCH SIE-replace. Glöms ett flöde blir det tysta föräldralösa rader.
+
 ## Deployment
 
 - **loadEnv vs process.env**: `loadEnv()` läser enbart `.env`-filer — INTE systemmiljövariabler. GitHub Actions secrets är systemmiljövariabler. Använd alltid `process.env.X ?? env.X` för CI-secrets.

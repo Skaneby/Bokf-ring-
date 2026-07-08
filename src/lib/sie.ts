@@ -55,11 +55,12 @@ export async function importSIE(fileContent: string, mode: 'merge' | 'replace' =
 
   let currentVoucherId: number | null = null;
 
-  await db.transaction('rw', db.accounts, db.vouchers, db.transactions, async () => {
+  await db.transaction('rw', db.accounts, db.vouchers, db.transactions, db.attachments, async () => {
     if (mode === 'replace') {
       await db.transactions.clear();
       await db.vouchers.clear();
       await db.accounts.clear();
+      await db.attachments.clear(); // bilagor hör till raderade verifikat
     }
 
     for (let i = 0; i < lines.length; i++) {
