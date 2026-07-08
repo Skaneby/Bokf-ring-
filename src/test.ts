@@ -1456,7 +1456,7 @@ async function runTests() {
   // ── Manuell justering + omräkning av summarader ───────────────────────
   { const rows = buildNeRows(neVouchers, neTxs, 2025, {
       R1:  { value: 90000, note: 'Rättelse: privat andel' },
-      R12: { value: 2000 },
+      R13: { value: 2000 },
     });
     const get = (id: string) => rows.find(r => r.id === id)!;
     assert(get('R1').value === 90000 && get('R1').adjusted, 'Justering: R1 använder manuellt värde');
@@ -1465,7 +1465,7 @@ async function runTests() {
     assert(near(get('R11').value, 90000 + 5000 - 30000 - 12000),
       `Justering: R11 räknas om från justerade värden (fick ${get('R11').value})`);
     assert(near(get('R47').value, 53000 - 10000 + 2000),
-      `Justering: R47 = R11 + R12 − R43 = 45 000 (fick ${get('R47').value})`); }
+      `Justering: R47 = R11 + R13 − R43 = 45 000 (fick ${get('R47').value})`); }
 
   // ── Underskott → R48 ───────────────────────────────────────────────────
   { const rows = buildNeRows(neVouchers, neTxs, 2025, { R6: { value: 80000 } });
@@ -1488,13 +1488,13 @@ async function runTests() {
   { const dec = await getDeclaration(2025);
     assert(dec !== undefined && dec.fields.R1?.value === 95000 && dec.status === 'draft',
       'Persistens: justering sparad med status draft'); }
-  await saveAdjustment(2025, 'R12', { value: 500 });
+  await saveAdjustment(2025, 'R13', { value: 500 });
   { const dec = await getDeclaration(2025);
-    assert(dec?.fields.R1?.value === 95000 && dec?.fields.R12?.value === 500,
+    assert(dec?.fields.R1?.value === 95000 && dec?.fields.R13?.value === 500,
       'Persistens: flera justeringar samexisterar'); }
   await saveAdjustment(2025, 'R1', null);
   { const dec = await getDeclaration(2025);
-    assert(dec?.fields.R1 === undefined && dec?.fields.R12?.value === 500,
+    assert(dec?.fields.R1 === undefined && dec?.fields.R13?.value === 500,
       'Persistens: null återställer raden utan att röra andra'); }
   await setDeclarationStatus(2025, 'klar');
   { const dec = await getDeclaration(2025);
@@ -1555,7 +1555,8 @@ async function runTests() {
   { const pkg = buildNeSruPackage(m2Input);
     const files = serialize(pkg);
     const text = decodeLatin1(files.blanketter);
-    assert(text.startsWith('#BLANKETT NE-2025P1'), 'NE-SRU: BLANKETTER.SRU börjar med #BLANKETT');
+    assert(text.startsWith('#BLANKETT NE-2025P4'),
+      'NE-SRU: blankettkod NE-2025P4 (P-suffix från SKV 2161 utgåva 13)');
     assert(text.includes('#IDENTITET 165560000167 20260708 160000'), 'NE-SRU: #IDENTITET med personnummer + frusen tidsstämpel');
     assert(text.includes('#UPPGIFT 7011 2025-01-01'), 'NE-SRU: #UPPGIFT-rad med datumvärde');
     assert((text.match(/#FIL_SLUT/g) ?? []).length === 1, 'NE-SRU: exakt en #FIL_SLUT');
@@ -1585,7 +1586,7 @@ async function runTests() {
   { const dec = await getDeclaration(2025);
     assert(dec?.submission?.uploadedAt === undefined && dec?.submission?.exportedAt === '2026-07-08',
       'Inlämning: steg kan ångras utan att röra andra steg');
-    assert(dec?.fields.R12?.value === 500, 'Inlämning: justeringar orörda av submission-uppdateringar'); }
+    assert(dec?.fields.R13?.value === 500, 'Inlämning: justeringar orörda av submission-uppdateringar'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // 21. INK2 — AKTIEBOLAG (M3)
@@ -1670,11 +1671,11 @@ async function runTests() {
 
   // ── Typad persistens: NE och INK2 samexisterar per år ─────────────────
   await saveAdjustment(2025, 'J2', { value: 5000 }, 'INK2');
-  await saveAdjustment(2025, 'R12', { value: 111 }, 'NE');
+  await saveAdjustment(2025, 'R13', { value: 111 }, 'NE');
   { const ink2 = await getDeclaration(2025, 'INK2');
     const ne   = await getDeclaration(2025, 'NE');
     assert(ink2?.fields.J2?.value === 5000 && ink2.type === 'INK2', 'Persistens: INK2-justering på egen post');
-    assert(ne?.fields.R12?.value === 111 && ne.type === 'NE', 'Persistens: NE-justering separat från INK2');
+    assert(ne?.fields.R13?.value === 111 && ne.type === 'NE', 'Persistens: NE-justering separat från INK2');
     assert(ink2?.id !== ne?.id, 'Persistens: NE och INK2 är olika deklarationsposter'); }
   await setSubmissionStep(2025, 'exportedAt', '2026-07-08', 'INK2');
   { const ink2 = await getDeclaration(2025, 'INK2');

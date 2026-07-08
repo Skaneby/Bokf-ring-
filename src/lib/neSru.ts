@@ -14,7 +14,12 @@ import { CompanySettings } from './invoice';
 // Blankettkodens årsversion (P-suffix) ska fortsatt kontrolleras i testtjänsten.
 export const NE_FALTKODER_VERIFIED = true;
 
-export const NE_FORM_CODE = (taxYear: number) => `NE-${taxYear}P1`; // VERIFIERAS: årsversion/P-suffix
+// Blankettversion per beskattningsår — P-suffixet läses från blanketten
+// (SKV 2161 utgåva 13, "NEM-1-13-2025P4" → NE-2025P4). Nya år: kontrollera
+// suffixet på årets blankett innan skarp export.
+const NE_FORM_VERSION: Record<number, string> = { 2025: 'P4' };
+export const NE_FORM_CODE = (taxYear: number) =>
+  `NE-${taxYear}${NE_FORM_VERSION[taxYear] ?? 'P4'}`;
 
 const FIELD_PERIOD_FROM = '7011'; // räkenskapsårets början
 const FIELD_PERIOD_TO   = '7012'; // räkenskapsårets slut

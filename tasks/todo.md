@@ -86,7 +86,9 @@ Spec: `docs/deklarationsmodul-spec.md` (SRU-filöverföring + manuell deklaratio
 - [x] M3 (INK2-delen): blankettvy INK2R/INK2S för aktiebolag + SRU-export med två blanketter (24 nya tester)
   - Byråstöd/roller/auditlogg kräver plattformsspåret (backend, flera användare) — utanför lokal app-scope, se docs/deklarationsmodul-spec.md §3-4
 - [ ] M4: Spår B — API-integration mot Skatteverket (kräver avtal + verifierad tjänstebeskrivning)
-- [ ] Verifiera kvarvarande mot Skatteverket: INK2R/INK2S-fältkoder (fortfarande platshållare), NE:s justeringsrader R12-R48, blankettkodernas årsversion (P-suffix), encoding — kör första fil i SKV:s testtjänst
+- [x] Blankettkod NE-2025P4 verifierad mot blankett SKV 2161 utg. 13 (docs/underlag-NE-blankett-SKV2161-2025.pdf)
+- [x] Justeringsradernas numrering rättad mot blanketten: R13 kostnader ej avdrag, R14 intäkter ej upptas (R12 = överföring av R11)
+- [ ] Verifiera kvarvarande mot Skatteverket: INK2R/INK2S-fältkoder (platshållare), fältkoder för NE:s justeringsrader R12-R48 (webbblanketten trycker inte koderna — kräver SKV:s fältlista eller maskinläsbar blankett), encoding — kör första fil i SKV:s testtjänst
 
 ### Öppet / Förbättringar (prioriterade)
 

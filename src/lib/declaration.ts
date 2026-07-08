@@ -82,15 +82,17 @@ export const NE_LINES: NeLineDef[] = [
   { id: 'R10', label: 'Avskrivningar och nedskrivningar maskiner/inventarier och immateriella tillgångar',
     kind: 'expense', sruCode: '7505', accounts: [{ from: 7800, to: 7819 }, { from: 7830, to: 7899 }] },
   { id: 'R11', label: 'Bokfört resultat', kind: 'computed', sruCode: '7440' },
-  // ── Skattemässiga justeringar — fältkoder ej i kopplingstabellen (exporteras ej) ──
-  { id: 'R12', label: 'Bokförda kostnader som inte ska dras av', kind: 'manual' },
-  { id: 'R13', label: 'Bokförda intäkter som inte ska tas upp', kind: 'manual' },
-  // Egenavgifter: avsättningen bokförs på 8422 i appen och dras som påförd
-  // avgift här. Schablonavdrag 25 % (R43-justering) hanteras i e-tjänsten.
-  { id: 'R43', label: 'Avdrag för egenavgifter (bokförd avsättning, konto 8422)',
+  // ── Skattemässiga justeringar (radnummer enligt blankett SKV 2161 utgåva 13) ──
+  // R12 = överföring av R11 till sidan 2 (visas inte som egen rad här).
+  // Fältkoder ej i kopplingstabellen → exporteras ej, kompletteras i e-tjänsten.
+  { id: 'R13', label: 'Bokförda kostnader som inte ska dras av', kind: 'manual' },
+  { id: 'R14', label: 'Bokförda intäkter som inte ska tas upp', kind: 'manual' },
+  // Egenavgifter: avsättningen bokförs på 8422 i appen och redovisas här som
+  // årets beräknade avdrag. Schablonavdrag 25 % kan justeras manuellt på raden.
+  { id: 'R43', label: 'Årets beräknade avdrag för egenavgifter och särskild löneskatt (konto 8422)',
     kind: 'expense', accounts: [{ from: 8422, to: 8422 }] },
-  { id: 'R47', label: 'Överskott → INK1 ruta 10.1', kind: 'computed' },
-  { id: 'R48', label: 'Underskott → INK1 ruta 10.2', kind: 'computed' },
+  { id: 'R47', label: 'Överskott → INK1 p. 10.1 eller 10.3', kind: 'computed' },
+  { id: 'R48', label: 'Underskott → INK1 p. 10.2 eller 10.4', kind: 'computed' },
 ];
 
 // ── Radbygge ──────────────────────────────────────────────────────────────────
@@ -172,7 +174,7 @@ export function buildNeRows(
   get('R11').value = r11;
   get('R11').auto  = r11;
 
-  const slutligt = r11 + get('R12').value - get('R13').value - get('R43').value;
+  const slutligt = r11 + get('R13').value - get('R14').value - get('R43').value;
   get('R47').value = Math.max(0, slutligt);
   get('R47').auto  = get('R47').value;
   get('R48').value = Math.max(0, -slutligt);
