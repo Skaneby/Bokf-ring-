@@ -2,6 +2,7 @@ import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { formatCurrency } from '../lib/utils';
+import { RESULT_EXCLUDED_ACCOUNTS } from '../lib/yearEnd';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
@@ -23,7 +24,8 @@ export function Dashboard() {
     if (a.type === 'asset')                               assets      += b;
     if (a.type === 'liability' || a.type === 'equity')    liabilities -= b;
     if (a.type === 'revenue')                             revenue     -= b;
-    if (a.type === 'expense')                             expenses    += b;
+    // 8999 (årsavslut) räknas inte som kostnad — se lib/yearEnd.ts
+    if (a.type === 'expense' && !RESULT_EXCLUDED_ACCOUNTS.has(a.id)) expenses += b;
   });
   const result = revenue - expenses;
 

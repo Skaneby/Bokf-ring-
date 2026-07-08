@@ -125,7 +125,7 @@ export function Reports({ onEditVoucher, onReset }: { onEditVoucher: (id: number
       {tab === 'balans'      && <BalansTab   accounts={accounts} transactions={split.throughEnd} />}
       {tab === 'huvudbok'    && <HuvudbokTab accounts={accounts} transactions={split.inPeriod} vouchers={vouchersInPeriod} onEditVoucher={onEditVoucher} />}
       {tab === 'moms'        && <MomsTab     transactions={split.inPeriod} periodText={periodLabel(period)} />}
-      {tab === 'skatt'       && <SkattTab    accounts={accounts} transactions={transactions} />}
+      {tab === 'skatt'       && <SkattTab    accounts={accounts} transactions={transactions} vouchers={vouchers} />}
       {tab === 'deklaration' && <DeklarationTab vouchers={vouchers} transactions={transactions} />}
       {tab === 'backup'      && <BackupTab   onReset={onReset} />}
     </div>

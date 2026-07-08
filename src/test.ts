@@ -36,6 +36,7 @@ import {
 } from './lib/ai';
 import { matchesSearch } from './components/reports/shared';
 import { periodRange, periodLabel, splitByPeriod } from './lib/period';
+import { calcYearEnd, performYearEnd, RESULT_DISPOSITION_ACCOUNT } from './lib/yearEnd';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -112,7 +113,7 @@ async function runTests() {
 
   await resetDb();
   const accountCount = await db.accounts.count();
-  assert(accountCount === 25, `Exakt 25 standardkonton (fick ${accountCount})`);
+  assert(accountCount === 27, `Exakt 27 standardkonton (fick ${accountCount})`);
 
   const accs = await db.accounts.toArray();
   assert(accs.some(a => a.id === 1930 && a.type === 'asset'),     'Konto 1930 är tillgång');
@@ -1862,6 +1863,88 @@ async function runTests() {
     const q2moms = calcMomsLines(splitByPeriod(pVouchers, pTxs, { year: 2025, quarter: 2 }).inPeriod);
     assert(near(q2moms.box48, 1000) && near(q2moms.box49, -1000),
       'Momsrapport Q2: ingående moms 1 000 → att återfå'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 25. ÅRSAVSLUT (P4)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 25. Årsavslut ─────────────────────────────────────\n');
+
+  await resetDb();
+
+  // 2025: försäljning 50 000, kostnad 10 000, eget uttag 20 000, insättning 5 000
+  await addVoucher('2025-03-01', 'Försäljning', [
+    { accountId: 1930, amount: 50000 }, { accountId: 3040, amount: -50000 },
+  ]);
+  await addVoucher('2025-04-01', 'Kostnad', [
+    { accountId: 6570, amount: 10000 }, { accountId: 1930, amount: -10000 },
+  ]);
+  await addVoucher('2025-06-01', 'Eget uttag', [
+    { accountId: 2013, amount: 20000 }, { accountId: 1930, amount: -20000 },
+  ]);
+  await addVoucher('2025-07-01', 'Egen insättning', [
+    { accountId: 1930, amount: 5000 }, { accountId: 2018, amount: -5000 },
+  ]);
+  // 2026-händelse — ska INTE påverka 2025 års avslut
+  await addVoucher('2026-02-01', 'Försäljning nästa år', [
+    { accountId: 1930, amount: 7000 }, { accountId: 3040, amount: -7000 },
+  ]);
+
+  // ── Förhandsberäkning ──────────────────────────────────────────────────
+  { const p = calcYearEnd(await db.vouchers.toArray(), await db.transactions.toArray(), 2025);
+    assert(near(p.resultat, 40000), `Årsavslut: resultat = 40 000 (fick ${p.resultat})`);
+    assert(near(p.uttag, 20000), `Årsavslut: uttag = 20 000 (fick ${p.uttag})`);
+    assert(near(p.insattningar, 5000), `Årsavslut: insättningar = 5 000 (fick ${p.insattningar})`);
+    assert(!p.alreadyClosed && p.hasAnything, 'Årsavslut: öppet år med innehåll'); }
+
+  // ── Genomförande ───────────────────────────────────────────────────────
+  { const created = await performYearEnd(2025);
+    assert(created === 2, `Årsavslut: två verifikat bokförda (fick ${created})`); }
+
+  { const vouchers = await db.vouchers.toArray();
+    const txs = await db.transactions.toArray();
+    const bal = new Map<number, number>();
+    for (const t of txs) bal.set(t.accountId, (bal.get(t.accountId) ?? 0) + t.amount);
+
+    // Egetkapitalkontona nollställda; 2010 = +resultat +insättningar −uttag
+    assert(near(bal.get(2013) ?? 0, 0), 'Årsavslut: 2013 egna uttag nollställt');
+    assert(near(bal.get(2018) ?? 0, 0), 'Årsavslut: 2018 egna insättningar nollställt');
+    assert(near(bal.get(2019) ?? 0, 0), 'Årsavslut: 2019 årets resultat nollställt efter omföring');
+    assert(near(-(bal.get(2010) ?? 0), 40000 + 5000 - 20000),
+      `Årsavslut: 2010 eget kapital = 25 000 kredit (fick ${-(bal.get(2010) ?? 0)})`);
+    // 8999 bär dispositionen (debet 40 000 vid vinst)
+    assert(near(bal.get(RESULT_DISPOSITION_ACCOUNT) ?? 0, 40000), 'Årsavslut: 8999 bär dispositionen');
+
+    // Dispositionsverifikatet 31/12, omföringen 1/1
+    const disp = vouchers.find(v => v.description.includes('resultatdisposition'))!;
+    const omf  = vouchers.find(v => v.description.includes('omföring eget kapital'))!;
+    assert(disp.date === '2025-12-31', 'Årsavslut: disposition per 31 december');
+    assert(omf.date === '2026-01-01', 'Årsavslut: omföring per 1 januari');
+
+    // Balansekvationen håller efter avslutet
+    const b = await getBalances();
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Årsavslut: balansekvationen håller');
+
+    // Odisponerat resultat t.o.m. 2026: bara nya årets 7 000 (2025 disponerat)
+    const p26 = calcYearEnd(vouchers, txs, 2026);
+    assert(near(p26.resultat, 7000), `Årsavslut: odisponerat 2026 = 7 000 — 2025 redan fört till EK (fick ${p26.resultat})`); }
+
+  // ── Skydd ──────────────────────────────────────────────────────────────
+  { const p = calcYearEnd(await db.vouchers.toArray(), await db.transactions.toArray(), 2025);
+    assert(p.alreadyClosed, 'Årsavslut: 2025 detekteras som avslutat');
+    let threw = false;
+    try { await performYearEnd(2025); } catch { threw = true; }
+    assert(threw, 'Årsavslut: dubbelavslut avvisas'); }
+
+  // ── Rapportkonventionen: NE och resultat opåverkade av 8999 ────────────
+  { const rows = buildNeRows(await db.vouchers.toArray(), await db.transactions.toArray(), 2025);
+    const r11 = rows.find(r => r.id === 'R11')!;
+    assert(near(r11.value, 40000), `Årsavslut: NE R11 för 2025 fortfarande 40 000 efter avslut (fick ${r11.value})`);
+    // 8999 utanför NE:s intervall; kontrollera även calcNELines (8400-8799)
+    const ne = calcNELines((await db.transactions.toArray()).filter(t => {
+      return true; // hela datasetet — 8999 ska inte påverka
+    }));
+    assert(near(ne.aretsResultat, 40000 + 7000), 'Årsavslut: calcNELines opåverkad av 8999'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

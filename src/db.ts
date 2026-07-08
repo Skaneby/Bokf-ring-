@@ -126,6 +126,7 @@ export const defaultAccounts: Account[] = [
   { id: 2010, name: 'Eget kapital', type: 'equity' },
   { id: 2013, name: 'Egna uttag', type: 'equity' },
   { id: 2018, name: 'Egna insättningar', type: 'equity' },
+  { id: 2019, name: 'Årets resultat', type: 'equity' },
   { id: 2510, name: 'Skatteskulder (F-skatt)', type: 'liability' },
   { id: 2514, name: 'Beräknade egenavgifter', type: 'liability' },
   { id: 2610, name: 'Utgående moms, 25%', type: 'liability', vatCode: '10' },
@@ -145,6 +146,9 @@ export const defaultAccounts: Account[] = [
   { id: 6530, name: 'Redovisningstjänster', type: 'expense' },
   { id: 6570, name: 'Bankkostnader', type: 'expense' },
   { id: 8422, name: 'Egenavgifter', type: 'expense' },
+  // 8999 används enbart av årsavslutet (resultatdisposition) och exkluderas
+  // ur resultaträkningen — se lib/yearEnd.ts
+  { id: 8999, name: 'Årets resultat (avslut)', type: 'expense' },
 ];
 
 // Accounts added after initial release — patched into existing databases on startup
@@ -152,9 +156,11 @@ const PATCH_ACCOUNTS: Account[] = [
   { id: 1510, name: 'Kundfordringar', type: 'asset' },
   { id: 2013, name: 'Egna uttag', type: 'equity' },
   { id: 2018, name: 'Egna insättningar', type: 'equity' },
+  { id: 2019, name: 'Årets resultat', type: 'equity' },
   { id: 2510, name: 'Skatteskulder (F-skatt)', type: 'liability' },
   { id: 2514, name: 'Beräknade egenavgifter', type: 'liability' },
   { id: 8422, name: 'Egenavgifter', type: 'expense' },
+  { id: 8999, name: 'Årets resultat (avslut)', type: 'expense' },
 ];
 
 export async function initializeDb(): Promise<{ hasData: boolean }> {

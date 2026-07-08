@@ -1,6 +1,7 @@
 import React from 'react';
 import { Account, Transaction } from '../../db';
 import { formatCurrency } from '../../lib/utils';
+import { RESULT_EXCLUDED_ACCOUNTS } from '../../lib/yearEnd';
 import { Card, Row, TotalRow, buildBalMap } from './shared';
 
 interface Props {
@@ -11,7 +12,9 @@ interface Props {
 export function ResultatTab({ accounts, transactions }: Props) {
   const bal = buildBalMap(transactions);
   const revenues = accounts.filter(a => a.type === 'revenue');
-  const expenses = accounts.filter(a => a.type === 'expense');
+  // 8999 (årsavslutets resultatdisposition) exkluderas — annars skulle
+  // ett avslutat års resultaträkning visa 0
+  const expenses = accounts.filter(a => a.type === 'expense' && !RESULT_EXCLUDED_ACCOUNTS.has(a.id));
   let totalRev = 0, totalExp = 0;
 
   return (

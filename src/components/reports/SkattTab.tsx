@@ -1,18 +1,24 @@
 import React, { useState } from 'react';
-import { Account, Transaction, db } from '../../db';
+import { Account, Transaction, Voucher, db } from '../../db';
 import { formatCurrency } from '../../lib/utils';
 import { calcNELines, calcMomsLines, calculateEgenavgifter, EGENAVGIFTER_RATE, AgeBracket } from '../../lib/tax';
+import { calcYearEnd, performYearEnd } from '../../lib/yearEnd';
+import { taxYearsAvailable } from '../../lib/declaration';
 import { format } from 'date-fns';
 import { Card } from './shared';
 
 interface Props {
   accounts: Account[];
   transactions: Transaction[];
+  vouchers: Voucher[];
 }
 
-export function SkattTab({ accounts: _accounts, transactions }: Props) {
+export function SkattTab({ accounts: _accounts, transactions, vouchers }: Props) {
   const [bracket, setBracket] = useState<AgeBracket>('full');
   const [egBooked, setEgBooked] = useState(false);
+  const [closeYear, setCloseYear] = useState<number | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const [closeMsg, setCloseMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const ne    = calcNELines(transactions);
   const moms  = calcMomsLines(transactions);
@@ -129,6 +135,94 @@ export function SkattTab({ accounts: _accounts, transactions }: Props) {
         <p className="px-5 py-3 text-xs text-slate-400">
           Ruta 20–24 (EU-förvärv och omvänd skattskyldighet) fylls i manuellt i Skatteverkets e-tjänst.
         </p>
+      </Card>
+
+      {/* Årsavslut (P4) */}
+      <Card title="Årsavslut — nollställ resultat och egna uttag mot eget kapital">
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-sm text-slate-500">
+            Vid årsskiftet förs årets resultat, egna uttag och egna insättningar över till
+            2010 Eget kapital. Två verifikat bokförs: resultatdisposition (31/12, konto 8999→2019)
+            och omföring av eget kapital (1/1). Resultaträkningen för det avslutade året påverkas inte.
+          </p>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">År att avsluta</label>
+              <select
+                value={closeYear ?? ''}
+                onChange={e => { setCloseYear(e.target.value ? Number(e.target.value) : null); setConfirmClose(false); setCloseMsg(null); }}
+                aria-label="År att avsluta"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+              >
+                <option value="">Välj år…</option>
+                {taxYearsAvailable(vouchers).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {closeYear !== null && (() => {
+            const preview = calcYearEnd(vouchers, transactions, closeYear);
+            if (preview.alreadyClosed) {
+              return <p className="text-sm text-emerald-600">Årsavslut {closeYear} är redan genomfört ✓ (se Huvudbok: "Årsavslut {closeYear}").</p>;
+            }
+            if (!preview.hasAnything) {
+              return <p className="text-sm text-slate-400">Inget att avsluta för {closeYear}.</p>;
+            }
+            return (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-slate-200 p-4 space-y-1 text-sm">
+                  <div className="flex justify-between"><span className="text-slate-600">Odisponerat resultat t.o.m. 31/12 {closeYear}</span>
+                    <span className={`tabular-nums font-medium ${preview.resultat < 0 ? 'text-red-600' : 'text-slate-900'}`}>{formatCurrency(preview.resultat)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Egna uttag (2013) att omföra</span>
+                    <span className="tabular-nums text-slate-900">{formatCurrency(preview.uttag)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-600">Egna insättningar (2018) att omföra</span>
+                    <span className="tabular-nums text-slate-900">{formatCurrency(preview.insattningar)}</span></div>
+                  <div className="flex justify-between border-t border-slate-100 pt-1.5 font-semibold">
+                    <span className="text-slate-900">Nettoförändring 2010 Eget kapital</span>
+                    <span className="tabular-nums text-slate-900">{formatCurrency(preview.resultat + preview.insattningar - preview.uttag)}</span></div>
+                </div>
+
+                {!confirmClose ? (
+                  <button
+                    onClick={() => setConfirmClose(true)}
+                    className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700 transition-colors"
+                  >
+                    Genomför årsavslut {closeYear}
+                  </button>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <span className="text-sm text-amber-800">Två verifikat bokförs. Fortsätta?</span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await performYearEnd(closeYear);
+                          setCloseMsg({ ok: true, text: `Årsavslut ${closeYear} genomfört — verifikaten finns i Huvudboken.` });
+                        } catch (e) {
+                          setCloseMsg({ ok: false, text: e instanceof Error ? e.message : 'Årsavslutet misslyckades.' });
+                        }
+                        setConfirmClose(false);
+                      }}
+                      className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 transition-colors"
+                    >
+                      Ja, bokför
+                    </button>
+                    <button
+                      onClick={() => setConfirmClose(false)}
+                      className="rounded-lg px-3 py-2 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                    >
+                      Avbryt
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {closeMsg && (
+            <p className={`text-sm ${closeMsg.ok ? 'text-emerald-600' : 'text-red-600'}`}>{closeMsg.text}</p>
+          )}
+        </div>
       </Card>
     </div>
   );

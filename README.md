@@ -14,7 +14,7 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 - **Fakturering** — skapa fakturor med löpande nummerserie (obruten enligt bokföringslagen), egen HTML-mall eller standardmall, skriv ut/PDF, dela eller maila; bokförs enligt faktura- eller kontantmetoden
 - **Snabbval** — eget uttag, egen insättning, F-skatt och egenavgifter med ett klick
 - **Rapporter** — resultaträkning, balansräkning, huvudbok (sök + paginering), momsrapport — allt filtrerbart per år/kvartal/månad
-- **Skatt & deklaration** — NE-bilagan (SKV 2161) sammanställs automatiskt, egenavgifter beräknas per åldersgrupp, momsdeklarationens rutor summeras
+- **Skatt & deklaration** — NE-bilagan (SKV 2161) sammanställs automatiskt, egenavgifter beräknas per åldersgrupp, momsdeklarationens rutor summeras, årsavslut med ett klick
 - **SIE4** — import och export för utbyte med Fortnox, Visma och redovisningsbyråer
 - **JSON-backup** — ladda ned och återställ hela bokföringen som en fil
 - **AI-hjälp** — inbyggd chattbot som kan svensk skatt, juridik och bokföring och känner din kontoplan; kräver din egen (gratis) Gemini-nyckel som valideras och lagras lokalt
@@ -36,7 +36,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test          # 452 enhetstester (tsx + fake-indexeddb)
+npm run test          # 470 enhetstester (tsx + fake-indexeddb)
 npm run test:e2e      # E2E i webbläsare: desktop 1280px + mobil 375px (Playwright)
 npm run lint          # typkontroll (tsc --noEmit)
 npm run build         # produktionsbygge till dist/
