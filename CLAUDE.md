@@ -48,23 +48,31 @@ git push origin main
 ```
 src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
-  db.ts                — Dexie-schema (accounts, vouchers, transactions)
-  main.tsx             — React-root mount
+  db.ts                — Dexie-schema + defaultAccounts + PATCH_ACCOUNTS (patchas in i befintliga DB:er vid uppstart)
+  main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
   test.ts              — 245 enhetstester (Node + fake-indexeddb)
   components/
+    ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
     Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
     Dashboard.tsx      — KPI-kort; använd useLiveQuery i toppen (INTE i JSX)
-    VoucherEntry.tsx   — bokföringsformulär, momshjälp, OCR-skanning, snabbval
-    ChartOfAccounts.tsx — kontoplan CRUD
-    Reports.tsx        — flikar: Resultat, Balans, Huvudbok, Skatt, Säkerhetskopiering
+    VoucherEntry.tsx   — bokföringsformulär, momshjälp, OCR-skanning, snabbval (TEMPLATE_LABELS)
+    ChartOfAccounts.tsx — kontoplan CRUD; radering blockeras om kontot har transaktioner
+    Reports.tsx        — tunn flik-router (~70 rader); flikarna bor i reports/
     GeminiImport.tsx   — importera verifikationer från Gemini JSON-export
+    reports/
+      shared.tsx       — Card / Row / TotalRow / buildBalMap
+      ResultatTab.tsx  — resultaträkning
+      BalansTab.tsx    — balansräkning
+      HuvudbokTab.tsx  — huvudbok med paginering (25/sida), redigera/radera verifikat
+      SkattTab.tsx     — NE-bilaga, egenavgifter, momsdeklaration
+      BackupTab.tsx    — JSON-backup, SIE4 import/export, "Byt bokföring"
   lib/
     backup.ts          — buildBackupData() / applyBackupData() / exportBackup()
-    sie.ts             — exportSIE() / importSIE(content, 'merge'|'replace')
+    sie.ts             — exportSIE() / importSIE(content, 'merge'|'replace') / decodeSIEBuffer (CP437)
     vat.ts             — splitVat() / vatRows() / VAT_OUT / VAT_IN — testbar logik
     ocr.ts             — scanReceipt(file) via Gemini Vision
     tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
-    geminiImport.ts    — parseGeminiJson() / validateRows() / bookDraftRows()
+    geminiImport.ts    — parseGeminiJson() / validateRows() / resolveAccount() / bookDraftRows()
     utils.ts           — formatCurrency()
 ```
 
@@ -82,10 +90,15 @@ src/
 - **Aldrig pusha till gh-pages manuellt** — deploy-pages@v4 hanterar allt
 - **PWA service worker** — använd `registerType: 'autoUpdate'` + `skipWaiting: true` + `clientsClaim: true` — annars fastnar gamla SW och servar stale cache på användarens enhet
 
+### Databas
+- **Nya standardkonton når inte befintliga användare automatiskt** — `initializeDb` seedar bara vid tom DB. Nya konton MÅSTE också läggas till i `PATCH_ACCOUNTS` (db.ts) så att befintliga databaser patchas vid uppstart. Dexie har inga foreign keys — transaktioner mot saknade konton sparas tyst
+- **hasData = accountCount > 0** — inte voucherCount; en användare med kontoplan men noll verifikationer ska INTE se välkomstskärmen
+
 ### Bokföring
 - **Balanscheck på sparade rader** — beräkna debet/kredit-diff ENBART på rader med valt konto (samma set som sparas), inte alla formulärrader
 - **SIE-import mode** — `importSIE(content, 'merge')` eller `'replace'`
-- **Verifikationer** redigeras/raderas från Rapporter → Huvudbok; state lyfts via `editId` i App.tsx
+- **Verifikationer** redigeras/raderas från Rapporter → Huvudbok; state lyfts via `editId` i App.tsx; efter redigering navigeras användaren tillbaka till Rapporter
+- **Mallkonton måste vara korrekta BAS-konton** — F-skatt = 2510 Skatteskulder (inte 2013 Egna uttag); slå upp kontot innan en mall skapas
 
 ---
 

@@ -1,46 +1,60 @@
 # Lessons Learned
 
-## Deployment
-
-- **loadEnv vs process.env**: `loadEnv()` läser enbart `.env`-filer — INTE systemmiljövariabler. GitHub Actions secrets är systemmiljövariabler. Använd alltid `process.env.X ?? env.X` för CI-secrets.
-
-- **Case sensitivity**: GitHub Pages URL matchar repo-namnet exakt. `Bokf-ring-` ≠ `bokf-ring-`. Verifiera alltid att base path matchar repo-namnets skiftläge i både vite.config.ts och index.html.
-
-- **Branch discipline**: Jobba ENBART på `main`. GitHub Actions hanterar all deployment via `actions/deploy-pages@v4`. Skapa aldrig `gh-pages` eller andra deployment-branches. Om de existerar — ta bort dem omedelbart.
-
-- **GitHub Pages source måste vara "GitHub Actions"**: Om den är satt till "Deploy from branch" ignoreras alla `deploy-pages@v4`-körningar tyst. Kontrollera Settings → Pages → Source efter varje repo-klon.
-
-- **_headers fungerar inte på GitHub Pages**: `_headers`-filer är Netlify-specifika. GitHub Pages ignorerar dem. Använd meta http-equiv-taggar i HTML istället.
-
-- **Verifiera deployment innan du rapporterar klart**: Kolla alltid GitHub Actions-körningens status och att live-URL:en visar rätt innehåll.
-
-## PWA / Service Worker
-
-- **skipWaiting + clientsClaim är obligatoriska**: Utan dem installeras ny SW men aktiveras aldrig förrän alla flikar stängs. Användaren ser då aldrig uppdateringar. Konfigurera alltid:
-  ```
-  registerType: 'autoUpdate'
-  workbox: { skipWaiting: true, clientsClaim: true }
-  ```
-
-- **Gammal SW blockerar uppdateringar**: Om en gammal SW utan skipWaiting finns på användarens enhet, intercepts den alla nätverksanrop. Ny SW kan inte ta över. Enda lösningen: användaren rensar webbplatsdata i Chrome.
-
-- **Ta aldrig bort PWA**: PWA är nödvändigt för Android-installation. Rätt fix för SW-problem är korrekt konfiguration, inte att ta bort hela PWA-pluginet.
-
-## Bokföring / Affärslogik
-
-- **Balanscheck på sparade rader**: `totalDebit/totalCredit` måste beräknas från rader med valt konto (samma set som faktiskt sparas). Om man räknar alla formulärrader inkl. tomma, kan ett balanserat formulär spara obalanserade transaktioner i DB.
-
-- **Kontoartsmappning i rapporter**: `expense` visar positivt databassaldo direkt. `revenue` måste negeras. `asset`/`liability`/`equity` är balansräkningskonton. Blanda aldrig ihop dem.
-
-- **OCR-riktning default**: Kvitton och fakturor ska som default klassificeras som ingående (inköp, `vatDir: 'in'`). Endast explicit försäljningsdokumentation ska vara `'out'`.
-
 ## React
 
-- **Hooks i JSX är förbjudet**: `useLiveQuery`, `useState` etc. måste alltid anropas i toppen av komponenten, aldrig inuti `return()`, villkorssatser eller loopar.
+- **Hooks FÖRE early returns — alltid**: Alla hooks (`useState`, `useEffect`, `useLiveQuery`) måste anropas innan varje `if (...) return`. En `useEffect` placerad efter `if (!hasData) return <Welcome/>` gjorde att hook-antalet ändrades mellan renders → React kraschade → helt vit skärm i produktion (juli 2026). Kontrollera hook-placering i varje komponent-diff.
+
+- **Hooks i JSX är förbjudet**: `useLiveQuery`, `useState` etc. får aldrig anropas inuti `return()`, villkorssatser eller loopar.
+
+- **ErrorBoundary är obligatoriskt skyddsnät**: Utan ErrorBoundary blir varje obehandlat renderfel en vit skärm utan förklaring. Med den får användaren felmeddelande + "Ladda om"-knapp. Ta aldrig bort den från main.tsx.
 
 - **useLiveQuery auto-uppdaterar**: Ingen manuell refresh behövs efter DB-ändringar.
 
 - **Dexie filter på icke-indexerade fält**: `where('description')` kastar SchemaError om fältet inte är indexerat. Använd `.toArray().find()` istället.
+
+## Git / Merge
+
+- **Verifiera BÅDA sidorna vid merge-konflikt**: Vid konfliktlösning i App.tsx togs feature-branchens importlista rakt av — men main hade kod som använde `db` och `RefreshCw`. Resultat: ReferenceError → vit skärm. Efter varje konfliktlösning: sök igenom filen efter identifierare och verifiera att alla är importerade, kör sedan `npm run build`.
+
+- **Ändra aldrig fungerande deployment-infrastruktur för att jaga en annan bugg**: deploy.yml byttes i onödan till gh-pages-push under felsökning av vit skärm — deployen var aldrig problemet. Rör bara infrastruktur när det finns bevis på att infrastrukturen är trasig.
+
+## Databas / Migration
+
+- **Ny default-data når inte befintliga användare automatiskt**: `initializeDb` seedar bara vid tom DB. När nya standardkonton (2013, 2510, 8422 …) läggs till måste de även patchas in i befintliga databaser vid uppstart (se `PATCH_ACCOUNTS` i db.ts). Annars skapar mallar transaktioner mot konton som inte finns — Dexie har inga foreign keys så felet är tyst.
+
+- **hasData ska baseras på konton, inte verifikationer**: En användare med kontoplan men noll verifikationer är en aktiv användare — visa inte välkomstskärmen (risk att de raderar sin kontoplan via "Starta ny bokföring").
+
+## Deployment
+
+- **loadEnv vs process.env**: `loadEnv()` läser enbart `.env`-filer — INTE systemmiljövariabler. GitHub Actions secrets är systemmiljövariabler. Använd alltid `process.env.X ?? env.X` för CI-secrets.
+
+- **Case sensitivity**: GitHub Pages URL matchar repo-namnet exakt. `Bokf-ring-` ≠ `bokf-ring-`. Verifiera att base path matchar repo-namnets skiftläge.
+
+- **Branch discipline**: Jobba ENBART på `main`. `actions/deploy-pages@v4` hanterar all deployment. Skapa aldrig `gh-pages`-branches — om de dyker upp, ta bort dem.
+
+- **GitHub Pages source måste vara "GitHub Actions"**: Om den är satt till "Deploy from branch" ignoreras alla `deploy-pages@v4`-körningar tyst.
+
+- **WebFetch mot GitHub Pages ger falska 403**: GitHubs CDN/botskydd blockerar automatiserade hämtningar. En 403 från WebFetch bevisar INTE att sajten är nere — verifiera med Actions-status och användarens webbläsare istället.
+
+- **_headers fungerar inte på GitHub Pages**: Netlify-specifikt. Använd meta http-equiv i HTML istället.
+
+## PWA / Service Worker
+
+- **skipWaiting + clientsClaim är obligatoriska**: Utan dem installeras ny SW men aktiveras aldrig förrän alla flikar stängs. Konfigurera alltid `registerType: 'autoUpdate'` + `workbox: { skipWaiting: true, clientsClaim: true }`.
+
+- **Gammal SW blockerar uppdateringar**: En gammal SW utan skipWaiting intercepts alla nätverksanrop och kan inte ersättas remote. Enda lösningen: användaren rensar webbplatsdata, eller `?reset=1`-flödet i main.tsx.
+
+- **Ta aldrig bort PWA**: Nödvändigt för Android-installation. Rätt fix för SW-problem är korrekt konfiguration.
+
+## Bokföring / Affärslogik
+
+- **Balanscheck på sparade rader**: `totalDebit/totalCredit` beräknas från rader med valt konto (samma set som sparas). Räknar man alla formulärrader inkl. tomma kan obalanserade transaktioner sparas.
+
+- **Kontoartsmappning i rapporter**: `expense` visar positivt databassaldo direkt. `revenue` negeras. `asset`/`liability`/`equity` är balansräkningskonton.
+
+- **Rätt konto för rätt händelse**: F-skatt är en skattebetalning (2510 Skatteskulder) — INTE ett eget uttag (2013). Att återanvända ett "liknande" konto i en mall förorenar både balansräkning och NE-bilaga. Slå upp BAS-kontot innan en mall skapas.
+
+- **OCR-riktning default**: Kvitton klassificeras som ingående (`vatDir: 'in'`) om inget annat är tydligt.
 
 ## Process
 
@@ -54,4 +68,4 @@
 
 - **Rapportera inte som klart utan bevis**: "Det borde fungera" räcker inte. Verifiera med Actions-loggar och live-URL.
 
-- **_headers är Netlify — inte GitHub Pages**: Blanda inte ihop plattformspecifika funktioner.
+- **Testantal är rörligt**: Uppdatera dokumentation (README, CLAUDE.md, todo.md) när testsviten växer — annars ljuger dokumenten.
