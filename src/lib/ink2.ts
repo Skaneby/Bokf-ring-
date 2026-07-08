@@ -1,56 +1,211 @@
-// INK2 (aktiebolag) — förenklat räkenskapsschema (INK2R) och skattemässiga
-// justeringar (INK2S) enligt samma mönster som NE-blankettvyn.
+// INK2 (aktiebolag) — räkenskapsschema INK2R enligt blankettens officiella
+// postnumrering (2.1–2.50 balans, 3.1–3.27 resultat) + skattemässiga
+// justeringar (INK2S) för beräkning.
 //
-// FÖRENKLAT: posterna är aggregerade kontointervall, inte blankettens
-// officiella postnumrering (2.x/3.x/4.x) — därför egna rad-id:n (T/E/I/K/F/J).
-// Alla leaf-rader är justerbara; summarader räknas om från gällande värden.
-// SRU-fältkoder är PLATSHÅLLARE (VERIFIERAS mot SKV 269 före skarp inlämning).
+// Fältkoder och kontointervall är VERIFIERADE mot BAS kopplingstabell
+// "Inkomstdeklaration 2" (BAS 2023) — arkiverad i docs/.
+// Specialfall ur tabellen: vissa poster är NETTO-poster med olika fältkod
+// beroende på tecken (t.ex. 3.2 → 7411 vid + / 7510 vid −).
+// INK2S (4.x) är inte kontomappad och EXPORTERAS INTE — kompletteras i
+// e-tjänsten (samma policy som NE:s justeringsrader).
 
 import { Voucher, Transaction } from '../db';
-import { NeRow, NeAdjustments, NeLineDef } from './declaration';
-import { SruPackage } from './sru';
+import { NeRow, NeAdjustments } from './declaration';
+import { SruPackage, SruUppgift } from './sru';
 import { CompanySettings } from './invoice';
 
-export const INK2_FALTKODER_VERIFIED = false;
-export const INK2R_FORM_CODE = (taxYear: number) => `INK2R-${taxYear}P1`; // VERIFIERAS
-export const INK2S_FORM_CODE = (taxYear: number) => `INK2S-${taxYear}P1`; // VERIFIERAS
+export const INK2_FALTKODER_VERIFIED = true;
 
-// Balansrader värderas per bokslutsdagen: ackumulerat saldo t.o.m. beskattningsåret.
-// Resultatrader avser enbart beskattningsårets transaktioner.
-type Ink2Kind = NeLineDef['kind'] | 'asset' | 'liability';
+// P-suffix per beskattningsår — VERIFIERAS mot årets blankett/testtjänsten
+// (NE 2025 = P4; INK2 antas följa samma utgåvecykel)
+const INK2_FORM_VERSION: Record<number, string> = {};
+export const INK2R_FORM_CODE = (taxYear: number) =>
+  `INK2R-${taxYear}${INK2_FORM_VERSION[taxYear] ?? 'P4'}`;
+export const INK2S_FORM_CODE = (taxYear: number) =>
+  `INK2S-${taxYear}${INK2_FORM_VERSION[taxYear] ?? 'P4'}`;
 
+type Range = { from: number; to: number };
+
+// balance-poster ackumuleras t.o.m. året; result-poster avser året.
+// 'net' = resultatpost som kan vara +/− med olika fältkod per tecken.
 interface Ink2LineDef {
-  id: string;
+  id: string;          // officiellt postnummer, t.ex. '2.19', '3.1'
   label: string;
-  kind: Ink2Kind;
-  accounts?: { from: number; to: number }[]; // FÖRENKLAD mappning — VERIFIERAS
+  kind: 'asset' | 'liability' | 'revenue' | 'expense' | 'net' | 'manual' | 'computed';
+  accounts?: Range[];
+  sruCode?: string;      // fältkod (plus-kod för net-poster)
+  sruCodeMinus?: string; // fältkod vid negativt värde (net-poster)
 }
 
+const r = (from: number, to?: number): Range => ({ from, to: to ?? from });
+
 export const INK2R_LINES: Ink2LineDef[] = [
-  // Tillgångar (debetsaldo visas positivt)
-  { id: 'T1', label: 'Anläggningstillgångar', kind: 'asset', accounts: [{ from: 1000, to: 1399 }] },
-  { id: 'T2', label: 'Varulager', kind: 'asset', accounts: [{ from: 1400, to: 1499 }] },
-  { id: 'T3', label: 'Kundfordringar', kind: 'asset', accounts: [{ from: 1500, to: 1599 }] },
-  { id: 'T4', label: 'Övriga fordringar och förutbetalda kostnader', kind: 'asset', accounts: [{ from: 1600, to: 1799 }] },
-  { id: 'T5', label: 'Kassa, bank och kortfristiga placeringar', kind: 'asset', accounts: [{ from: 1800, to: 1999 }] },
-  { id: 'TS', label: 'Summa tillgångar', kind: 'computed' },
-  // Eget kapital & skulder (kreditsaldo visas positivt)
-  { id: 'E1', label: 'Eget kapital', kind: 'liability', accounts: [{ from: 2000, to: 2099 }] },
-  { id: 'E2', label: 'Obeskattade reserver', kind: 'liability', accounts: [{ from: 2100, to: 2199 }] },
-  { id: 'E3', label: 'Avsättningar och långfristiga skulder', kind: 'liability', accounts: [{ from: 2200, to: 2399 }] },
-  { id: 'E4', label: 'Kortfristiga skulder', kind: 'liability', accounts: [{ from: 2400, to: 2999 }] },
-  { id: 'ES', label: 'Summa eget kapital och skulder (inkl. årets resultat)', kind: 'computed' },
-  // Resultaträkning (beskattningsåret)
-  { id: 'I1', label: 'Nettoomsättning', kind: 'revenue', accounts: [{ from: 3000, to: 3799 }] },
-  { id: 'I2', label: 'Övriga rörelseintäkter', kind: 'revenue', accounts: [{ from: 3800, to: 3999 }] },
-  { id: 'K1', label: 'Råvaror, handelsvaror och tjänster', kind: 'expense', accounts: [{ from: 4000, to: 4999 }] },
-  { id: 'K2', label: 'Övriga externa kostnader', kind: 'expense', accounts: [{ from: 5000, to: 6999 }] },
-  { id: 'K3', label: 'Personalkostnader', kind: 'expense', accounts: [{ from: 7000, to: 7699 }] },
-  { id: 'K4', label: 'Av- och nedskrivningar', kind: 'expense', accounts: [{ from: 7700, to: 7899 }] },
-  { id: 'K5', label: 'Övriga rörelsekostnader', kind: 'expense', accounts: [{ from: 7900, to: 7999 }] },
-  { id: 'F1', label: 'Finansiella intäkter', kind: 'revenue', accounts: [{ from: 8000, to: 8399 }] },
-  { id: 'F2', label: 'Finansiella kostnader och skatter', kind: 'expense', accounts: [{ from: 8400, to: 8999 }] },
-  { id: 'RR', label: 'Årets resultat (bokfört)', kind: 'computed' },
+  // ── Tillgångar ──
+  { id: '2.1',  label: 'Koncessioner, patent, licenser, varumärken m.m.', kind: 'asset', sruCode: '7201',
+    accounts: [r(1000, 1087), r(1089, 1099)] },
+  { id: '2.2',  label: 'Förskott avseende immateriella anläggningstillgångar', kind: 'asset', sruCode: '7202',
+    accounts: [r(1088)] },
+  { id: '2.3',  label: 'Byggnader och mark', kind: 'asset', sruCode: '7214',
+    accounts: [r(1100, 1119), r(1130, 1179), r(1190, 1199)] },
+  { id: '2.4',  label: 'Maskiner, inventarier och övriga materiella anläggningstillgångar', kind: 'asset', sruCode: '7215',
+    accounts: [r(1200, 1279), r(1290, 1299)] },
+  { id: '2.5',  label: 'Förbättringsutgifter på annans fastighet', kind: 'asset', sruCode: '7216',
+    accounts: [r(1120, 1129)] },
+  { id: '2.6',  label: 'Pågående nyanläggningar och förskott', kind: 'asset', sruCode: '7217',
+    accounts: [r(1180, 1189), r(1280, 1289)] },
+  { id: '2.7',  label: 'Andelar i koncernföretag', kind: 'asset', sruCode: '7230',
+    accounts: [r(1310, 1319)] },
+  { id: '2.8',  label: 'Andelar i intresseföretag m.m.', kind: 'asset', sruCode: '7231',
+    accounts: [r(1330, 1335), r(1338, 1339)] },
+  { id: '2.9',  label: 'Ägarintresse i övriga företag och andra långfristiga värdepapper', kind: 'asset', sruCode: '7233',
+    accounts: [r(1350, 1359), r(1336, 1337)] },
+  { id: '2.10', label: 'Fordringar hos koncern-/intresseföretag', kind: 'asset', sruCode: '7232',
+    accounts: [r(1320, 1329), r(1340, 1345), r(1348, 1349)] },
+  { id: '2.11', label: 'Lån till delägare eller närstående', kind: 'asset', sruCode: '7234',
+    accounts: [r(1360, 1369)] },
+  { id: '2.12', label: 'Övriga långfristiga fordringar', kind: 'asset', sruCode: '7235',
+    accounts: [r(1370, 1389), r(1346, 1347)] },
+  { id: '2.13', label: 'Råvaror och förnödenheter', kind: 'asset', sruCode: '7241',
+    accounts: [r(1410, 1429)] },
+  { id: '2.14', label: 'Varor under tillverkning', kind: 'asset', sruCode: '7242',
+    accounts: [r(1440, 1449)] },
+  { id: '2.15', label: 'Färdiga varor och handelsvaror', kind: 'asset', sruCode: '7243',
+    accounts: [r(1450, 1469)] },
+  { id: '2.16', label: 'Övriga lagertillgångar', kind: 'asset', sruCode: '7244',
+    accounts: [r(1490, 1499)] },
+  { id: '2.17', label: 'Pågående arbeten för annans räkning (tillgång)', kind: 'asset', sruCode: '7245',
+    accounts: [r(1470, 1479)] },
+  { id: '2.18', label: 'Förskott till leverantörer', kind: 'asset', sruCode: '7246',
+    accounts: [r(1480, 1489)] },
+  { id: '2.19', label: 'Kundfordringar', kind: 'asset', sruCode: '7251',
+    accounts: [r(1510, 1559), r(1580, 1589)] },
+  { id: '2.20', label: 'Fordringar hos koncern-/intresseföretag (kortfristiga)', kind: 'asset', sruCode: '7252',
+    accounts: [r(1560, 1572), r(1574, 1579), r(1660, 1672), r(1674, 1679)] },
+  { id: '2.21', label: 'Övriga fordringar (kortfristiga)', kind: 'asset', sruCode: '7261',
+    accounts: [r(1573), r(1610, 1619), r(1630, 1659), r(1673), r(1680, 1699)] },
+  { id: '2.22', label: 'Upparbetad men ej fakturerad intäkt', kind: 'asset', sruCode: '7262',
+    accounts: [r(1620, 1629)] },
+  { id: '2.23', label: 'Förutbetalda kostnader och upplupna intäkter', kind: 'asset', sruCode: '7263',
+    accounts: [r(1700, 1799)] },
+  { id: '2.24', label: 'Andelar i koncernföretag (kortfristiga)', kind: 'asset', sruCode: '7270',
+    accounts: [r(1860, 1869)] },
+  { id: '2.25', label: 'Övriga kortfristiga placeringar', kind: 'asset', sruCode: '7271',
+    accounts: [r(1800, 1859), r(1870, 1899)] },
+  { id: '2.26', label: 'Kassa, bank och redovisningsmedel', kind: 'asset', sruCode: '7281',
+    accounts: [r(1900, 1999)] },
+  { id: 'TS',   label: 'Summa tillgångar', kind: 'computed' },
+  // ── Eget kapital och skulder ──
+  { id: '2.27', label: 'Bundet eget kapital', kind: 'liability', sruCode: '7301',
+    accounts: [r(2080, 2089)] },
+  { id: '2.28', label: 'Fritt eget kapital', kind: 'liability', sruCode: '7302',
+    accounts: [r(2090, 2099)] },
+  { id: '2.29', label: 'Periodiseringsfonder', kind: 'liability', sruCode: '7321',
+    accounts: [r(2110, 2139)] },
+  { id: '2.30', label: 'Ackumulerade överavskrivningar', kind: 'liability', sruCode: '7322',
+    accounts: [r(2150, 2159)] },
+  { id: '2.31', label: 'Övriga obeskattade reserver', kind: 'liability', sruCode: '7323',
+    accounts: [r(2160, 2199)] },
+  { id: '2.32', label: 'Avsättningar för pensioner (tryggandelagen)', kind: 'liability', sruCode: '7331',
+    accounts: [r(2210, 2219)] },
+  { id: '2.33', label: 'Övriga avsättningar för pensioner', kind: 'liability', sruCode: '7332',
+    accounts: [r(2230, 2239)] },
+  { id: '2.34', label: 'Övriga avsättningar', kind: 'liability', sruCode: '7333',
+    accounts: [r(2220, 2229), r(2240, 2299)] },
+  { id: '2.35', label: 'Obligationslån', kind: 'liability', sruCode: '7350',
+    accounts: [r(2310, 2329)] },
+  { id: '2.36', label: 'Checkräkningskredit (långfristig)', kind: 'liability', sruCode: '7351',
+    accounts: [r(2330, 2339)] },
+  { id: '2.37', label: 'Övriga skulder till kreditinstitut (långfristiga)', kind: 'liability', sruCode: '7352',
+    accounts: [r(2340, 2359)] },
+  { id: '2.38', label: 'Skulder till koncern-/intresseföretag (långfristiga)', kind: 'liability', sruCode: '7353',
+    accounts: [r(2360, 2372), r(2374, 2379)] },
+  { id: '2.39', label: 'Övriga långfristiga skulder', kind: 'liability', sruCode: '7354',
+    accounts: [r(2373), r(2380, 2399)] },
+  { id: '2.40', label: 'Checkräkningskredit (kortfristig)', kind: 'liability', sruCode: '7360',
+    accounts: [r(2480, 2489)] },
+  { id: '2.41', label: 'Övriga skulder till kreditinstitut (kortfristiga)', kind: 'liability', sruCode: '7361',
+    accounts: [r(2410, 2419)] },
+  { id: '2.42', label: 'Förskott från kunder', kind: 'liability', sruCode: '7362',
+    accounts: [r(2420, 2429)] },
+  { id: '2.43', label: 'Pågående arbeten för annans räkning (skuld)', kind: 'liability', sruCode: '7363',
+    accounts: [r(2430, 2439)] },
+  { id: '2.44', label: 'Fakturerad men ej upparbetad intäkt', kind: 'liability', sruCode: '7364',
+    accounts: [r(2450, 2459)] },
+  { id: '2.45', label: 'Leverantörsskulder', kind: 'liability', sruCode: '7365',
+    accounts: [r(2440, 2449)] },
+  { id: '2.46', label: 'Växelskulder', kind: 'liability', sruCode: '7366',
+    accounts: [r(2492)] },
+  { id: '2.47', label: 'Skulder till koncern-/intresseföretag (kortfristiga)', kind: 'liability', sruCode: '7367',
+    accounts: [r(2460, 2472), r(2474, 2479), r(2860, 2872), r(2874, 2879)] },
+  { id: '2.48', label: 'Övriga kortfristiga skulder (inkl. moms)', kind: 'liability', sruCode: '7369',
+    accounts: [r(2473), r(2490, 2491), r(2493, 2499), r(2600, 2859), r(2873), r(2880, 2899)] },
+  { id: '2.49', label: 'Skatteskulder', kind: 'liability', sruCode: '7368',
+    accounts: [r(2500, 2599)] },
+  { id: '2.50', label: 'Upplupna kostnader och förutbetalda intäkter', kind: 'liability', sruCode: '7370',
+    accounts: [r(2900, 2999)] },
+  { id: 'ES',   label: 'Summa eget kapital och skulder (inkl. årets resultat)', kind: 'computed' },
+  // ── Resultaträkning ──
+  { id: '3.1',  label: 'Nettoomsättning', kind: 'revenue', sruCode: '7410',
+    accounts: [r(3000, 3799)] },
+  { id: '3.2',  label: 'Förändring av lager av produkter i arbete m.m.', kind: 'net',
+    sruCode: '7411', sruCodeMinus: '7510',
+    accounts: [r(4900, 4909), r(4930, 4959), r(4970, 4979), r(4990, 4999)] },
+  { id: '3.3',  label: 'Aktiverat arbete för egen räkning', kind: 'revenue', sruCode: '7412',
+    accounts: [r(3800, 3899)] },
+  { id: '3.4',  label: 'Övriga rörelseintäkter', kind: 'revenue', sruCode: '7413',
+    accounts: [r(3900, 3999)] },
+  { id: '3.5',  label: 'Råvaror och förnödenheter', kind: 'expense', sruCode: '7511',
+    accounts: [r(4000, 4799), r(4910, 4929)] },
+  { id: '3.6',  label: 'Handelsvaror', kind: 'expense', sruCode: '7512',
+    accounts: [r(4960, 4969), r(4980, 4989)] },
+  { id: '3.7',  label: 'Övriga externa kostnader', kind: 'expense', sruCode: '7513',
+    accounts: [r(5000, 6999)] },
+  { id: '3.8',  label: 'Personalkostnader', kind: 'expense', sruCode: '7514',
+    accounts: [r(7000, 7699)] },
+  { id: '3.9',  label: 'Av- och nedskrivningar av anläggningstillgångar', kind: 'expense', sruCode: '7515',
+    accounts: [r(7700, 7739), r(7750, 7789), r(7800, 7899)] },
+  { id: '3.10', label: 'Nedskrivningar av omsättningstillgångar utöver normala', kind: 'expense', sruCode: '7516',
+    accounts: [r(7740, 7749), r(7790, 7799)] },
+  { id: '3.11', label: 'Övriga rörelsekostnader', kind: 'expense', sruCode: '7517',
+    accounts: [r(7900, 7999)] },
+  { id: '3.12', label: 'Resultat från andelar i koncernföretag', kind: 'net',
+    sruCode: '7414', sruCodeMinus: '7518',
+    accounts: [r(8000, 8069), r(8090, 8099)] },
+  { id: '3.13', label: 'Resultat från andelar i intresseföretag m.m.', kind: 'net',
+    sruCode: '7415', sruCodeMinus: '7519',
+    accounts: [r(8100, 8112), r(8114, 8117), r(8119, 8122), r(8124, 8132), r(8134, 8169), r(8190, 8199)] },
+  { id: '3.14', label: 'Resultat från övriga företag med ägarintresse', kind: 'net',
+    sruCode: '7423', sruCodeMinus: '7530',
+    accounts: [r(8113), r(8118), r(8123), r(8133)] },
+  { id: '3.15', label: 'Resultat från övriga anläggningstillgångar', kind: 'net',
+    sruCode: '7416', sruCodeMinus: '7520',
+    accounts: [r(8200, 8269), r(8290, 8299)] },
+  { id: '3.16', label: 'Övriga ränteintäkter och liknande', kind: 'revenue', sruCode: '7417',
+    accounts: [r(8300, 8369), r(8390, 8399)] },
+  { id: '3.17', label: 'Nedskrivningar av finansiella tillgångar', kind: 'expense', sruCode: '7521',
+    accounts: [r(8070, 8089), r(8170, 8189), r(8270, 8289), r(8370, 8389)] },
+  { id: '3.18', label: 'Räntekostnader och liknande', kind: 'expense', sruCode: '7522',
+    accounts: [r(8400, 8499)] },
+  { id: '3.19', label: 'Lämnade koncernbidrag', kind: 'expense', sruCode: '7524',
+    accounts: [r(8830, 8839)] },
+  { id: '3.20', label: 'Mottagna koncernbidrag', kind: 'revenue', sruCode: '7419',
+    accounts: [r(8820, 8829)] },
+  // 8810 kan avse båda riktningarna — mappas inte automatiskt (justeras manuellt)
+  { id: '3.21', label: 'Återföring av periodiseringsfond', kind: 'revenue', sruCode: '7420',
+    accounts: [r(8819)] },
+  { id: '3.22', label: 'Avsättning till periodiseringsfond', kind: 'expense', sruCode: '7525',
+    accounts: [r(8811)] },
+  { id: '3.23', label: 'Förändring av överavskrivningar', kind: 'net',
+    sruCode: '7421', sruCodeMinus: '7526',
+    accounts: [r(8850, 8859)] },
+  { id: '3.24', label: 'Övriga bokslutsdispositioner', kind: 'net',
+    sruCode: '7422', sruCodeMinus: '7527',
+    accounts: [r(8840, 8849), r(8860, 8899)] },
+  { id: '3.25', label: 'Skatt på årets resultat', kind: 'expense', sruCode: '7528',
+    accounts: [r(8900, 8989)] },
+  // 3.26/3.27: beräknas — vinst → 7450, förlust → 7550 (899x exkluderas överallt)
+  { id: 'RR',   label: 'Årets resultat (3.26 vinst / 3.27 förlust)', kind: 'computed',
+    sruCode: '7450', sruCodeMinus: '7550' },
 ];
 
 export const INK2S_LINES: Ink2LineDef[] = [
@@ -61,8 +216,11 @@ export const INK2S_LINES: Ink2LineDef[] = [
   { id: 'JR', label: 'Skattemässigt resultat', kind: 'computed' },
 ];
 
-const INK2_REVENUE = ['I1', 'I2', 'F1'];
-const INK2_EXPENSE = ['K1', 'K2', 'K3', 'K4', 'K5', 'F2'];
+const RESULT_IDS = INK2R_LINES
+  .filter(l => ['revenue', 'expense', 'net'].includes(l.kind))
+  .map(l => l.id);
+const ASSET_IDS = INK2R_LINES.filter(l => l.kind === 'asset').map(l => l.id);
+const EQLIAB_IDS = INK2R_LINES.filter(l => l.kind === 'liability').map(l => l.id);
 
 // Bygger alla INK2-rader (INK2R + INK2S) för ett beskattningsår.
 export function buildInk2Rows(
@@ -73,7 +231,6 @@ export function buildInk2Rows(
 ): NeRow[] {
   const voucherYear = new Map(vouchers.map(v => [v.id!, parseInt(v.date.slice(0, 4), 10)]));
 
-  // Två saldokartor: balans = ackumulerat t.o.m. året; resultat = enbart året
   const balCum = new Map<number, number>();
   const balYear = new Map<number, number>();
   for (const t of transactions) {
@@ -83,10 +240,10 @@ export function buildInk2Rows(
     if (year === taxYear) balYear.set(t.accountId, (balYear.get(t.accountId) ?? 0) + t.amount);
   }
 
-  const sumRanges = (map: Map<number, number>, ranges: { from: number; to: number }[]) => {
+  const sumRanges = (map: Map<number, number>, ranges: Range[]) => {
     let total = 0;
     for (const [accountId, saldo] of map) {
-      if (ranges.some(r => accountId >= r.from && accountId <= r.to)) total += saldo;
+      if (ranges.some(rg => accountId >= rg.from && accountId <= rg.to)) total += saldo;
     }
     return total;
   };
@@ -96,13 +253,17 @@ export function buildInk2Rows(
     if (def.accounts) {
       const isBalance = def.kind === 'asset' || def.kind === 'liability';
       const saldo = sumRanges(isBalance ? balCum : balYear, def.accounts);
-      const creditPositive = def.kind === 'liability' || def.kind === 'revenue';
+      // Kreditpositiva: skulder/EK, intäkter och nettoposter (kreditöverskott = +)
+      const creditPositive = def.kind !== 'asset' && def.kind !== 'expense';
       auto = Math.round(creditPositive ? -saldo : saldo);
     }
     const adj = adjustments[def.id];
-    const kind = (def.kind === 'asset' || def.kind === 'liability' ? 'expense' : def.kind) as NeRow['kind'];
+    const displayKind: NeRow['kind'] =
+      def.kind === 'asset' || def.kind === 'liability' ? 'expense'
+      : def.kind === 'net' ? 'revenue'
+      : def.kind;
     return {
-      id: def.id, label: def.label, kind,
+      id: def.id, label: def.label, kind: displayKind, sruCode: def.sruCode,
       auto,
       value: def.kind === 'computed' ? 0 : (adj ? Math.round(adj.value) : auto),
       adjusted: def.kind !== 'computed' && adj !== undefined,
@@ -110,15 +271,19 @@ export function buildInk2Rows(
     };
   });
 
-  const get = (id: string) => rows.find(r => r.id === id)!;
-  const sumOf = (ids: string[]) => ids.reduce((s, id) => s + get(id).value, 0);
+  const get = (id: string) => rows.find(x => x.id === id)!;
+  const defOf = (id: string) => [...INK2R_LINES, ...INK2S_LINES].find(d => d.id === id)!;
+  const sumOf = (ids: string[]) => ids.reduce((s, id) => {
+    const kind = defOf(id).kind;
+    const sign = kind === 'expense' ? -1 : 1; // revenue/net bidrar med tecken, expense dras av
+    return s + sign * get(id).value;
+  }, 0);
 
-  const arets = sumOf(INK2_REVENUE) - sumOf(INK2_EXPENSE);
+  const arets = sumOf(RESULT_IDS);
   get('RR').value = arets; get('RR').auto = arets;
-  get('TS').value = sumOf(['T1', 'T2', 'T3', 'T4', 'T5']);
+  get('TS').value = ASSET_IDS.reduce((s, id) => s + get(id).value, 0);
   get('TS').auto  = get('TS').value;
-  // Eget kapital/skulder redovisas inkl. årets bokförda resultat → ska matcha TS
-  get('ES').value = sumOf(['E1', 'E2', 'E3', 'E4']) + arets;
+  get('ES').value = EQLIAB_IDS.reduce((s, id) => s + get(id).value, 0) + arets;
   get('ES').auto  = get('ES').value;
 
   get('J1').value = arets; get('J1').auto = arets;
@@ -130,17 +295,6 @@ export function buildInk2Rows(
 
 // ── SRU-paket ─────────────────────────────────────────────────────────────────
 
-// PLATSHÅLLARKODER (VERIFIERAS): INK2R-rader → 7200-serien, INK2S → 7500-serien
-const INK2R_CODE: Record<string, string> = {
-  T1: '7201', T2: '7202', T3: '7203', T4: '7204', T5: '7205', TS: '7206',
-  E1: '7211', E2: '7212', E3: '7213', E4: '7214', ES: '7215',
-  I1: '7221', I2: '7222', K1: '7231', K2: '7232', K3: '7233', K4: '7234',
-  K5: '7235', F1: '7241', F2: '7242', RR: '7250',
-};
-const INK2S_CODE: Record<string, string> = {
-  J1: '7501', J2: '7502', J3: '7503', J4: '7504', JR: '7510',
-};
-
 export interface Ink2SruInput {
   taxYear: number;
   rows: NeRow[];
@@ -149,16 +303,25 @@ export interface Ink2SruInput {
   program: { name: string; version: string };
 }
 
+// Endast INK2R exporteras (verifierade koder). INK2S saknar kontomappade
+// fältkoder och kompletteras i e-tjänsten.
 export function buildInk2SruPackage(input: Ink2SruInput): SruPackage {
   const { taxYear, rows, company, createdAt, program } = input;
-  const period = [
+
+  const uppgifter: SruUppgift[] = [
     { fieldCode: '7011', value: `${taxYear}-01-01` },
     { fieldCode: '7012', value: `${taxYear}-12-31` },
   ];
-  const pick = (codes: Record<string, string>) =>
-    rows
-      .filter(r => codes[r.id] !== undefined && r.value !== 0)
-      .map(r => ({ fieldCode: codes[r.id], value: String(r.value) }));
+  for (const def of INK2R_LINES) {
+    if (!def.sruCode) continue;
+    const row = rows.find(x => x.id === def.id);
+    if (!row || row.value === 0) continue;
+    if (row.value < 0 && def.sruCodeMinus) {
+      uppgifter.push({ fieldCode: def.sruCodeMinus, value: String(Math.abs(row.value)) });
+    } else {
+      uppgifter.push({ fieldCode: def.sruCode, value: String(row.value) });
+    }
+  }
 
   return {
     createdAt,
@@ -173,13 +336,7 @@ export function buildInk2SruPackage(input: Ink2SruInput): SruPackage {
         formCode: INK2R_FORM_CODE(taxYear),
         idNumber: company.orgnr,
         name: company.name,
-        uppgifter: [...period, ...pick(INK2R_CODE)],
-      },
-      {
-        formCode: INK2S_FORM_CODE(taxYear),
-        idNumber: company.orgnr,
-        name: company.name,
-        uppgifter: [...period, ...pick(INK2S_CODE)],
+        uppgifter,
       },
     ],
   };

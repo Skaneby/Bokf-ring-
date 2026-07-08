@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v3 (accounts, vouchers, transactions, invoices, settings, declarations) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 422 enhetstester (Node + fake-indexeddb)
+  test.ts              — 429 enhetstester (Node + fake-indexeddb)
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
     Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
@@ -84,7 +84,7 @@ src/
     invoice.ts         — nummerserie, invoiceTotals(), bokning (faktura/kontant), renderInvoiceHtml()
     declaration.ts     — NE-blankettvy: B1-B16 (ackumulerat) + R1-R48 (år), justeringar, inlämningssteg, utskrift
     neSru.ts           — NE→SRU; B/R-fältkoder VERIFIERADE (BAS kopplingstabell); justeringsrader exporteras ej
-    ink2.ts            — INK2R/INK2S för AB: buildInk2Rows() / buildInk2SruPackage() (PRELIMINÄR)
+    ink2.ts            — INK2R officiella poster 2.1-3.27, VERIFIERADE koder (BAS); INK2S exporteras ej
     sru/               — SRU-export M0: serialize() / parse / Latin-1 / Luhn (deterministisk)
     ai.ts              — AI-inställningar, nyckelvalidering, gateMessage(), buildSystemPrompt(), askAi()
     utils.ts           — formatCurrency()
@@ -164,7 +164,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 422 enhetstester
+npm run test         # kör 429 enhetstester
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
 ```

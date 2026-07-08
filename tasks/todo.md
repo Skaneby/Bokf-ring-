@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 422 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 429 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Fakturering (juli 2026)**
 - [x] Fakturor med löpande, obruten nummerserie (räknas bara uppåt, återanvänds aldrig)
@@ -83,12 +83,15 @@ Spec: `docs/deklarationsmodul-spec.md` (SRU-filöverföring + manuell deklaratio
   - NE:s fältkoder VERIFIERADE mot BAS kopplingstabell (B1=7200…B16=7383, R1=7400…R11=7440); underlag: docs/underlag-NE-kopplingstabell-BAS.pdf
   - Blankettvyn utökad med balansposterna B1-B16 (ackumulerade saldon per bokslutsdagen)
   - Justeringsrader (R12-R48) exporteras EJ ännu — saknar verifierade koder, kompletteras i e-tjänsten
-- [x] M3 (INK2-delen): blankettvy INK2R/INK2S för aktiebolag + SRU-export med två blanketter (24 nya tester)
+- [x] M3 (INK2-delen): blankettvy INK2R/INK2S för aktiebolag + SRU-export
+  - INK2R:s fältkoder VERIFIERADE mot BAS kopplingstabell (2.1=7201 … 3.27=7550) inkl. nettoposter med teckenberoende kod; underlag: docs/underlag-INK2-kopplingstabell-BAS.pdf
+  - Blankettvyn följer officiell postnumrering (2.1-2.50, 3.1-3.27)
+  - INK2S (4.x) exporteras EJ — ej kontomappad, kompletteras i e-tjänsten
   - Byråstöd/roller/auditlogg kräver plattformsspåret (backend, flera användare) — utanför lokal app-scope, se docs/deklarationsmodul-spec.md §3-4
 - [ ] M4: Spår B — API-integration mot Skatteverket (kräver avtal + verifierad tjänstebeskrivning)
 - [x] Blankettkod NE-2025P4 verifierad mot blankett SKV 2161 utg. 13 (docs/underlag-NE-blankett-SKV2161-2025.pdf)
 - [x] Justeringsradernas numrering rättad mot blanketten: R13 kostnader ej avdrag, R14 intäkter ej upptas (R12 = överföring av R11)
-- [ ] Verifiera kvarvarande mot Skatteverket: INK2R/INK2S-fältkoder (platshållare), fältkoder för NE:s justeringsrader R12-R48 (webbblanketten trycker inte koderna — kräver SKV:s fältlista eller maskinläsbar blankett), encoding — kör första fil i SKV:s testtjänst
+- [ ] Verifiera kvarvarande mot Skatteverket: fältkoder för NE:s justeringsrader R12-R48 och INK2S 4.x (kräver SKV:s fältlista), INK2-blankettens P-suffix, encoding — kör första fil i SKV:s testtjänst
 
 ### Öppet / Förbättringar (prioriterade)
 

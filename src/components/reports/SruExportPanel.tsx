@@ -104,9 +104,13 @@ export function SruExportPanel({ taxYear, rows, declaration, type }: Props) {
         </div>
       ) : (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          Bokföringsdelens fältkoder (B1–B16, R1–R11) följer BAS kopplingstabell för NE.
-          Skattemässiga justeringar (R12–R48) ingår <strong>inte</strong> i filen — komplettera dem
-          i Skatteverkets e-tjänst efter uppladdning. Kontrollera din första fil i testtjänsten.
+          {type === 'NE'
+            ? <>Bokföringsdelens fältkoder (B1–B16, R1–R11) följer BAS kopplingstabell för NE.
+              Skattemässiga justeringar (R12–R48) ingår <strong>inte</strong> i filen — komplettera dem
+              i Skatteverkets e-tjänst efter uppladdning. Kontrollera din första fil i testtjänsten.</>
+            : <>Räkenskapsschemats fältkoder (INK2R 2.1–3.27) följer BAS kopplingstabell.
+              Skattemässiga justeringar (INK2S) ingår <strong>inte</strong> i filen — komplettera dem
+              i Skatteverkets e-tjänst efter uppladdning. Kontrollera din första fil i testtjänsten.</>}
         </div>
       )}
 

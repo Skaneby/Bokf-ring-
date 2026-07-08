@@ -29,7 +29,7 @@ import {
   setDeclarationStatus, setSubmissionStep, renderNePrintHtml,
 } from './lib/declaration';
 import { buildNeSruPackage, NE_FORM_CODE } from './lib/neSru';
-import { buildInk2Rows, buildInk2SruPackage, INK2R_FORM_CODE, INK2S_FORM_CODE } from './lib/ink2';
+import { buildInk2Rows, buildInk2SruPackage, INK2R_FORM_CODE } from './lib/ink2';
 import {
   getAiSettings, saveAiSettings, hasValidKey, gateMessage, NO_KEY_REPLY,
   buildSystemPrompt, isOnboardingDone, markOnboardingDone,
@@ -1597,9 +1597,10 @@ async function runTests() {
   await resetDb();
 
   // År 2024: aktiekapital sätts in (ska ingå i balansen 2025 men inte resultatet)
+  // 2081 = Aktiekapital (AB) — 2010 är delägarkonto för EF och mappas inte på INK2
   await addVoucher('2024-01-10', 'Aktiekapital', [
     { accountId: 1930, amount: 25000 },
-    { accountId: 2010, amount: -25000 },
+    { accountId: 2081, amount: -25000 },
   ]);
   // År 2025: försäljning 200 000 + moms, kostnader 80 000, kundfordran 50 000
   await addVoucher('2025-02-01', 'Försäljning kontant', [
@@ -1622,15 +1623,18 @@ async function runTests() {
 
   { const rows = buildInk2Rows(abVouchers, abTxs, 2025);
     const get = (id: string) => rows.find(r => r.id === id)!;
-    // Resultat: enbart 2025
-    assert(near(get('I1').value, 240000), `INK2 I1 nettoomsättning = 240 000 (fick ${get('I1').value})`);
-    assert(near(get('K2').value, 80000),  `INK2 K2 externa kostnader = 80 000 (fick ${get('K2').value})`);
-    assert(near(get('RR').value, 160000), `INK2 RR årets resultat = 160 000 (fick ${get('RR').value})`);
+    // Resultat: enbart 2025 — officiell postnumrering
+    assert(near(get('3.1').value, 240000), `INK2 3.1 nettoomsättning = 240 000 (fick ${get('3.1').value})`);
+    assert(near(get('3.7').value, 80000),  `INK2 3.7 övriga externa kostnader = 80 000 (fick ${get('3.7').value})`);
+    assert(near(get('RR').value, 160000), `INK2 årets resultat = 160 000 (fick ${get('RR').value})`);
     // Balans: ackumulerat inkl. 2024 (aktiekapital + bank)
-    assert(near(get('T5').value, 25000 + 250000 - 80000), `INK2 T5 kassa/bank inkl. föregående år (fick ${get('T5').value})`);
-    assert(near(get('T3').value, 50000), `INK2 T3 kundfordringar = 50 000 (fick ${get('T3').value})`);
-    assert(near(get('E1').value, 25000), `INK2 E1 eget kapital = 25 000 (fick ${get('E1').value})`);
-    assert(near(get('E4').value, 60000), `INK2 E4 kortfristiga skulder (moms) = 60 000 (fick ${get('E4').value})`);
+    assert(near(get('2.26').value, 25000 + 250000 - 80000), `INK2 2.26 kassa/bank inkl. föregående år (fick ${get('2.26').value})`);
+    assert(near(get('2.19').value, 50000), `INK2 2.19 kundfordringar = 50 000 (fick ${get('2.19').value})`);
+    assert(near(get('2.27').value, 25000), `INK2 2.27 bundet eget kapital (2081) = 25 000 (fick ${get('2.27').value})`);
+    assert(near(get('2.48').value, 60000), `INK2 2.48 övriga kortfristiga skulder (moms) = 60 000 (fick ${get('2.48').value})`);
+    // Verifierade fältkoder ur BAS kopplingstabell
+    assert(get('3.1').sruCode === '7410' && get('2.26').sruCode === '7281' && get('2.49').sruCode === '7368',
+      'INK2: fältkoder enligt BAS kopplingstabell (3.1=7410, 2.26=7281, 2.49=7368)');
     // Balansekvation: TS = ES (ES inkluderar årets resultat)
     assert(near(get('TS').value, get('ES').value),
       `INK2 balanserar: TS ${get('TS').value} = ES ${get('ES').value}`);
@@ -1647,7 +1651,7 @@ async function runTests() {
     assert(near(get('JR').value, 160000 + 5000 - 2000),
       `INK2 JR = 163 000 med justeringar (fick ${get('JR').value})`); }
 
-  // ── SRU-paket med två blanketter ───────────────────────────────────────
+  // ── SRU-paket — endast INK2R (verifierade koder) ───────────────────────
   { const rows = buildInk2Rows(abVouchers, abTxs, 2025);
     const pkg = buildInk2SruPackage({
       taxYear: 2025, rows,
@@ -1655,19 +1659,37 @@ async function runTests() {
       createdAt: { date: '20260708', time: '170000' },
       program: { name: 'LokalBokforing', version: '2.0' },
     });
-    assert(pkg.blanketter.length === 2, 'INK2-SRU: två blanketter (INK2R + INK2S)');
-    assert(pkg.blanketter[0].formCode === INK2R_FORM_CODE(2025), 'INK2-SRU: INK2R-blankettkod');
-    assert(pkg.blanketter[1].formCode === INK2S_FORM_CODE(2025), 'INK2-SRU: INK2S-blankettkod');
-    const r = pkg.blanketter[0];
-    assert(r.uppgifter.some(u => u.fieldCode === '7011' && u.value === '2025-01-01'), 'INK2-SRU: period på INK2R');
-    assert(r.uppgifter.some(u => u.fieldCode === '7221' && u.value === '240000'), 'INK2-SRU: I1 → 7221');
-    // Nollrader utelämnas (t.ex. varulager T2)
-    assert(!r.uppgifter.some(u => u.fieldCode === '7202'), 'INK2-SRU: nollrad (T2 varulager) utelämnas');
+    assert(pkg.blanketter.length === 1, 'INK2-SRU: endast INK2R exporteras (INK2S saknar kontomappade koder)');
+    assert(pkg.blanketter[0].formCode === INK2R_FORM_CODE(2025), `INK2-SRU: blankettkod ${INK2R_FORM_CODE(2025)}`);
+    const b = pkg.blanketter[0];
+    const get = (code: string) => b.uppgifter.find(u => u.fieldCode === code);
+    assert(get('7011')?.value === '2025-01-01', 'INK2-SRU: period på INK2R');
+    assert(get('7410')?.value === '240000', `INK2-SRU: 3.1 → 7410 = 240000 (fick ${get('7410')?.value})`);
+    assert(get('7281')?.value === '195000', 'INK2-SRU: 2.26 kassa/bank → 7281');
+    assert(get('7450')?.value === '160000', 'INK2-SRU: årets vinst → 7450 (3.26)');
+    assert(get('7550') === undefined, 'INK2-SRU: förlustkoden 7550 utelämnas vid vinst');
+    // Nollrader utelämnas (t.ex. 2.13 råvaror)
+    assert(get('7241') === undefined, 'INK2-SRU: nollrad (2.13 råvaror) utelämnas');
     const files = serialize(pkg);
     const text = decodeLatin1(files.blanketter);
-    assert(text.includes('#BLANKETT INK2R-2025P1') && text.includes('#BLANKETT INK2S-2025P1'),
-      'INK2-SRU: båda blanketterna serialiseras i samma fil');
+    assert(text.includes(`#BLANKETT ${INK2R_FORM_CODE(2025)}`), 'INK2-SRU: INK2R serialiseras');
     assert((text.match(/#FIL_SLUT/g) ?? []).length === 1, 'INK2-SRU: exakt en #FIL_SLUT'); }
+
+  // ── Nettoposter: fältkod väljs efter tecken ────────────────────────────
+  { const rowsPlus = buildInk2Rows(abVouchers, abTxs, 2025, { '3.2': { value: 5000 } });
+    const rowsMinus = buildInk2Rows(abVouchers, abTxs, 2025, { '3.2': { value: -5000 } });
+    const mk = (rows2: typeof rowsPlus) => buildInk2SruPackage({
+      taxYear: 2025, rows: rows2,
+      company: { ...DEFAULT_COMPANY, name: 'Exempel AB', orgnr: '165560000167' },
+      createdAt: { date: '20260708', time: '170000' },
+      program: { name: 'LokalBokforing', version: '2.0' },
+    }).blanketter[0].uppgifter;
+    const plus = mk(rowsPlus);
+    const minus = mk(rowsMinus);
+    assert(plus.some(u => u.fieldCode === '7411' && u.value === '5000'), 'INK2-SRU: 3.2 positiv → pluskod 7411');
+    assert(!plus.some(u => u.fieldCode === '7510'), 'INK2-SRU: 3.2 positiv → ingen minuskod');
+    assert(minus.some(u => u.fieldCode === '7510' && u.value === '5000'), 'INK2-SRU: 3.2 negativ → minuskod 7510 med absolutbelopp');
+    assert(!minus.some(u => u.fieldCode === '7411'), 'INK2-SRU: 3.2 negativ → ingen pluskod'); }
 
   // ── Typad persistens: NE och INK2 samexisterar per år ─────────────────
   await saveAdjustment(2025, 'J2', { value: 5000 }, 'INK2');
