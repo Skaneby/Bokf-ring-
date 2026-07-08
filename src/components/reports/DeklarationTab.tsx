@@ -7,6 +7,7 @@ import {
   setDeclarationStatus, renderNePrintHtml, NeRow,
 } from '../../lib/declaration';
 import { getCompanySettings } from '../../lib/invoice';
+import { SruExportPanel } from './SruExportPanel';
 import { Printer, RotateCcw, Pencil, CheckCircle } from 'lucide-react';
 
 interface Props {
@@ -226,6 +227,9 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
           {formatCurrency(r47.value > 0 ? r47.value : r48.value)}
         </span>
       </div>
+
+      {/* SRU-export + inlämningsguide */}
+      <SruExportPanel taxYear={taxYear} rows={rows} declaration={declaration} />
     </div>
   );
 }

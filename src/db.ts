@@ -61,12 +61,21 @@ export interface DeclarationField {
   note?: string;
 }
 
+// Inlämningsspårning — appen kan inte läsa status hos Skatteverket (Spår A);
+// stegen bekräftas av användaren enligt inlämningsguiden
+export interface DeclarationSubmission {
+  exportedAt?: string;  // SRU-filer genererade och nedladdade
+  uploadedAt?: string;  // användaren bekräftar uppladdning i filöverföringstjänsten
+  signedAt?: string;    // användaren bekräftar signering på Mina sidor
+}
+
 export interface Declaration {
   id?: number;
   taxYear: number;              // beskattningsår
   type: 'NE';                   // fler blankettyper i M3 (INK2 …)
   fields: Record<string, DeclarationField>; // lineId ('R1' …) → justering
   status: 'draft' | 'klar';
+  submission?: DeclarationSubmission;
   updated_at: number;
 }
 

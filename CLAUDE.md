@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v3 (accounts, vouchers, transactions, invoices, settings, declarations) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 354 enhetstester (Node + fake-indexeddb)
+  test.ts              — 374 enhetstester (Node + fake-indexeddb)
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
     Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
@@ -80,7 +80,8 @@ src/
     tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
     geminiImport.ts    — parseGeminiJson() / validateRows() / resolveAccount() / bookDraftRows()
     invoice.ts         — nummerserie, invoiceTotals(), bokning (faktura/kontant), renderInvoiceHtml()
-    declaration.ts     — NE-blankettrader: buildNeRows() / justeringar / renderNePrintHtml()
+    declaration.ts     — NE-blankettrader: buildNeRows() / justeringar / inlämningssteg / renderNePrintHtml()
+    neSru.ts           — mappning NE-rader → SruPackage; fältkodstabell (PRELIMINÄR — VERIFIERAS)
     sru/               — SRU-export M0: serialize() / parse / Latin-1 / Luhn (deterministisk)
     utils.ts           — formatCurrency()
 ```
@@ -159,7 +160,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 354 enhetstester
+npm run test         # kör 374 enhetstester
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
 ```

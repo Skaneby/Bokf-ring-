@@ -7,7 +7,7 @@
 // manuellt, och justeringen vinner alltid över det bokförda värdet.
 // SRU-fältkoder per rad fylls i vid M2 efter verifiering mot Skatteverket.
 
-import { db, Declaration, DeclarationField, Voucher, Transaction } from '../db';
+import { db, Declaration, DeclarationField, DeclarationSubmission, Voucher, Transaction } from '../db';
 
 // ── Blankettdefinition ────────────────────────────────────────────────────────
 
@@ -169,6 +169,27 @@ export async function setDeclarationStatus(taxYear: number, status: 'draft' | 'k
       await db.declarations.update(existing.id!, { status, updated_at: Date.now() });
     } else {
       await db.declarations.add({ taxYear, type: 'NE', fields: {}, status, updated_at: Date.now() });
+    }
+  });
+}
+
+// Bekräfta ett inlämningssteg (exporterad/uppladdad/signerad). null = ångra steget.
+export async function setSubmissionStep(
+  taxYear: number,
+  step: keyof DeclarationSubmission,
+  timestamp: string | null,
+): Promise<void> {
+  await db.transaction('rw', db.declarations, async () => {
+    const existing = await getDeclaration(taxYear);
+    const submission = { ...(existing?.submission ?? {}) };
+    if (timestamp === null) delete submission[step];
+    else submission[step] = timestamp;
+    if (existing) {
+      await db.declarations.update(existing.id!, { submission, updated_at: Date.now() });
+    } else {
+      await db.declarations.add({
+        taxYear, type: 'NE', fields: {}, status: 'draft', submission, updated_at: Date.now(),
+      });
     }
   });
 }

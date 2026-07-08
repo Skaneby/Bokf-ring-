@@ -26,8 +26,9 @@ import {
 } from './lib/sru';
 import {
   buildNeRows, taxYearsAvailable, getDeclaration, saveAdjustment,
-  setDeclarationStatus, renderNePrintHtml,
+  setDeclarationStatus, setSubmissionStep, renderNePrintHtml,
 } from './lib/declaration';
+import { buildNeSruPackage, NE_FORM_CODE } from './lib/neSru';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1491,6 +1492,80 @@ async function runTests() {
     assert(html.includes('R11'), 'Utskrift: summarad R11 med');
     assert(html.includes('Privat andel'), 'Utskrift: justeringsanteckning med');
     assert(html.includes('<script') === false, 'Utskrift: ingen oescapad HTML'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 20. SRU-EXPORT AV NE-DEKLARATION (M2)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 20. SRU-export av NE ──────────────────────────────\n');
+
+  // Bygger vidare på bokföringen från sektion 19 (2025 + öresförsäljning)
+  const m2Vouchers = await db.vouchers.toArray();
+  const m2Txs      = await db.transactions.toArray();
+  const m2Rows     = buildNeRows(m2Vouchers, m2Txs, 2025);
+  const m2Company  = {
+    ...DEFAULT_COMPANY,
+    name: 'Enkla Firman', orgnr: '165560000167',
+    address: 'Storgatan 1\n111 22 Stockholm', email: 'ef@example.se',
+  };
+  const m2Input = {
+    taxYear: 2025, rows: m2Rows, company: m2Company,
+    createdAt: { date: '20260708', time: '160000' },
+    program: { name: 'LokalBokforing', version: '2.0' },
+  };
+
+  // ── Paketbygge ─────────────────────────────────────────────────────────
+  { const pkg = buildNeSruPackage(m2Input);
+    assert(pkg.blanketter.length === 1, 'NE-SRU: exakt en blankett');
+    const b = pkg.blanketter[0];
+    assert(b.formCode === NE_FORM_CODE(2025), `NE-SRU: blankettkod ${NE_FORM_CODE(2025)}`);
+    const get = (code: string) => b.uppgifter.find(u => u.fieldCode === code);
+    assert(get('7011')?.value === '2025-01-01', 'NE-SRU: 7011 räkenskapsår från');
+    assert(get('7012')?.value === '2025-12-31', 'NE-SRU: 7012 räkenskapsår till');
+    assert(get('7101')?.value === '100000', `NE-SRU: R1 → 7101 = 100000 (fick ${get('7101')?.value})`);
+    assert(get('7143')?.value === '10000', 'NE-SRU: R43 → 7143 = 10000');
+    assert(get('7147') !== undefined && Number(get('7147')!.value) > 0, 'NE-SRU: R47 överskott med');
+    // Nollrader utelämnas: R7 personal = 0 → ingen uppgiftsrad
+    assert(get('7107') === undefined, 'NE-SRU: nollrad (R7) utelämnas');
+    assert(get('7148') === undefined, 'NE-SRU: R48 = 0 utelämnas');
+    // Adressen tar bara första raden (SRU-värden får inte innehålla radbrytning)
+    assert(pkg.sender.address === 'Storgatan 1', 'NE-SRU: flerradsadress trunkeras till första raden'); }
+
+  // ── Serialisering av byggt paket ───────────────────────────────────────
+  { const pkg = buildNeSruPackage(m2Input);
+    const files = serialize(pkg);
+    const text = decodeLatin1(files.blanketter);
+    assert(text.startsWith('#BLANKETT NE-2025P1'), 'NE-SRU: BLANKETTER.SRU börjar med #BLANKETT');
+    assert(text.includes('#IDENTITET 165560000167 20260708 160000'), 'NE-SRU: #IDENTITET med personnummer + frusen tidsstämpel');
+    assert(text.includes('#UPPGIFT 7011 2025-01-01'), 'NE-SRU: #UPPGIFT-rad med datumvärde');
+    assert((text.match(/#FIL_SLUT/g) ?? []).length === 1, 'NE-SRU: exakt en #FIL_SLUT');
+    const info = decodeLatin1(files.info);
+    assert(info.includes('#ORGNR 165560000167') && info.includes('#NAMN Enkla Firman'),
+      'NE-SRU: INFO.SRU med uppgiftslämnare'); }
+
+  // ── Justeringar följer med i exporten ──────────────────────────────────
+  { const adjRows = buildNeRows(m2Vouchers, m2Txs, 2025, { R1: { value: 90000 } });
+    const pkg = buildNeSruPackage({ ...m2Input, rows: adjRows });
+    const r1 = pkg.blanketter[0].uppgifter.find(u => u.fieldCode === '7101');
+    assert(r1?.value === '90000', 'NE-SRU: manuellt justerad rad exporteras med justerat värde'); }
+
+  // ── Ogiltiga företagsuppgifter stoppas vid serialisering ──────────────
+  { const pkg = buildNeSruPackage({ ...m2Input, company: { ...m2Company, orgnr: '5560000168' } });
+    let code = '';
+    try { serialize(pkg); } catch (e) { code = e instanceof SruError ? e.code : 'ANNAT'; }
+    assert(code === 'SRU-ORGNR-01', 'NE-SRU: ogiltigt orgnr stoppas med SRU-ORGNR-01'); }
+
+  // ── Inlämningsspårning ─────────────────────────────────────────────────
+  await setSubmissionStep(2025, 'exportedAt', '2026-07-08');
+  await setSubmissionStep(2025, 'uploadedAt', '2026-07-09');
+  { const dec = await getDeclaration(2025);
+    assert(dec?.submission?.exportedAt === '2026-07-08' && dec?.submission?.uploadedAt === '2026-07-09',
+      'Inlämning: exporterad + uppladdad spåras'); }
+  await setSubmissionStep(2025, 'uploadedAt', null);
+  { const dec = await getDeclaration(2025);
+    assert(dec?.submission?.uploadedAt === undefined && dec?.submission?.exportedAt === '2026-07-08',
+      'Inlämning: steg kan ångras utan att röra andra steg');
+    assert(dec?.fields.R12?.value === 500, 'Inlämning: justeringar orörda av submission-uppdateringar'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

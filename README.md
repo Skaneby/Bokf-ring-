@@ -18,7 +18,7 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 - **SIE4** — import och export för utbyte med Fortnox, Visma och redovisningsbyråer
 - **JSON-backup** — ladda ned och återställ hela bokföringen som en fil
 - **PWA** — installeras på hemskärmen, uppdateras automatiskt
-- **Deklaration via fil** *(planerad)* — SRU-export (INFO.SRU + BLANKETTER.SRU) för inlämning till Skatteverket, se `docs/deklarationsmodul-spec.md`
+- **Deklaration via fil** *(beta)* — NE-bilagan exporteras som SRU-filer (INFO.SRU + BLANKETTER.SRU) med inlämningsguide; fältkoder preliminära tills verifiering mot Skatteverkets testtjänst
 
 ## Kom igång lokalt
 
@@ -34,7 +34,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test       # 354 enhetstester (tsx + fake-indexeddb)
+npm run test       # 374 enhetstester (tsx + fake-indexeddb)
 npm run lint       # typkontroll (tsc --noEmit)
 npm run build      # produktionsbygge till dist/
 ```
