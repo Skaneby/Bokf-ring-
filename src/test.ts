@@ -19,6 +19,11 @@ import {
   DEFAULT_COMPANY,
 } from './lib/invoice';
 import { InvoiceRow } from './db';
+import {
+  serialize, normalizePackage, parseInfo, parseBlanketter,
+  toIdNumber12, luhnValid, luhnCheckDigit, decodeLatin1,
+  SruError, SruPackage, SruBlankett,
+} from './lib/sru';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1156,6 +1161,208 @@ async function runTests() {
     const evil = { ...inv1, customerName: '<script>alert(1)</script>' };
     const html2 = renderInvoiceHtml(evil, s);
     assert(!html2.includes('<script>alert'), 'renderInvoiceHtml: kundnamn HTML-escapas'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 18. SRU-EXPORT (M0 — deklarationsmodulen)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 18. SRU-export ────────────────────────────────────\n');
+
+  const bytesEqual = (a: Uint8Array, b: Uint8Array) =>
+    a.length === b.length && a.every((v, i) => v === b[i]);
+
+  // ── Luhn & id-nummer ───────────────────────────────────────────────────
+  assert(luhnValid('5560000167'), 'Luhn: giltigt orgnr 5560000167');
+  assert(!luhnValid('5560000168'), 'Luhn: fel kontrollsiffra avvisas');
+  assert(luhnCheckDigit('556000016') === 7, 'Luhn: kontrollsiffra beräknas korrekt');
+  assert(toIdNumber12('556000-0167') === '165560000167', 'toIdNumber12: 10 siffror + bindestreck → sekelprefix 16');
+  assert(toIdNumber12('165560000167') === '165560000167', 'toIdNumber12: 12 siffror passerar oförändrat');
+  { let code = ''; try { toIdNumber12('5560000168'); } catch (e) { code = (e as SruError).code; }
+    assert(code === 'SRU-ORGNR-01', 'toIdNumber12: fel kontrollsiffra → SRU-ORGNR-01'); }
+  { let code = ''; try { toIdNumber12('4806262517'); } catch (e) { code = (e as SruError).code; }
+    assert(code === 'SRU-ORGNR-02', 'toIdNumber12: personnummer utan sekel avvisas'); }
+
+  // ── Kanoniskt paket (samma som golden files) ───────────────────────────
+  const goldenPkg: SruPackage = {
+    createdAt: { date: '20260708', time: '143211' },
+    program: { name: 'Lokal Bokföring', version: '2.0' },
+    sender: {
+      orgNumber: '556000-0167',
+      name: 'Exempelbolaget ÅÄÖ AB',
+      address: 'Storgatan 1', postalCode: '11122', city: 'STOCKHOLM',
+      contact: 'Karl Karlsson', email: 'kk@exempelbolaget.se', phone: '08-2121212',
+    },
+    blanketter: [
+      { formCode: 'INK2S-2026P1', idNumber: '165560000167',
+        uppgifter: [{ fieldCode: '8686', value: '125000' }] },
+      { formCode: 'INK2R-2026P1', idNumber: '5560000167', name: 'Exempelbolaget ÅÄÖ AB',
+        uppgifter: [
+          { fieldCode: '7511', value: '48000' },
+          { fieldCode: '7410', value: '1250000' },
+          { fieldCode: '7512', value: '-35000' },
+          { fieldCode: '8580', value: 'Övriga upplysningar änges här' },
+        ] },
+    ],
+  };
+
+  // ── Golden files: byte-identisk regression ─────────────────────────────
+  { const { info, blanketter } = serialize(goldenPkg);
+    const goldenInfo = new Uint8Array(readFileSync(resolve(__dirname, 'test-fixtures/sru-golden/INFO.SRU')));
+    const goldenBlank = new Uint8Array(readFileSync(resolve(__dirname, 'test-fixtures/sru-golden/BLANKETTER.SRU')));
+    assert(bytesEqual(info, goldenInfo), `Golden: INFO.SRU byte-identisk (${info.length} bytes)`);
+    assert(bytesEqual(blanketter, goldenBlank), `Golden: BLANKETTER.SRU byte-identisk (${blanketter.length} bytes)`);
+    const text = decodeLatin1(blanketter);
+    assert(text.indexOf('#BLANKETT INK2R') < text.indexOf('#BLANKETT INK2S'),
+      'Golden: blanketter deterministiskt sorterade på blankettkod');
+    assert((text.match(/#FIL_SLUT/g) ?? []).length === 1, 'Golden: exakt en #FIL_SLUT i BLANKETTER.SRU');
+    assert(text.endsWith('#FIL_SLUT\r\n'), 'Golden: filen slutar med #FIL_SLUT + CRLF');
+    // åäö kodas som Latin-1, inte UTF-8: Ö = 0xD6 (en byte, inte två)
+    assert(blanketter.includes(0xd6), 'Golden: Ö kodas som Latin-1-byte 0xD6'); }
+
+  // ── Round-trip: parse(serialize(x)) == normalize(x) ────────────────────
+  { const { info, blanketter } = serialize(goldenPkg);
+    const norm = normalizePackage(goldenPkg);
+    const pInfo = parseInfo(info);
+    assert(JSON.stringify(pInfo.sender) === JSON.stringify(norm.sender), 'Round-trip: sender identisk');
+    assert(pInfo.skapad.date === '20260708' && pInfo.skapad.time === '143211', 'Round-trip: #SKAPAD bevarad');
+    assert(pInfo.program.name === 'Lokal Bokföring' && pInfo.program.version === '2.0', 'Round-trip: #PROGRAM bevarad');
+    assert(pInfo.filnamn === 'BLANKETTER.SRU', 'Round-trip: #FILNAMN pekar på blankettfilen');
+    const pBlank = parseBlanketter(blanketter);
+    assert(JSON.stringify(pBlank) === JSON.stringify(norm.blanketter), 'Round-trip: blanketter identiska'); }
+
+  // ── Determinism ────────────────────────────────────────────────────────
+  { const a = serialize(goldenPkg); const b = serialize(goldenPkg);
+    assert(bytesEqual(a.info, b.info) && bytesEqual(a.blanketter, b.blanketter),
+      'Determinism: samma paket → byte-identiska filer'); }
+
+  // ── Valideringsfel ─────────────────────────────────────────────────────
+  const expectSruError = (mutate: (p: SruPackage) => void, expectedCode: string, label: string) => {
+    const p: SruPackage = JSON.parse(JSON.stringify(goldenPkg));
+    mutate(p);
+    let code = '';
+    try { serialize(p); } catch (e) { code = e instanceof SruError ? e.code : 'ANNAT'; }
+    assert(code === expectedCode, `${label} → ${expectedCode}`, `fick "${code}"`);
+  };
+
+  expectSruError(p => { p.blanketter = []; }, 'SRU-EMPTY-01', 'Tomt paket');
+  expectSruError(p => { p.blanketter[0].formCode = 'HEJ'; }, 'SRU-FORM-01', 'Ogiltig blankettkod');
+  expectSruError(p => { p.blanketter[0].uppgifter = []; }, 'SRU-FORM-02', 'Blankett utan uppgifter');
+  expectSruError(p => { p.blanketter[0].uppgifter[0].fieldCode = '86'; }, 'SRU-FIELD-01', 'Fältkod med fel längd');
+  expectSruError(p => { p.blanketter[1].uppgifter[1].fieldCode = '7511'; }, 'SRU-FIELD-02', 'Duplicerad fältkod');
+  expectSruError(p => { p.blanketter[0].uppgifter[0].value = ''; }, 'SRU-VAL-01', 'Tomt värde');
+  expectSruError(p => { p.blanketter[0].uppgifter[0].value = 'rad1\nrad2'; }, 'SRU-VAL-02', 'Radbrytning i värde');
+  expectSruError(p => { p.blanketter[0].uppgifter[0].value = ' 125000'; }, 'SRU-VAL-03', 'Inledande blanksteg');
+  expectSruError(p => { p.sender.name = 'Smiley 😀 AB'; }, 'SRU-ENC-01', 'Tecken utanför Latin-1');
+  expectSruError(p => { p.createdAt.date = '2026-07-08'; }, 'SRU-TS-01', 'Fel datumformat');
+  expectSruError(p => { p.blanketter[0].idNumber = '5560000168'; }, 'SRU-ORGNR-01', 'Ogiltigt id-nummer på blankett');
+
+  // ── 5 MB-gränsen ───────────────────────────────────────────────────────
+  { const big: SruPackage = {
+      ...goldenPkg,
+      blanketter: ['INK2R-2026P1', 'INK2S-2026P1', 'NE-2026P1'].map(formCode => ({
+        formCode, idNumber: '165560000167',
+        uppgifter: Array.from({ length: 9000 }, (_, i) => ({
+          fieldCode: String(1000 + i), value: 'X'.repeat(230),
+        })),
+      })),
+    };
+    let code = '';
+    try { serialize(big); } catch (e) { code = e instanceof SruError ? e.code : 'ANNAT'; }
+    assert(code === 'SRU-SIZE-01', 'BLANKETTER.SRU över 5 MB → SRU-SIZE-01'); }
+
+  // ── Property-tester: slumpade giltiga paket (seedad PRNG) ──────────────
+  { const mulberry32 = (seed: number) => () => {
+      seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const rnd = mulberry32(42);
+    const pick = <T,>(arr: T[]): T => arr[Math.floor(rnd() * arr.length)];
+    const int = (min: number, max: number) => min + Math.floor(rnd() * (max - min + 1));
+
+    const NAME_CHARS = 'ABCDEFÅÄÖabcdefåäöghijkl0123456789';
+    const randName = () => {
+      let s = pick([...NAME_CHARS]);
+      const n = int(0, 20);
+      for (let i = 0; i < n; i++) s += pick([...(NAME_CHARS + '  .-')]);
+      return s + pick([...NAME_CHARS]); // aldrig blanksteg först/sist
+    };
+    const randOrgnr = () => {
+      let body9 = String(int(2, 9)); // tredje siffran ≥ 2 fixas nedan
+      body9 = String(int(1, 9)) + String(int(0, 9)) + String(int(2, 9));
+      for (let i = 0; i < 6; i++) body9 += String(int(0, 9));
+      const full = body9 + String(luhnCheckDigit(body9));
+      return rnd() < 0.5 ? full : '16' + full; // testa både 10- och 12-siffrig indata
+    };
+    const randValue = () => pick([
+      () => String(int(-999999, 9999999)),
+      () => `${int(2020, 2026)}-${String(int(1, 12)).padStart(2, '0')}-${String(int(1, 28)).padStart(2, '0')}`,
+      () => randName(),
+    ])();
+    const FORMS = ['INK2R-2026P1', 'INK2S-2026P1', 'NE-2026P1', 'K10-2026P1', 'N8-2026P1'];
+
+    const randPackage = (): SruPackage => {
+      const nBlank = int(1, 4);
+      const usedForms = new Set<string>();
+      const blanketter: SruBlankett[] = [];
+      for (let i = 0; i < nBlank; i++) {
+        let formCode = pick(FORMS);
+        while (usedForms.has(formCode)) formCode = pick(FORMS);
+        usedForms.add(formCode);
+        const nUpp = int(1, 12);
+        const codes = new Set<string>();
+        while (codes.size < nUpp) codes.add(String(int(1000, 9999)));
+        blanketter.push({
+          formCode,
+          idNumber: randOrgnr(),
+          ...(rnd() < 0.5 ? { name: randName() } : {}),
+          uppgifter: [...codes].map(fieldCode => ({ fieldCode, value: randValue() })),
+        });
+      }
+      return {
+        createdAt: { date: `2026${String(int(1, 12)).padStart(2, '0')}${String(int(1, 28)).padStart(2, '0')}`,
+                     time: `${String(int(0, 23)).padStart(2, '0')}${String(int(0, 59)).padStart(2, '0')}${String(int(0, 59)).padStart(2, '0')}` },
+        program: { name: randName(), version: `${int(1, 9)}.${int(0, 9)}` },
+        sender: { orgNumber: randOrgnr(), name: randName(),
+                  ...(rnd() < 0.5 ? { email: 'test@example.se' } : {}) },
+        blanketter,
+      };
+    };
+
+    const failures: string[] = [];
+    const N = 150;
+    for (let iter = 0; iter < N; iter++) {
+      const pkg = randPackage();
+      try {
+        const a = serialize(pkg);
+        const b = serialize(pkg);
+        if (!bytesEqual(a.info, b.info) || !bytesEqual(a.blanketter, b.blanketter))
+          failures.push(`iter ${iter}: ej deterministisk`);
+        const norm = normalizePackage(pkg);
+        const parsed = parseBlanketter(a.blanketter);
+        if (JSON.stringify(parsed) !== JSON.stringify(norm.blanketter))
+          failures.push(`iter ${iter}: round-trip skiljer`);
+        const pInfo = parseInfo(a.info);
+        if (JSON.stringify(pInfo.sender) !== JSON.stringify(norm.sender))
+          failures.push(`iter ${iter}: sender round-trip skiljer`);
+        const text = decodeLatin1(a.blanketter);
+        if ((text.match(/#FIL_SLUT/g) ?? []).length !== 1)
+          failures.push(`iter ${iter}: fel antal #FIL_SLUT`);
+        for (const byte of a.blanketter) {
+          if (byte !== 0x0d && byte !== 0x0a && !((byte >= 0x20 && byte <= 0x7e) || byte >= 0xa0)) {
+            failures.push(`iter ${iter}: otillåten byte 0x${byte.toString(16)}`);
+            break;
+          }
+        }
+      } catch (e) {
+        failures.push(`iter ${iter}: oväntat fel ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    assert(failures.length === 0,
+      `Property-test: ${N} slumpade paket — determinism, round-trip, #FIL_SLUT, encoding`,
+      failures.slice(0, 3).join('; '));
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v2 (accounts, vouchers, transactions, invoices, settings) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 293 enhetstester (Node + fake-indexeddb)
+  test.ts              — 325 enhetstester (Node + fake-indexeddb)
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
     Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
@@ -156,7 +156,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 293 enhetstester
+npm run test         # kör 325 enhetstester
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
 ```
