@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "tsx src/test.ts"
+    "test": "tsx src/test.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:desktop": "playwright test --project=desktop",
+    "test:e2e:mobil": "playwright test --project=mobil"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -25,6 +28,7 @@
     "vite-plugin-pwa": "^1.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

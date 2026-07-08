@@ -9,3 +9,5 @@ coverage/
 # .claude/ ignoreras utom agentdefinitioner — de styr modellval per uppgiftstyp
 .claude/*
 !.claude/agents/
+playwright-report/
+test-results/

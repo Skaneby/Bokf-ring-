@@ -65,6 +65,15 @@
 - [x] Pedagogisk onboarding: 8-stegsguide (dubbelbokföring, moms, fakturor, deklaration, backup)
 - [x] Guiden visas automatiskt första gången + kan öppnas när som helst via "Visa guiden"
 
+**E2E-tester (juli 2026)**
+- [x] Playwright-svit (e2e/app.spec.ts): 6 tester × 2 viewports — desktop 1280px + mobil 375px
+- [x] Grundflöde: välkomst → onboarding → momsbokning → verifierade KPI-belopp (körs i BÅDA lägena)
+- [x] Fakturaflöde: inställningar → skapa → bokförd → betald → resultat/balans/huvudbok stämmer
+- [x] Deklaration: NE-rader, justering med live-omräkning, SRU-nedladdning (rätt filnamn), INK2-växel
+- [x] Gemini-import UI, AI-gate utan nyckel, backupnedladdning, skyddad kontoradering
+- [x] Mobil: hamburgermeny, formuläretiketter, touch-bokning, ingen horisontell scroll
+- [x] npm run test:e2e / test:e2e:desktop / test:e2e:mobil
+
 **Optimeringar (juli 2026)**
 - [x] Halvskrivna verifikationer överlever flikbyte (VoucherEntry hålls monterad)
 - [x] Lazy loading: Gemini SDK + fyra flikar utanför startbundeln (401 → 364 kB)
