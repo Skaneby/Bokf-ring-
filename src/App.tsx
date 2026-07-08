@@ -4,8 +4,10 @@ import { VoucherEntry } from './components/VoucherEntry';
 import { Welcome } from './components/Welcome';
 import { initializeDb, db } from './db';
 import { exportBackup } from './lib/backup';
+import { isOnboardingDone, markOnboardingDone } from './lib/ai';
 import {
   LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw, Receipt,
+  Sparkles, HelpCircle,
 } from 'lucide-react';
 
 // Lazy-laddade flikar — hålls utanför startbundeln
@@ -13,6 +15,8 @@ const ChartOfAccounts = lazy(() => import('./components/ChartOfAccounts').then(m
 const Reports         = lazy(() => import('./components/Reports').then(m => ({ default: m.Reports })));
 const GeminiImport    = lazy(() => import('./components/GeminiImport').then(m => ({ default: m.GeminiImport })));
 const Invoices        = lazy(() => import('./components/Invoices').then(m => ({ default: m.Invoices })));
+const AiChat          = lazy(() => import('./components/AiChat').then(m => ({ default: m.AiChat })));
+const Onboarding      = lazy(() => import('./components/Onboarding').then(m => ({ default: m.Onboarding })));
 
 const APP_URL = 'https://skaneby.github.io/Bokf-ring-/';
 
@@ -23,6 +27,7 @@ const NAV = [
   { id: 'accounts',  label: 'Kontoplan',  icon: List },
   { id: 'reports',   label: 'Rapporter',  icon: FileText },
   { id: 'import',    label: 'Importera',  icon: FileJson },
+  { id: 'ai',        label: 'AI-hjälp',   icon: Sparkles },
 ] as const;
 
 type TabId = typeof NAV[number]['id'];
@@ -37,6 +42,7 @@ export default function App() {
   const [ready,   setReady]   = useState(false);
   const [hasData, setHasData] = useState(false);
   const [confirmSwitch, setConfirmSwitch] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     initializeDb()
@@ -49,6 +55,12 @@ export default function App() {
     const id = setTimeout(() => setCopied(false), 2500);
     return () => clearTimeout(id);
   }, [copied]);
+
+  // Visa guiden automatiskt första gången appen används med data
+  useEffect(() => {
+    if (!ready || !hasData) return;
+    isOnboardingDone().then(done => { if (!done) setShowGuide(true); });
+  }, [ready, hasData]);
 
   if (!ready) return null;
   if (!hasData) return (
@@ -122,6 +134,13 @@ export default function App() {
           <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.15em] text-slate-500 uppercase">
             Säkerhet
           </p>
+          <button
+            onClick={() => { setShowGuide(true); setMobile(false); }}
+            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+          >
+            <HelpCircle className="h-4 w-4 shrink-0" />
+            Visa guiden
+          </button>
           <button
             onClick={() => exportBackup()}
             className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
@@ -205,10 +224,18 @@ export default function App() {
               {tab === 'accounts'  && <ChartOfAccounts />}
               {tab === 'reports'   && <Reports onEditVoucher={editVoucher} onReset={() => setHasData(false)} />}
               {tab === 'import'    && <GeminiImport />}
+              {tab === 'ai'        && <AiChat />}
             </Suspense>
           </div>
         </main>
       </div>
+
+      {/* Onboarding-guide */}
+      {showGuide && (
+        <Suspense fallback={null}>
+          <Onboarding onClose={() => { setShowGuide(false); markOnboardingDone(); }} />
+        </Suspense>
+      )}
     </div>
   );
 }

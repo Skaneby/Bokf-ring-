@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 398 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 415 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Fakturering (juli 2026)**
 - [x] Fakturor med löpande, obruten nummerserie (räknas bara uppåt, återanvänds aldrig)
@@ -56,6 +56,14 @@
 - [x] Skicka: skriv ut/PDF, ladda ned, dela (Web Share), e-post
 - [x] Företagsinställningar: orgnr, momsnr, bankgiro, betalningsvillkor
 - [x] Nytt konto 1510 Kundfordringar (patchas in i befintliga databaser)
+
+**AI-hjälp & onboarding (juli 2026)**
+- [x] AI-chattbot (flik "AI-hjälp"): expert på svensk skatt/juridik/bokföring + appen själv
+- [x] Kräver användarens egen Gemini-nyckel — valideras med testanrop, lagras lokalt
+- [x] Utan validerad nyckel svarar boten med instruktion om hur nyckeln läggs in
+- [x] Systemprompt med användarens kontoplan, datamängd och komplett appguide
+- [x] Pedagogisk onboarding: 8-stegsguide (dubbelbokföring, moms, fakturor, deklaration, backup)
+- [x] Guiden visas automatiskt första gången + kan öppnas när som helst via "Visa guiden"
 
 **Optimeringar (juli 2026)**
 - [x] Halvskrivna verifikationer överlever flikbyte (VoucherEntry hålls monterad)
@@ -78,11 +86,17 @@ Spec: `docs/deklarationsmodul-spec.md` (SRU-filöverföring + manuell deklaratio
 - [ ] M4: Spår B — API-integration mot Skatteverket (kräver avtal + verifierad tjänstebeskrivning)
 - [ ] Verifiera SRU-syntax, encoding och blankettkoder mot Skatteverkets tekniska beskrivning
 
-### Öppet / Förbättringar
+### Öppet / Förbättringar (prioriterade)
 
-- [ ] Periodfiltrering i rapporter (månad/kvartal/år)
-- [ ] Sökfunktion i huvudbok
-- [ ] Momsrapport per period (aggregerad 2610/2620/2630/2640)
-- [ ] Årsavslut — nollställ resultatkonton mot 2010 vid nytt räkenskapsår
-- [ ] Export av NE-bilagan som PDF/utskriftsvänlig vy
-- [ ] Kvittobilagor — spara kvittobild kopplad till verifikation (IndexedDB blob)
+- [ ] **P1 — Sökfunktion i huvudbok**: störst vardagsnytta, minst insats (filtrera på beskrivning/konto/belopp)
+- [ ] **P2 — Periodfiltrering i rapporter** (månad/kvartal/år): krävs som grund för P3, stor nytta vid momsdeklaration
+- [ ] **P3 — Momsrapport per period**: bygger på P2 — visar rutorna 05/10-12/48/49 per redovisningsperiod
+- [ ] **P4 — Årsavslut**: nollställ resultatkonton mot 2010 vid nytt räkenskapsår; viktig vid årsskiftet, kräver domännoggrannhet
+- [ ] **P5 — Kvittobilagor**: spara kvittobild kopplad till verifikation (IndexedDB blob); störst insats, lagringstungt
+- [x] Export av NE-bilagan som utskriftsvänlig vy — klar via "Skriv ut underlag" i Deklarationsfliken
+
+### Framtida moduler (underlag finns)
+
+- [ ] KU-filer (kontrolluppgifter KU10-KU81) — XML-format; fältlista uppladdad (Bilaga 2b Fältlista 9.0)
+- [ ] Arbetsgivardeklaration på individnivå (AGI) — XML-format; fältlista uppladdad (Bilaga Fältlista 1.1.17.1)
+- OBS: dessa är ANDRA format än SRU — inkomstdeklarationens fältkoder verifieras via SKV 269/Fältlistor för inkomstdeklaration

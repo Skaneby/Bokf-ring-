@@ -17,6 +17,8 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 - **Skatt & deklaration** — NE-bilagan (SKV 2161) sammanställs automatiskt, egenavgifter beräknas per åldersgrupp, momsdeklarationens rutor summeras
 - **SIE4** — import och export för utbyte med Fortnox, Visma och redovisningsbyråer
 - **JSON-backup** — ladda ned och återställ hela bokföringen som en fil
+- **AI-hjälp** — inbyggd chattbot som kan svensk skatt, juridik och bokföring och känner din kontoplan; kräver din egen (gratis) Gemini-nyckel som valideras och lagras lokalt
+- **Onboarding** — pedagogisk 8-stegsguide vid första start, alltid tillgänglig via "Visa guiden"
 - **PWA** — installeras på hemskärmen, uppdateras automatiskt
 - **Deklaration via fil** *(beta)* — NE-bilagan (enskild firma) och INK2R/INK2S (aktiebolag) exporteras som SRU-filer (INFO.SRU + BLANKETTER.SRU) med inlämningsguide; fältkoder preliminära tills verifiering mot Skatteverkets testtjänst
 
@@ -34,7 +36,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test       # 398 enhetstester (tsx + fake-indexeddb)
+npm run test       # 415 enhetstester (tsx + fake-indexeddb)
 npm run lint       # typkontroll (tsc --noEmit)
 npm run build      # produktionsbygge till dist/
 ```

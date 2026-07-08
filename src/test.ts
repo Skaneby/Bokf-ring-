@@ -30,6 +30,10 @@ import {
 } from './lib/declaration';
 import { buildNeSruPackage, NE_FORM_CODE } from './lib/neSru';
 import { buildInk2Rows, buildInk2SruPackage, INK2R_FORM_CODE, INK2S_FORM_CODE } from './lib/ink2';
+import {
+  getAiSettings, saveAiSettings, hasValidKey, gateMessage, NO_KEY_REPLY,
+  buildSystemPrompt, isOnboardingDone, markOnboardingDone,
+} from './lib/ai';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1662,6 +1666,50 @@ async function runTests() {
     const ne   = await getDeclaration(2025, 'NE');
     assert(ink2?.submission?.exportedAt === '2026-07-08', 'Persistens: INK2-inlämningssteg spåras');
     assert(ne?.submission?.exportedAt === undefined, 'Persistens: NE-inlämning opåverkad av INK2'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 22. AI-HJÄLP & ONBOARDING
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 22. AI-hjälp & onboarding ─────────────────────────\n');
+
+  await resetDb();
+
+  // ── Nyckelinställningar ────────────────────────────────────────────────
+  { const s = await getAiSettings();
+    assert(s.apiKey === '' && s.validatedAt === undefined, 'AI: tom standardinställning'); }
+
+  { const noKey = { apiKey: '' };
+    const unvalidated = { apiKey: 'AIzaTest123' };
+    const valid = { apiKey: 'AIzaTest123', validatedAt: '2026-07-08' };
+    assert(!hasValidKey(noKey), 'AI: tom nyckel är inte giltig');
+    assert(!hasValidKey(unvalidated), 'AI: ovaliderad nyckel är inte giltig — kräver testanrop');
+    assert(hasValidKey(valid), 'AI: validerad nyckel är giltig');
+    assert(gateMessage(noKey) === NO_KEY_REPLY, 'AI: boten svarar med nyckelinstruktion utan nyckel');
+    assert(gateMessage(unvalidated) === NO_KEY_REPLY, 'AI: boten kräver VALIDERAD nyckel');
+    assert(gateMessage(valid) === null, 'AI: ingen spärr med validerad nyckel');
+    assert(NO_KEY_REPLY.includes('aistudio.google.com'), 'AI: instruktionen berättar var man hämtar nyckel');
+    assert(NO_KEY_REPLY.includes('lokalt'), 'AI: instruktionen förklarar lokal lagring'); }
+
+  await saveAiSettings({ apiKey: 'AIzaSparad', validatedAt: '2026-07-08' });
+  { const s = await getAiSettings();
+    assert(s.apiKey === 'AIzaSparad' && s.validatedAt === '2026-07-08', 'AI: inställningar sparas och läses'); }
+
+  // ── Systemprompt ───────────────────────────────────────────────────────
+  { const prompt = buildSystemPrompt({
+      accounts: await db.accounts.toArray(),
+      voucherCount: 5, invoiceCount: 2, years: [2026, 2025],
+    });
+    assert(prompt.includes('1930 Företagskonto / Bank'), 'AI-prompt: kontoplanen ingår');
+    assert(prompt.includes('5 verifikationer') && prompt.includes('2026, 2025'), 'AI-prompt: användarens data ingår');
+    assert(prompt.includes('fakturametoden') && prompt.includes('Mina sidor'), 'AI-prompt: appguiden ingår');
+    assert(prompt.includes('inte professionell rådgivning'), 'AI-prompt: rådgivningsdisclaimer ingår');
+    assert(prompt.includes('svenska'), 'AI-prompt: svarar på svenska'); }
+
+  // ── Onboarding-flagga ──────────────────────────────────────────────────
+  assert((await isOnboardingDone()) === false, 'Onboarding: visas för nya användare');
+  await markOnboardingDone();
+  assert((await isOnboardingDone()) === true, 'Onboarding: flaggan sparas — visas inte igen');
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

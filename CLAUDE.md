@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v3 (accounts, vouchers, transactions, invoices, settings, declarations) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 398 enhetstester (Node + fake-indexeddb)
+  test.ts              — 415 enhetstester (Node + fake-indexeddb)
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
     Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
@@ -59,6 +59,8 @@ src/
     ChartOfAccounts.tsx — kontoplan CRUD; radering blockeras om kontot har transaktioner
     Reports.tsx        — tunn flik-router (~70 rader); flikarna bor i reports/
     GeminiImport.tsx   — importera verifikationer från Gemini JSON-export
+    AiChat.tsx         — AI-chattbot (egen Gemini-nyckel, valideras); expert på skatt/juridik/appen
+    Onboarding.tsx     — 8-stegs pedagogisk guide; flagga i settings, "Visa guiden" i sidomenyn
     Invoices.tsx       — flik-router för fakturering
     invoices/
       InvoiceForm.tsx  — skapa faktura; metod väljs per faktura (faktura/kontant)
@@ -84,6 +86,7 @@ src/
     neSru.ts           — mappning NE-rader → SruPackage; fältkodstabell (PRELIMINÄR — VERIFIERAS)
     ink2.ts            — INK2R/INK2S för AB: buildInk2Rows() / buildInk2SruPackage() (PRELIMINÄR)
     sru/               — SRU-export M0: serialize() / parse / Latin-1 / Luhn (deterministisk)
+    ai.ts              — AI-inställningar, nyckelvalidering, gateMessage(), buildSystemPrompt(), askAi()
     utils.ts           — formatCurrency()
 ```
 
@@ -161,7 +164,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 398 enhetstester
+npm run test         # kör 415 enhetstester
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
 ```
