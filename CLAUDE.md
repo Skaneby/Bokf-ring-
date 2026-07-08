@@ -163,6 +163,25 @@ git push origin main # triggar deploy automatiskt (~40 sek)
 
 ---
 
+## Modellstrategi
+
+Huvudsessionen körs på den mest kapabla modellen (Fable 5 / Opus). Kostnadsoptimering sker genom **delegering till subagenter med fasta modeller** — inte genom att byta huvudmodell:
+
+| Uppgiftstyp | Utförs av | Modell |
+|---|---|---|
+| Bokföringslogik, moms, SRU/SIE-serialisering, DB-migrationer, buggar med okänd rotorsak, arkitektur | **Huvudsessionen direkt** | Sessionens modell (Fable/Opus) |
+| Rutin-UI enligt befintligt mönster, Tailwind-justeringar, enkla refaktoreringar, testuppdateringar | Subagent **`rutinarbete`** | Sonnet |
+| Rena dokumentationsuppdateringar (README, todo, lessons) | Subagent **`dokumentation`** | Haiku |
+
+Regler:
+- Delegera PROAKTIVT när en uppgift matchar en subagent — vänta inte på uppmaning.
+- Delegera ALDRIG bokföringslogik eller formatserialisering — fel där är tysta och juridiskt allvarliga.
+- Blandade uppgifter delas upp: huvudsessionen gör den kritiska delen, subagenten resten.
+- Verifiering efter subagentarbete: huvudsessionen kör alltid `npm run test` + `npm run build` innan commit.
+- Agentdefinitionerna bor i `.claude/agents/` och är incheckade — uppdatera dem när policyn ändras.
+
+---
+
 ## Effort Levels
 
 Select effort based on task complexity — state which level you're using and why.

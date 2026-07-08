@@ -18,6 +18,7 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 - **SIE4** — import och export för utbyte med Fortnox, Visma och redovisningsbyråer
 - **JSON-backup** — ladda ned och återställ hela bokföringen som en fil
 - **PWA** — installeras på hemskärmen, uppdateras automatiskt
+- **Deklaration via fil** *(planerad)* — SRU-export (INFO.SRU + BLANKETTER.SRU) för inlämning till Skatteverket, se `docs/deklarationsmodul-spec.md`
 
 ## Kom igång lokalt
 
