@@ -1,10 +1,15 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { VoucherEntry } from './components/VoucherEntry';
-import { Welcome } from './components/Welcome';
 import { initializeDb, db } from './db';
 import { exportBackup } from './lib/backup';
 import { isOnboardingDone, markOnboardingDone } from './lib/ai';
+import {
+  BokforingsfilMeta, SaveStatus, getBokforingsfil, clearBokforingsfil,
+  createAutoSaver, watchDatabase, writeToFile, AutoSaver,
+} from './lib/bokforingsfil';
+import { Welcome } from './components/Welcome';
+import { OpenBokforing } from './components/OpenBokforing';
 import {
   LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw, Receipt,
   Sparkles, HelpCircle,
@@ -43,12 +48,39 @@ export default function App() {
   const [hasData, setHasData] = useState(false);
   const [confirmSwitch, setConfirmSwitch] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  // Bokföringsdatabasen (fil): meta + öppningsläge + sparstatus
+  const [filMeta, setFilMeta] = useState<BokforingsfilMeta | null>(null);
+  const [filOpened, setFilOpened] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [saver, setSaver] = useState<AutoSaver | null>(null);
 
   useEffect(() => {
     initializeDb()
-      .then(({ hasData }) => { setHasData(hasData); setReady(true); })
+      .then(async ({ hasData }) => {
+        setFilMeta(await getBokforingsfil());
+        setHasData(hasData);
+        setReady(true);
+      })
       .catch(err => { console.error(err); setReady(true); });
   }, []);
+
+  // Auto-sparning till bokföringsfilen när den är öppnad
+  useEffect(() => {
+    if (!filMeta?.handle || !filOpened) return;
+    const s = createAutoSaver(async () => {
+      // Läs meta vid varje sparning — "Byt bokföring" kopplar från filen
+      // och då får INGET skrivas (annars skrivs en tom databas till filen)
+      const current = await getBokforingsfil();
+      if (!current?.handle) return;
+      await writeToFile(current.handle, current.name);
+    });
+    watchDatabase(s);
+    const unsub = s.subscribe(setSaveStatus);
+    setSaver(s);
+    const flushOnHide = () => { if (document.visibilityState === 'hidden') s.flush(); };
+    document.addEventListener('visibilitychange', flushOnHide);
+    return () => { unsub(); document.removeEventListener('visibilitychange', flushOnHide); };
+  }, [filMeta?.handle, filOpened]);
 
   useEffect(() => {
     if (!copied) return;
@@ -63,10 +95,29 @@ export default function App() {
   }, [ready, hasData]);
 
   if (!ready) return null;
+
+  // Appen minns en bokföringsfil → be om ett klick för att öppna den
+  if (filMeta?.handle && !filOpened) {
+    return (
+      <OpenBokforing
+        meta={filMeta}
+        onOpened={async name => {
+          setFilMeta({ name, handle: filMeta.handle });
+          setFilOpened(true);
+          setHasData(true);
+        }}
+        onDisconnected={async () => {
+          setFilMeta(await getBokforingsfil());
+          setFilOpened(false);
+        }}
+      />
+    );
+  }
+
   if (!hasData) return (
     <Welcome
-      onLoaded={() => setHasData(true)}
-      onStartFresh={() => setHasData(true)}
+      onLoaded={async () => { setFilMeta(await getBokforingsfil()); setFilOpened(true); setHasData(true); }}
+      onStartFresh={async () => { setFilMeta(await getBokforingsfil()); setFilOpened(true); setHasData(true); }}
     />
   );
 
@@ -82,6 +133,11 @@ export default function App() {
   };
 
   const handleSwitchBooks = async () => {
+    // Koppla från filen FÖRST — annars auto-sparas den tömda databasen dit
+    saver?.suspend();
+    await clearBokforingsfil();
+    setFilMeta(null);
+    setFilOpened(false);
     await db.transaction('rw', db.transactions, db.vouchers, db.accounts, db.attachments, async () => {
       await db.transactions.clear();
       await db.vouchers.clear();
@@ -106,10 +162,33 @@ export default function App() {
         ${mobile ? 'translate-x-0' : '-translate-x-full'}
         md:relative md:translate-x-0
       `}>
-        {/* Logo */}
+        {/* Logo + aktiv bokföring */}
         <div className="px-6 py-6 border-b border-slate-800">
           <p className="text-[10px] font-semibold tracking-[0.15em] text-slate-500 uppercase mb-0.5">Lokal</p>
           <h1 className="text-lg font-bold text-white tracking-tight">Bokföring</h1>
+          {filMeta && (
+            <div className="mt-2 min-w-0">
+              <p className="truncate text-xs font-medium text-slate-300" title={filMeta.name}>{filMeta.name}</p>
+              {filMeta.handle ? (
+                <button
+                  onClick={() => saver?.flush()}
+                  className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500 hover:text-slate-300 transition-colors"
+                  title="Klicka för att spara nu"
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    saveStatus === 'saving' ? 'animate-pulse bg-amber-400'
+                    : saveStatus === 'error' ? 'bg-red-500'
+                    : 'bg-emerald-500'
+                  }`} />
+                  {saveStatus === 'saving' ? 'Sparar till fil…'
+                   : saveStatus === 'error' ? 'Sparfel — klicka för nytt försök'
+                   : 'Sparas till fil automatiskt'}
+                </button>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-slate-500">Endast i webbläsaren — ta backup!</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Nav */}

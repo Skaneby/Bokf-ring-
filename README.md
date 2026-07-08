@@ -6,6 +6,7 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 
 ## Funktioner
 
+- **Bokföringsdatabas som fil** — namnge din bokföring och välj var `.bokforing.json` sparas; appen minns filen, auto-sparar varje ändring och öppnar den med ett klick vid nästa besök (Chrome/Edge; annars webbläsarlagring med namn)
 - **Dubbelbokföring** med automatisk balansvalidering (debet = kredit, alltid)
 - **BAS-kontoplan** med 25 standardkonton, fullt redigerbar
 - **Momshjälp** — ange bruttobelopp och momssats (6/12/25 %), raderna fylls i automatiskt
@@ -37,7 +38,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test          # 508 enhetstester (tsx + fake-indexeddb)
+npm run test          # 522 enhetstester (tsx + fake-indexeddb)
 npm run test:e2e      # E2E i webbläsare: desktop 1280px + mobil 375px (Playwright)
 npm run lint          # typkontroll (tsc --noEmit)
 npm run build         # produktionsbygge till dist/

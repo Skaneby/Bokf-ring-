@@ -15,10 +15,11 @@ async function expectAmount(page: Page, container: ReturnType<Page['locator']>, 
     .toContain(expected);
 }
 
-// Startar från tom DB: välkomstskärm → ny bokföring → stäng guiden
+// Startar från tom DB: skapa bokföring (utan fil — filpickern är nativ och
+// kan inte styras i headless) → stäng guiden
 async function freshStart(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: /Starta ny bokföring/ }).click();
+  await page.getByRole('button', { name: /Skapa utan fil/ }).click();
   // Onboarding visas automatiskt första gången
   await page.getByRole('button', { name: 'Stäng guiden' }).click();
   await expect(page.getByRole('heading', { name: 'Översikt' })).toBeVisible();
@@ -53,11 +54,16 @@ async function bookPurchase(page: Page, gross: string) {
 test('@both grundflöde: välkomst → guide → bokför med moms → korrekt översikt', async ({ page }) => {
   await page.goto('/');
 
-  // Välkomstskärmen vid tom DB med alla tre alternativ
-  await expect(page.getByText('Välj hur du vill starta')).toBeVisible();
+  // Skapa bokföring-skärmen vid tom DB: namn + alla alternativ
+  await expect(page.getByText('Det finns ingen bokföringsdatabas här ännu')).toBeVisible();
+  await expect(page.getByLabel('Bokföringens namn')).toHaveValue('Min bokföring');
+  await expect(page.getByRole('button', { name: /Skapa ny bokföring med databasfil/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Öppna befintlig bokföringsfil/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Ladda in JSON-backup/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Importera SIE4-fil/ })).toBeVisible();
-  await page.getByRole('button', { name: /Starta ny bokföring/ }).click();
+  // Namnge bokföringen och skapa (utan fil — nativ filpicker kan inte styras headless)
+  await page.getByLabel('Bokföringens namn').fill('E2E Bokföring');
+  await page.getByRole('button', { name: /Skapa utan fil/ }).click();
 
   // Onboarding: 8 steg, gå igenom två och stäng
   await expect(page.getByText('Välkommen till Lokal Bokföring')).toBeVisible();
@@ -82,6 +88,12 @@ test('@both grundflöde: välkomst → guide → bokför med moms → korrekt ö
 
   // Verifikationsräknaren
   await expect(page.getByText('Verifikationer', { exact: true }).locator('..')).toContainText('1');
+
+  // Appen minns bokföringens namn — visas i sidomenyn (öppna den på mobil)
+  const burger = page.getByRole('button', { name: 'Öppna meny' });
+  if (await burger.isVisible()) await burger.click();
+  await expect(page.getByText('E2E Bokföring')).toBeVisible();
+  await expect(page.getByText(/Endast i webbläsaren/)).toBeVisible();
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

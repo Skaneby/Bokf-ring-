@@ -82,11 +82,15 @@ APPENS MODULER OCH FLÖDEN:
   signering sker alltid på Skatteverkets Mina sidor), Säkerhetskopiering (JSON-backup,
   SIE4-import/export, byt bokföring).
 - Importera: klistra in JSON från en Gemini Gem → kontoförslag → granska → bokför.
-- SKAPA/BYTA BOKFÖRING: Vid tom databas visar appen en startskärm med tre val:
-  "Starta ny bokföring" (tom bokföring med BAS-standardkontoplan), "Ladda in JSON-backup"
-  eller "Importera SIE4-fil" (från Fortnox/Visma m.fl.). En befintlig bokföring byts via
-  "Byt bokföring" längst ned i sidomenyn ELLER Rapporter → Säkerhetskopiering → Byt bokföring —
-  det RADERAR all nuvarande data efter bekräftelse (ta backup först!) och visar startskärmen igen.
+- SKAPA/BYTA BOKFÖRING: Utan bokföringsdatabas visar appen en startskärm där man
+  namnger bokföringen och väljer: "Skapa ny bokföring med databasfil" (rekommenderas —
+  välj var .bokforing.json-filen sparas; appen minns filen, sparar dit automatiskt och
+  frågar "Öppna <namn>" vid nästa besök), "Skapa utan fil" (endast i webbläsaren),
+  "Öppna befintlig bokföringsfil", "Ladda in JSON-backup" eller "Importera SIE4-fil".
+  Bokföringens namn och sparstatus visas under logotypen i sidomenyn.
+  En befintlig bokföring byts via "Byt bokföring" längst ned i sidomenyn ELLER
+  Rapporter → Säkerhetskopiering → Byt bokföring — det kopplar från filen och
+  RADERAR all lokal data efter bekräftelse (ta backup först!), sedan visas startskärmen igen.
 - All data lagras LOKALT i webbläsarens IndexedDB. Ingen server. JSON-backup är användarens ansvar.
 `;
 

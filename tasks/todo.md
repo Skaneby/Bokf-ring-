@@ -46,7 +46,15 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 508 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 522 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+
+**Bokföringsdatabas som fil (juli 2026)**
+- [x] Skapa bokföring: namnge + välj var .bokforing.json-filen sparas (File System Access API)
+- [x] Appen minns filen: vid nästa besök visas "Öppna <namn>" — ett klick läser in databasen
+- [x] Auto-sparning till filen vid varje ändring (debounced) med sparstatus i sidomenyn
+- [x] Bokföringens namn visas i sidomenyn; "utan fil"-läge med backup-varning för Firefox/Safari
+- [x] Skydd: "Byt bokföring" kopplar från filen FÖRST — en tömd databas skrivs aldrig till filen
+- [x] Öppna befintlig bokföringsfil från startskärmen (flytta mellan datorer)
 
 **Fakturaarkiv & utskick (juli 2026)**
 - [x] Fakturafilen arkiveras i databasen exakt som den skapades — senare ändringar av uppgifter/mall påverkar aldrig arkivet

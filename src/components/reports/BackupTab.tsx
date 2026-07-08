@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { db } from '../../db';
 import { exportSIE, importSIE, decodeSIEBuffer } from '../../lib/sie';
 import { exportBackup, importBackup } from '../../lib/backup';
+import { clearBokforingsfil } from '../../lib/bokforingsfil';
 import { Download, Upload } from 'lucide-react';
 
 interface Props {
@@ -19,6 +20,8 @@ export function BackupTab({ onReset }: Props) {
   };
 
   const handleReset = async () => {
+    // Koppla från bokföringsfilen FÖRST — annars auto-sparas tömningen dit
+    await clearBokforingsfil();
     await db.transaction('rw', db.transactions, db.vouchers, db.accounts, db.attachments, async () => {
       await db.transactions.clear();
       await db.vouchers.clear();

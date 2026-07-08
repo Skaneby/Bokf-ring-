@@ -37,6 +37,9 @@ import {
 import { matchesSearch } from './components/reports/shared';
 import { periodRange, periodLabel, splitByPeriod } from './lib/period';
 import { parseBlocks, parseInline } from './lib/markdown';
+import {
+  getBokforingsfil, setBokforingsfil, clearBokforingsfil, createAutoSaver,
+} from './lib/bokforingsfil';
 import { calcYearEnd, performYearEnd, RESULT_DISPOSITION_ACCOUNT } from './lib/yearEnd';
 import {
   addAttachment, deleteAttachment, deleteAttachmentsForVoucher, attachmentCounts,
@@ -2133,10 +2136,77 @@ async function runTests() {
     });
     assert(prompt.includes('| Konto | Debet | Kredit |'), 'AI-prompt: konteringar som tabell-instruktion');
     assert(prompt.includes('Markdown'), 'AI-prompt: markdown-formatkrav');
-    assert(prompt.includes('Starta ny bokföring') && prompt.includes('Byt bokföring'),
+    assert(prompt.includes('Skapa ny bokföring med databasfil') && prompt.includes('Byt bokföring'),
       'AI-prompt: kan förklara hur man skapar och byter bokföring');
+    assert(prompt.includes('Öppna <namn>') && prompt.includes('.bokforing.json'),
+      'AI-prompt: förklarar att appen minns bokföringsfilen');
     assert(prompt.includes('RADERAR') && prompt.includes('backup'),
       'AI-prompt: varnar att byte raderar data och nämner backup'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 29. BOKFÖRINGSDATABAS SOM FIL
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 29. Bokföringsfil ─────────────────────────────────\n');
+
+  await resetDb();
+  const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  // ── Meta: appen minns bokföringens namn (+ filhandtag) ────────────────
+  assert((await getBokforingsfil()) === null, 'Fil: ingen bokföringsfil i tom databas');
+  await setBokforingsfil({ name: 'Skaneby AB' });
+  { const meta = await getBokforingsfil();
+    assert(meta?.name === 'Skaneby AB' && meta.handle === undefined,
+      'Fil: namn utan handle sparas (utan fil-läget)'); }
+  // Handle är strukturklonbar — testas med platshållarobjekt i Node
+  await setBokforingsfil({ name: 'Skaneby AB', handle: { kind: 'file', name: 'x.bokforing.json' } as never });
+  { const meta = await getBokforingsfil();
+    assert(meta?.handle !== undefined, 'Fil: filreferens persisteras i settings'); }
+  await clearBokforingsfil();
+  assert((await getBokforingsfil()) === null, 'Fil: frånkoppling rensar minnet');
+
+  // ── Auto-sparning: debounce, flush, suspend, felstatus ────────────────
+  { let saves = 0;
+    const saver = createAutoSaver(async () => { saves++; }, 20);
+    saver.markDirty(); saver.markDirty(); saver.markDirty();
+    assert(saves === 0, 'Autospar: inget skrivs direkt (debounce)');
+    await sleep(40);
+    assert(saves === 1, `Autospar: tre ändringar → EN sparning (fick ${saves})`);
+    assert(saver.status === 'saved', 'Autospar: status saved efter sparning');
+
+    saver.suspend();
+    saver.markDirty();
+    await sleep(40);
+    assert(saves === 1, 'Autospar: suspend blockerar sparning (skydd under inläsning/byte)');
+    saver.resume();
+    saver.markDirty();
+    await sleep(40);
+    assert(saves === 2, 'Autospar: resume återupptar');
+
+    await saver.flush();
+    assert(saves === 3, 'Autospar: flush sparar direkt'); }
+
+  { const failing = createAutoSaver(async () => { throw new Error('disk'); }, 5);
+    const statuses: string[] = [];
+    failing.subscribe(st => statuses.push(st));
+    await failing.flush();
+    assert(failing.status === 'error' && statuses.includes('saving'),
+      'Autospar: fel ger status error (visas i sidomenyn)'); }
+
+  // ── Byt bokföring-skyddet: sparfunktionen vägrar utan meta ────────────
+  { let wrote = false;
+    const save = async () => {
+      const current = await getBokforingsfil();
+      if (!current?.handle) return; // samma vakt som i App
+      wrote = true;
+    };
+    await setBokforingsfil({ name: 'X', handle: {} as never });
+    await save();
+    assert(wrote, 'Filskydd: sparar när fil är kopplad');
+    wrote = false;
+    await clearBokforingsfil(); // = "Byt bokföring"
+    await save();
+    assert(!wrote, 'Filskydd: tömd databas skrivs ALDRIG till frånkopplad fil'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

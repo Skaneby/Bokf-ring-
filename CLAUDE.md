@@ -50,11 +50,12 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 508 enhetstester (Node + fake-indexeddb)
+  test.ts              — 522 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
-    Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
+    Welcome.tsx        — skapa bokföring: namn + databasfil (FS Access API) / utan fil / öppna fil / JSON / SIE4
+    OpenBokforing.tsx  — startgate när appen minns en bokföringsfil: "Öppna <namn>" (behörighet + inläsning)
     Dashboard.tsx      — KPI-kort; använd useLiveQuery i toppen (INTE i JSX)
     VoucherEntry.tsx   — bokföringsformulär, momshjälp, OCR-skanning, snabbval (TEMPLATE_LABELS)
     ChartOfAccounts.tsx — kontoplan CRUD; radering blockeras om kontot har transaktioner
@@ -92,6 +93,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     ink2.ts            — INK2R officiella poster 2.1-3.27, VERIFIERADE koder (BAS); INK2S exporteras ej
     sru/               — SRU-export M0: serialize() / parse / Latin-1 / Luhn (deterministisk)
     ai.ts              — AI-inställningar, nyckelvalidering, gateMessage(), buildSystemPrompt(), askAi()
+    bokforingsfil.ts   — bokföringsdatabas som fil: meta i settings, FS Access-handle, createAutoSaver/watchDatabase
     markdown.ts        — säker MD-parser för AI-svar (block+inline, testbar); renderas i components/Markdown.tsx
     utils.ts           — formatCurrency()
 ```
@@ -109,6 +111,11 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
 - **`loadEnv` läser inte `process.env`** — använd `process.env.X ?? env.X` för CI-secrets
 - **Aldrig pusha till gh-pages manuellt** — deploy-pages@v4 hanterar allt
 - **PWA service worker** — använd `registerType: 'autoUpdate'` + `skipWaiting: true` + `clientsClaim: true` — annars fastnar gamla SW och servar stale cache på användarens enhet
+
+### Bokföringsfil
+- **IndexedDB är arbetskopian, filen är databasen** — auto-sparning (debounced 2,5 s) skriver hela backupen till handlen vid varje tabelländring (Dexie-hooks via watchDatabase)
+- **"Byt bokföring" MÅSTE koppla från filen före tömning** — sparfunktionen läser meta per sparning och vägrar skriva utan handle; annars skrivs en tom databas över användarens fil
+- **FileSystemFileHandle är strukturklonbar** och persisteras i settings; behörighet kräver användargest per besök (OpenBokforing-gaten)
 
 ### Databas
 - **Nya standardkonton når inte befintliga användare automatiskt** — `initializeDb` seedar bara vid tom DB. Nya konton MÅSTE också läggas till i `PATCH_ACCOUNTS` (db.ts) så att befintliga databaser patchas vid uppstart. Dexie har inga foreign keys — transaktioner mot saknade konton sparas tyst
@@ -172,7 +179,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 508 enhetstester
+npm run test         # kör 522 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
