@@ -7,7 +7,7 @@
 // manuellt, och justeringen vinner alltid över det bokförda värdet.
 // SRU-fältkoder per rad fylls i vid M2 efter verifiering mot Skatteverket.
 
-import { db, Declaration, DeclarationField, DeclarationSubmission, Voucher, Transaction } from '../db';
+import { db, Declaration, DeclarationField, DeclarationSubmission, DeclarationType, Voucher, Transaction } from '../db';
 
 // ── Blankettdefinition ────────────────────────────────────────────────────────
 
@@ -140,35 +140,43 @@ export function buildNeRows(
 
 // ── Persistens ────────────────────────────────────────────────────────────────
 
-export async function getDeclaration(taxYear: number): Promise<Declaration | undefined> {
-  return db.declarations.where('taxYear').equals(taxYear).filter(d => d.type === 'NE').first();
+export async function getDeclaration(
+  taxYear: number,
+  type: DeclarationType = 'NE',
+): Promise<Declaration | undefined> {
+  return db.declarations.where('taxYear').equals(taxYear).filter(d => d.type === type).first();
 }
 
 export async function saveAdjustment(
   taxYear: number,
   lineId: string,
   field: DeclarationField | null, // null = återställ till bokfört
+  type: DeclarationType = 'NE',
 ): Promise<void> {
   await db.transaction('rw', db.declarations, async () => {
-    const existing = await getDeclaration(taxYear);
+    const existing = await getDeclaration(taxYear, type);
     const fields = { ...(existing?.fields ?? {}) };
     if (field === null) delete fields[lineId];
     else fields[lineId] = field;
     if (existing) {
       await db.declarations.update(existing.id!, { fields, updated_at: Date.now() });
     } else {
-      await db.declarations.add({ taxYear, type: 'NE', fields, status: 'draft', updated_at: Date.now() });
+      await db.declarations.add({ taxYear, type, fields, status: 'draft', updated_at: Date.now() });
     }
   });
 }
 
-export async function setDeclarationStatus(taxYear: number, status: 'draft' | 'klar'): Promise<void> {
+export async function setDeclarationStatus(
+  taxYear: number,
+  status: 'draft' | 'klar',
+  type: DeclarationType = 'NE',
+): Promise<void> {
   await db.transaction('rw', db.declarations, async () => {
-    const existing = await getDeclaration(taxYear);
+    const existing = await getDeclaration(taxYear, type);
     if (existing) {
       await db.declarations.update(existing.id!, { status, updated_at: Date.now() });
     } else {
-      await db.declarations.add({ taxYear, type: 'NE', fields: {}, status, updated_at: Date.now() });
+      await db.declarations.add({ taxYear, type, fields: {}, status, updated_at: Date.now() });
     }
   });
 }
@@ -178,9 +186,10 @@ export async function setSubmissionStep(
   taxYear: number,
   step: keyof DeclarationSubmission,
   timestamp: string | null,
+  type: DeclarationType = 'NE',
 ): Promise<void> {
   await db.transaction('rw', db.declarations, async () => {
-    const existing = await getDeclaration(taxYear);
+    const existing = await getDeclaration(taxYear, type);
     const submission = { ...(existing?.submission ?? {}) };
     if (timestamp === null) delete submission[step];
     else submission[step] = timestamp;
@@ -188,7 +197,7 @@ export async function setSubmissionStep(
       await db.declarations.update(existing.id!, { submission, updated_at: Date.now() });
     } else {
       await db.declarations.add({
-        taxYear, type: 'NE', fields: {}, status: 'draft', submission, updated_at: Date.now(),
+        taxYear, type, fields: {}, status: 'draft', submission, updated_at: Date.now(),
       });
     }
   });
@@ -199,7 +208,12 @@ export async function setSubmissionStep(
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const kr = (n: number) => n.toLocaleString('sv-SE') + ' kr';
 
-export function renderNePrintHtml(taxYear: number, rows: NeRow[], companyName: string): string {
+export function renderNePrintHtml(
+  taxYear: number,
+  rows: NeRow[],
+  companyName: string,
+  blankettTitle = 'NE-bilagan',
+): string {
   const tr = rows
     .filter(r => r.value !== 0 || r.auto !== 0 || r.kind === 'computed')
     .map(r => `<tr class="${r.kind === 'computed' ? 'sum' : ''}">
@@ -208,7 +222,7 @@ export function renderNePrintHtml(taxYear: number, rows: NeRow[], companyName: s
     .join('\n');
   const adjusted = rows.filter(r => r.adjusted);
   return `<!doctype html><html lang="sv"><head><meta charset="utf-8">
-<title>NE-underlag ${taxYear}</title>
+<title>Deklarationsunderlag ${taxYear}</title>
 <style>
   body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color:#0f172a; margin:40px; }
   h1 { font-size:22px; margin:0 0 2px; } .muted { color:#64748b; font-size:13px; }
@@ -219,7 +233,7 @@ export function renderNePrintHtml(taxYear: number, rows: NeRow[], companyName: s
   .foot { margin-top:24px; font-size:12px; color:#64748b; }
   @media print { body { margin:20px; } }
 </style></head><body>
-<h1>Underlag NE-bilagan — beskattningsår ${taxYear}</h1>
+<h1>Underlag ${blankettTitle} — beskattningsår ${taxYear}</h1>
 <div class="muted">${esc(companyName)} · Skapad ${new Date().toISOString().slice(0, 10)} · För manuell inmatning i Skatteverkets e-tjänst</div>
 <table>${tr}</table>
 ${adjusted.length > 0 ? `<div class="foot"><strong>* Manuellt justerade rader:</strong><br>${

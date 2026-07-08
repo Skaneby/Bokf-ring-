@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, Voucher, Transaction } from '../../db';
+import { db, Voucher, Transaction, DeclarationType } from '../../db';
 import { formatCurrency } from '../../lib/utils';
 import {
-  buildNeRows, taxYearsAvailable, getDeclaration, saveAdjustment,
+  buildNeRows, taxYearsAvailable, saveAdjustment,
   setDeclarationStatus, renderNePrintHtml, NeRow,
 } from '../../lib/declaration';
+import { buildInk2Rows } from '../../lib/ink2';
 import { getCompanySettings } from '../../lib/invoice';
 import { SruExportPanel } from './SruExportPanel';
 import { Printer, RotateCcw, Pencil, CheckCircle } from 'lucide-react';
@@ -18,14 +19,15 @@ interface Props {
 export function DeklarationTab({ vouchers, transactions }: Props) {
   const years = taxYearsAvailable(vouchers);
   const [taxYear, setTaxYear] = useState<number>(years[0] ?? new Date().getFullYear());
+  const [decType, setDecType] = useState<DeclarationType>('NE');
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editNote, setEditNote] = useState('');
 
-  // Reaktiv deklaration (justeringar + status) för valt år
+  // Reaktiv deklaration (justeringar + status) för valt år och blankettyp
   const declaration = useLiveQuery(
-    () => db.declarations.where('taxYear').equals(taxYear).filter(d => d.type === 'NE').first(),
-    [taxYear],
+    () => db.declarations.where('taxYear').equals(taxYear).filter(d => d.type === decType).first(),
+    [taxYear, decType],
   );
 
   // Om valt år försvinner (t.ex. all data för året raderad) — hoppa till senaste
@@ -37,10 +39,17 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
     return <p className="text-sm text-slate-400">Inga verifikationer ännu — det finns inget att deklarera.</p>;
   }
 
-  const rows = buildNeRows(vouchers, transactions, taxYear, declaration?.fields ?? {});
+  const rows = decType === 'NE'
+    ? buildNeRows(vouchers, transactions, taxYear, declaration?.fields ?? {})
+    : buildInk2Rows(vouchers, transactions, taxYear, declaration?.fields ?? {});
   const isKlar = declaration?.status === 'klar';
-  const r47 = rows.find(r => r.id === 'R47')!;
-  const r48 = rows.find(r => r.id === 'R48')!;
+
+  // Slutresultat per blankettyp (för summeringskortet)
+  const finalPos = decType === 'NE' ? rows.find(r => r.id === 'R47')! : rows.find(r => r.id === 'JR')!;
+  const finalNegValue = decType === 'NE'
+    ? rows.find(r => r.id === 'R48')!.value
+    : Math.max(0, -finalPos.value);
+  const finalPosValue = decType === 'NE' ? finalPos.value : Math.max(0, finalPos.value);
 
   const startEdit = (row: NeRow) => {
     setEditing(row.id);
@@ -51,12 +60,12 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
   const commitEdit = async (lineId: string) => {
     const value = Math.round(parseFloat(editValue));
     if (Number.isNaN(value)) { setEditing(null); return; }
-    await saveAdjustment(taxYear, lineId, { value, note: editNote.trim() || undefined });
+    await saveAdjustment(taxYear, lineId, { value, note: editNote.trim() || undefined }, decType);
     setEditing(null);
   };
 
   const resetLine = async (lineId: string) => {
-    await saveAdjustment(taxYear, lineId, null);
+    await saveAdjustment(taxYear, lineId, null, decType);
     setEditing(null);
   };
 
@@ -64,7 +73,10 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
     const company = await getCompanySettings();
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write(renderNePrintHtml(taxYear, rows, company.name || 'Enskild firma'));
+    w.document.write(renderNePrintHtml(
+      taxYear, rows, company.name || 'Företaget',
+      decType === 'NE' ? 'NE-bilagan' : 'INK2 (förenklat räkenskapsschema)',
+    ));
     w.document.close();
     w.focus();
     setTimeout(() => w.print(), 250);
@@ -84,6 +96,17 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
             {years.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
+        <div>
+          <label className="mb-1 block text-xs text-slate-500">Blankett</label>
+          <select
+            value={decType}
+            onChange={e => { setDecType(e.target.value as DeclarationType); setEditing(null); }}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+          >
+            <option value="NE">NE — enskild firma</option>
+            <option value="INK2">INK2 — aktiebolag</option>
+          </select>
+        </div>
         <span className="flex-1" />
         <button
           onClick={handlePrint}
@@ -92,7 +115,7 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
           <Printer className="h-4 w-4" /> Skriv ut underlag
         </button>
         <button
-          onClick={() => setDeclarationStatus(taxYear, isKlar ? 'draft' : 'klar')}
+          onClick={() => setDeclarationStatus(taxYear, isKlar ? 'draft' : 'klar', decType)}
           className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             isKlar
               ? 'bg-emerald-600 text-white hover:bg-emerald-700'
@@ -105,9 +128,15 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
       </div>
 
       <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-        Blankettvyn följer NE-bilagans radnummer (R1–R48) för manuell inmatning i Skatteverkets e-tjänst.
-        Kontomappningen är förenklad — kontrollera beloppen, och justera vid behov direkt i tabellen.
-        Schablonavdrag för egenavgifter (25&nbsp;%) görs i e-tjänsten. SRU-filexport kommer i nästa steg.
+        {decType === 'NE' ? (
+          <>Blankettvyn följer NE-bilagans radnummer (R1–R48) för manuell inmatning i Skatteverkets e-tjänst.
+          Kontomappningen är förenklad — kontrollera beloppen, och justera vid behov direkt i tabellen.
+          Schablonavdrag för egenavgifter (25&nbsp;%) görs i e-tjänsten.</>
+        ) : (
+          <>Förenklat räkenskapsschema (INK2R) och skattemässiga justeringar (INK2S) för aktiebolag.
+          Posterna är aggregerade kontointervall — inte blankettens officiella postnumrering.
+          Kontrollera mot blanketten och justera vid behov direkt i tabellen.</>
+        )}
       </div>
 
       {/* Blankettrader */}
@@ -151,8 +180,8 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
                   />
                 ) : (
                   <span className={`col-start-2 sm:col-start-4 text-right tabular-nums text-sm ${
-                    isComputed
-                      ? row.id === 'R48' && row.value > 0 ? 'text-red-600' : 'text-slate-900'
+                    isComputed && ((row.id === 'R48' && row.value > 0) || row.value < 0)
+                      ? 'text-red-600'
                       : 'text-slate-900'
                   }`}>
                     {formatCurrency(row.value)}
@@ -211,25 +240,31 @@ export function DeklarationTab({ vouchers, transactions }: Props) {
         })}
       </div>
 
-      {/* INK1-summering */}
+      {/* Resultatsummering */}
       <div className={`flex items-center justify-between rounded-xl border-2 p-5 ${
-        r47.value > 0 ? 'border-emerald-600 bg-emerald-50' : r48.value > 0 ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-white'
+        finalPosValue > 0 ? 'border-emerald-600 bg-emerald-50' : finalNegValue > 0 ? 'border-red-500 bg-red-50' : 'border-slate-300 bg-white'
       }`}>
         <div>
           <p className="font-bold text-slate-900">
-            {r47.value > 0 ? 'Överskott av näringsverksamhet' : r48.value > 0 ? 'Underskott av näringsverksamhet' : 'Nollresultat'}
+            {finalPosValue > 0
+              ? (decType === 'NE' ? 'Överskott av näringsverksamhet' : 'Skattemässigt överskott')
+              : finalNegValue > 0
+                ? (decType === 'NE' ? 'Underskott av näringsverksamhet' : 'Skattemässigt underskott')
+                : 'Nollresultat'}
           </p>
           <p className="text-sm text-slate-500">
-            {r47.value > 0 ? 'Förs till INK1 ruta 10.1' : r48.value > 0 ? 'Förs till INK1 ruta 10.2' : 'Ingen ruta att fylla i på INK1'}
+            {decType === 'NE'
+              ? (finalPosValue > 0 ? 'Förs till INK1 ruta 10.1' : finalNegValue > 0 ? 'Förs till INK1 ruta 10.2' : 'Ingen ruta att fylla i på INK1')
+              : 'Förs till INK2 första sidan (skattemässigt resultat)'}
           </p>
         </div>
-        <span className={`text-2xl font-bold tabular-nums ${r48.value > 0 ? 'text-red-600' : 'text-emerald-700'}`}>
-          {formatCurrency(r47.value > 0 ? r47.value : r48.value)}
+        <span className={`text-2xl font-bold tabular-nums ${finalNegValue > 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+          {formatCurrency(finalPosValue > 0 ? finalPosValue : finalNegValue)}
         </span>
       </div>
 
       {/* SRU-export + inlämningsguide */}
-      <SruExportPanel taxYear={taxYear} rows={rows} declaration={declaration} />
+      <SruExportPanel taxYear={taxYear} rows={rows} declaration={declaration} type={decType} />
     </div>
   );
 }

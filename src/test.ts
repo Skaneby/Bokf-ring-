@@ -29,6 +29,7 @@ import {
   setDeclarationStatus, setSubmissionStep, renderNePrintHtml,
 } from './lib/declaration';
 import { buildNeSruPackage, NE_FORM_CODE } from './lib/neSru';
+import { buildInk2Rows, buildInk2SruPackage, INK2R_FORM_CODE, INK2S_FORM_CODE } from './lib/ink2';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1566,6 +1567,101 @@ async function runTests() {
     assert(dec?.submission?.uploadedAt === undefined && dec?.submission?.exportedAt === '2026-07-08',
       'Inlämning: steg kan ångras utan att röra andra steg');
     assert(dec?.fields.R12?.value === 500, 'Inlämning: justeringar orörda av submission-uppdateringar'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 21. INK2 — AKTIEBOLAG (M3)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 21. INK2 aktiebolag ───────────────────────────────\n');
+
+  await resetDb();
+
+  // År 2024: aktiekapital sätts in (ska ingå i balansen 2025 men inte resultatet)
+  await addVoucher('2024-01-10', 'Aktiekapital', [
+    { accountId: 1930, amount: 25000 },
+    { accountId: 2010, amount: -25000 },
+  ]);
+  // År 2025: försäljning 200 000 + moms, kostnader 80 000, kundfordran 50 000
+  await addVoucher('2025-02-01', 'Försäljning kontant', [
+    { accountId: 1930, amount: 250000 },
+    { accountId: 3000, amount: -200000 },
+    { accountId: 2610, amount: -50000 },
+  ]);
+  await addVoucher('2025-03-01', 'Kundfaktura obetald', [
+    { accountId: 1510, amount: 50000 },
+    { accountId: 3000, amount: -40000 },
+    { accountId: 2610, amount: -10000 },
+  ]);
+  await addVoucher('2025-04-01', 'Externa kostnader', [
+    { accountId: 6110, amount: 80000 },
+    { accountId: 1930, amount: -80000 },
+  ]);
+
+  const abVouchers = await db.vouchers.toArray();
+  const abTxs      = await db.transactions.toArray();
+
+  { const rows = buildInk2Rows(abVouchers, abTxs, 2025);
+    const get = (id: string) => rows.find(r => r.id === id)!;
+    // Resultat: enbart 2025
+    assert(near(get('I1').value, 240000), `INK2 I1 nettoomsättning = 240 000 (fick ${get('I1').value})`);
+    assert(near(get('K2').value, 80000),  `INK2 K2 externa kostnader = 80 000 (fick ${get('K2').value})`);
+    assert(near(get('RR').value, 160000), `INK2 RR årets resultat = 160 000 (fick ${get('RR').value})`);
+    // Balans: ackumulerat inkl. 2024 (aktiekapital + bank)
+    assert(near(get('T5').value, 25000 + 250000 - 80000), `INK2 T5 kassa/bank inkl. föregående år (fick ${get('T5').value})`);
+    assert(near(get('T3').value, 50000), `INK2 T3 kundfordringar = 50 000 (fick ${get('T3').value})`);
+    assert(near(get('E1').value, 25000), `INK2 E1 eget kapital = 25 000 (fick ${get('E1').value})`);
+    assert(near(get('E4').value, 60000), `INK2 E4 kortfristiga skulder (moms) = 60 000 (fick ${get('E4').value})`);
+    // Balansekvation: TS = ES (ES inkluderar årets resultat)
+    assert(near(get('TS').value, get('ES').value),
+      `INK2 balanserar: TS ${get('TS').value} = ES ${get('ES').value}`);
+    // INK2S: J1 = RR; JR utan justeringar = J1
+    assert(near(get('J1').value, 160000), 'INK2 J1 bokfört resultat = RR');
+    assert(near(get('JR').value, 160000), 'INK2 JR skattemässigt resultat utan justeringar = J1'); }
+
+  // ── Skattemässiga justeringar ──────────────────────────────────────────
+  { const rows = buildInk2Rows(abVouchers, abTxs, 2025, {
+      J2: { value: 5000, note: 'Representation ej avdragsgill' },
+      J3: { value: 2000 },
+    });
+    const get = (id: string) => rows.find(r => r.id === id)!;
+    assert(near(get('JR').value, 160000 + 5000 - 2000),
+      `INK2 JR = 163 000 med justeringar (fick ${get('JR').value})`); }
+
+  // ── SRU-paket med två blanketter ───────────────────────────────────────
+  { const rows = buildInk2Rows(abVouchers, abTxs, 2025);
+    const pkg = buildInk2SruPackage({
+      taxYear: 2025, rows,
+      company: { ...DEFAULT_COMPANY, name: 'Exempel AB', orgnr: '165560000167' },
+      createdAt: { date: '20260708', time: '170000' },
+      program: { name: 'LokalBokforing', version: '2.0' },
+    });
+    assert(pkg.blanketter.length === 2, 'INK2-SRU: två blanketter (INK2R + INK2S)');
+    assert(pkg.blanketter[0].formCode === INK2R_FORM_CODE(2025), 'INK2-SRU: INK2R-blankettkod');
+    assert(pkg.blanketter[1].formCode === INK2S_FORM_CODE(2025), 'INK2-SRU: INK2S-blankettkod');
+    const r = pkg.blanketter[0];
+    assert(r.uppgifter.some(u => u.fieldCode === '7011' && u.value === '2025-01-01'), 'INK2-SRU: period på INK2R');
+    assert(r.uppgifter.some(u => u.fieldCode === '7221' && u.value === '240000'), 'INK2-SRU: I1 → 7221');
+    // Nollrader utelämnas (t.ex. varulager T2)
+    assert(!r.uppgifter.some(u => u.fieldCode === '7202'), 'INK2-SRU: nollrad (T2 varulager) utelämnas');
+    const files = serialize(pkg);
+    const text = decodeLatin1(files.blanketter);
+    assert(text.includes('#BLANKETT INK2R-2025P1') && text.includes('#BLANKETT INK2S-2025P1'),
+      'INK2-SRU: båda blanketterna serialiseras i samma fil');
+    assert((text.match(/#FIL_SLUT/g) ?? []).length === 1, 'INK2-SRU: exakt en #FIL_SLUT'); }
+
+  // ── Typad persistens: NE och INK2 samexisterar per år ─────────────────
+  await saveAdjustment(2025, 'J2', { value: 5000 }, 'INK2');
+  await saveAdjustment(2025, 'R12', { value: 111 }, 'NE');
+  { const ink2 = await getDeclaration(2025, 'INK2');
+    const ne   = await getDeclaration(2025, 'NE');
+    assert(ink2?.fields.J2?.value === 5000 && ink2.type === 'INK2', 'Persistens: INK2-justering på egen post');
+    assert(ne?.fields.R12?.value === 111 && ne.type === 'NE', 'Persistens: NE-justering separat från INK2');
+    assert(ink2?.id !== ne?.id, 'Persistens: NE och INK2 är olika deklarationsposter'); }
+  await setSubmissionStep(2025, 'exportedAt', '2026-07-08', 'INK2');
+  { const ink2 = await getDeclaration(2025, 'INK2');
+    const ne   = await getDeclaration(2025, 'NE');
+    assert(ink2?.submission?.exportedAt === '2026-07-08', 'Persistens: INK2-inlämningssteg spåras');
+    assert(ne?.submission?.exportedAt === undefined, 'Persistens: NE-inlämning opåverkad av INK2'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

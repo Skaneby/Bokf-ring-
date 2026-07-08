@@ -69,10 +69,12 @@ export interface DeclarationSubmission {
   signedAt?: string;    // användaren bekräftar signering på Mina sidor
 }
 
+export type DeclarationType = 'NE' | 'INK2';
+
 export interface Declaration {
   id?: number;
   taxYear: number;              // beskattningsår
-  type: 'NE';                   // fler blankettyper i M3 (INK2 …)
+  type: DeclarationType;        // NE (enskild firma) eller INK2 (aktiebolag)
   fields: Record<string, DeclarationField>; // lineId ('R1' …) → justering
   status: 'draft' | 'klar';
   submission?: DeclarationSubmission;

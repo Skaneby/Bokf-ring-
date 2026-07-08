@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Declaration } from '../../db';
+import React, { useState, useEffect } from 'react';
+import { Declaration, DeclarationType } from '../../db';
 import { NeRow, setSubmissionStep } from '../../lib/declaration';
 import { getCompanySettings } from '../../lib/invoice';
 import {
@@ -7,6 +7,7 @@ import {
   SRU_FILENAME_INFO, SRU_FILENAME_BLANKETTER,
 } from '../../lib/sru';
 import { buildNeSruPackage, NE_FALTKODER_VERIFIED } from '../../lib/neSru';
+import { buildInk2SruPackage } from '../../lib/ink2';
 import { FileDown, ExternalLink, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const APP_VERSION = { name: 'LokalBokforing', version: '2.0' };
@@ -27,12 +28,16 @@ interface Props {
   taxYear: number;
   rows: NeRow[];
   declaration: Declaration | undefined;
+  type: DeclarationType;
 }
 
-export function SruExportPanel({ taxYear, rows, declaration }: Props) {
+export function SruExportPanel({ taxYear, rows, declaration, type }: Props) {
   const [confirmed, setConfirmed] = useState(false);
   const [files, setFiles] = useState<SruFiles | null>(null);
   const [error, setError] = useState('');
+
+  // Genererade filer gäller bara det år/den blankett de skapades för
+  useEffect(() => { setFiles(null); setError(''); }, [taxYear, type]);
 
   const sub = declaration?.submission ?? {};
   const today = () => new Date().toISOString().slice(0, 10);
@@ -48,16 +53,17 @@ export function SruExportPanel({ taxYear, rows, declaration }: Props) {
       toIdNumber12(company.orgnr); // kastar med tydligt fel vid ogiltigt nummer
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, '0');
-      const pkg = buildNeSruPackage({
+      const input = {
         taxYear, rows, company,
         createdAt: {
           date: `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`,
           time: `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`,
         },
         program: APP_VERSION,
-      });
+      };
+      const pkg = type === 'NE' ? buildNeSruPackage(input) : buildInk2SruPackage(input);
       setFiles(serialize(pkg));
-      await setSubmissionStep(taxYear, 'exportedAt', today());
+      await setSubmissionStep(taxYear, 'exportedAt', today(), type);
     } catch (e) {
       setError(e instanceof SruError
         ? e.message
@@ -153,7 +159,7 @@ export function SruExportPanel({ taxYear, rows, declaration }: Props) {
           </p>
           {sub.exportedAt && !sub.uploadedAt && (
             <button
-              onClick={() => setSubmissionStep(taxYear, 'uploadedAt', today())}
+              onClick={() => setSubmissionStep(taxYear, 'uploadedAt', today(), type)}
               className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <CheckCircle className="h-4 w-4" /> Markera som uppladdad
@@ -173,7 +179,7 @@ export function SruExportPanel({ taxYear, rows, declaration }: Props) {
           </p>
           {sub.uploadedAt && !sub.signedAt && (
             <button
-              onClick={() => setSubmissionStep(taxYear, 'signedAt', today())}
+              onClick={() => setSubmissionStep(taxYear, 'signedAt', today(), type)}
               className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
             >
               <CheckCircle className="h-4 w-4" /> Markera som signerad
