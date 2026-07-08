@@ -3,29 +3,26 @@
 // se docs/deklarationsmodul-spec.md §4.2 (domän ≠ export).
 
 import { SruPackage } from './sru';
-import { NeRow } from './declaration';
+import { NeRow, NE_LINES } from './declaration';
 import { CompanySettings } from './invoice';
 
-// ⚠️ FÄLTKODSTABELL — PRELIMINÄR.
+// FÄLTKODER: bokföringsdelen (B1–B16, R1–R11) är VERIFIERAD mot BAS
+// kopplingstabell "NE — förenklat årsbokslut" (B1=7200 … R11=7440).
 // 7011/7012 (räkenskapsårets början/slut) är belagda i Skatteverkets exempel.
-// R-radernas koder nedan är PLATSHÅLLARE enligt schemat R{n} → 7100+n och
-// MÅSTE ersättas med verifierade koder ur SKV 269 / aktuell fältkodslista
-// innan skarp inlämning. UI:t spärrar exporten bakom en bekräftelse och
-// hänvisar till Skatteverkets testtjänst så länge VERIFIED är false.
-export const NE_FALTKODER_VERIFIED = false;
+// Skattemässiga justeringar (R12–R48) saknar verifierade koder och
+// EXPORTERAS INTE — de kompletteras i Skatteverkets e-tjänst efter uppladdning.
+// Blankettkodens årsversion (P-suffix) ska fortsatt kontrolleras i testtjänsten.
+export const NE_FALTKODER_VERIFIED = true;
 
 export const NE_FORM_CODE = (taxYear: number) => `NE-${taxYear}P1`; // VERIFIERAS: årsversion/P-suffix
 
-const FIELD_PERIOD_FROM = '7011'; // räkenskapsårets början (belagd)
-const FIELD_PERIOD_TO   = '7012'; // räkenskapsårets slut (belagd)
+const FIELD_PERIOD_FROM = '7011'; // räkenskapsårets början
+const FIELD_PERIOD_TO   = '7012'; // räkenskapsårets slut
 
-// R{n} → 7100+n — PLATSHÅLLARE (VERIFIERAS)
-const NE_LINE_CODE: Record<string, string> = {
-  R1: '7101', R2: '7102', R3: '7103', R4: '7104', R5: '7105',
-  R6: '7106', R7: '7107', R8: '7108', R9: '7109', R10: '7110',
-  R11: '7111', R12: '7112', R13: '7113', R43: '7143',
-  R47: '7147', R48: '7148',
-};
+// Koderna bor i blankettdefinitionen (NE_LINES) — kan aldrig hamna ur synk
+const NE_LINE_CODE: Record<string, string> = Object.fromEntries(
+  NE_LINES.filter(l => l.sruCode).map(l => [l.id, l.sruCode!]),
+);
 
 export interface NeSruInput {
   taxYear: number;

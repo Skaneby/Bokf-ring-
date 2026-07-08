@@ -12,8 +12,10 @@ import { db, Declaration, DeclarationField, DeclarationSubmission, DeclarationTy
 // ── Blankettdefinition ────────────────────────────────────────────────────────
 
 export type NeLineKind =
-  | 'revenue'   // intäktsrad: visas positivt från kreditsaldo
-  | 'expense'   // kostnadsrad: visas positivt från debetsaldo
+  | 'revenue'   // intäktsrad (årets transaktioner): visas positivt från kreditsaldo
+  | 'expense'   // kostnadsrad (årets transaktioner): visas positivt från debetsaldo
+  | 'asset'     // balanspost (ackumulerat t.o.m. året): debetsaldo positivt
+  | 'liability' // balanspost (ackumulerat): kreditsaldo positivt (EK/skulder)
   | 'manual'    // ingår i beräkningen men saknar automappning (anges för hand)
   | 'computed'; // summarad — kan inte justeras
 
@@ -21,31 +23,66 @@ export interface NeLineDef {
   id: string;
   label: string;
   kind: NeLineKind;
-  accounts?: { from: number; to: number }[]; // VERIFIERAS — förenklad mappning
-  sruCode?: string; // fylls i vid M2 efter verifiering mot SKV
+  accounts?: { from: number; to: number }[]; // förenklade intervall enligt BAS kopplingstabell
+  sruCode?: string; // VERIFIERAD fältkod ur BAS kopplingstabell NE (förenklat årsbokslut)
 }
 
+// Fältkoder och kontointervall enligt BAS kopplingstabell "NE — Inkomst av
+// näringsverksamhet, Enskilda näringsidkare (förenklat årsbokslut)".
+// Justeringsraderna R12+ ingår inte i kopplingstabellen och saknar därför
+// verifierad fältkod (exporteras inte i SRU-filen — kompletteras i e-tjänsten).
 export const NE_LINES: NeLineDef[] = [
+  // ── Balansräkning (B) — värderas per bokslutsdagen ──
+  { id: 'B1',  label: 'Immateriella anläggningstillgångar', kind: 'asset', sruCode: '7200',
+    accounts: [{ from: 1000, to: 1099 }] },
+  { id: 'B2',  label: 'Byggnader och markanläggningar', kind: 'asset', sruCode: '7210',
+    accounts: [{ from: 1100, to: 1129 }, { from: 1140, to: 1179 }, { from: 1190, to: 1199 }] },
+  { id: 'B3',  label: 'Mark och andra tillgångar som inte får skrivas av', kind: 'asset', sruCode: '7211',
+    accounts: [{ from: 1130, to: 1139 }, { from: 1180, to: 1189 }] },
+  { id: 'B4',  label: 'Maskiner och inventarier', kind: 'asset', sruCode: '7212',
+    accounts: [{ from: 1200, to: 1299 }] },
+  { id: 'B5',  label: 'Övriga anläggningstillgångar', kind: 'asset', sruCode: '7213',
+    accounts: [{ from: 1300, to: 1399 }] },
+  { id: 'B6',  label: 'Varulager', kind: 'asset', sruCode: '7240',
+    accounts: [{ from: 1400, to: 1499 }] },
+  { id: 'B7',  label: 'Kundfordringar', kind: 'asset', sruCode: '7250',
+    accounts: [{ from: 1500, to: 1599 }] },
+  { id: 'B8',  label: 'Övriga fordringar', kind: 'asset', sruCode: '7260',
+    accounts: [{ from: 1600, to: 1799 }] },
+  { id: 'B9',  label: 'Kassa och bank', kind: 'asset', sruCode: '7280',
+    accounts: [{ from: 1900, to: 1999 }] },
+  { id: 'B10', label: 'Eget kapital', kind: 'liability', sruCode: '7300',
+    accounts: [{ from: 2000, to: 2099 }] },
+  { id: 'B13', label: 'Låneskulder', kind: 'liability', sruCode: '7380',
+    accounts: [{ from: 2300, to: 2399 }] },
+  { id: 'B14', label: 'Skatteskulder (inkl. moms)', kind: 'liability', sruCode: '7381',
+    accounts: [{ from: 2500, to: 2799 }] },
+  { id: 'B15', label: 'Leverantörsskulder', kind: 'liability', sruCode: '7382',
+    accounts: [{ from: 2440, to: 2449 }] },
+  { id: 'B16', label: 'Övriga skulder', kind: 'liability', sruCode: '7383',
+    accounts: [{ from: 2400, to: 2439 }, { from: 2450, to: 2499 }, { from: 2800, to: 2999 }] },
+  // ── Resultaträkning (R) — årets transaktioner ──
   { id: 'R1',  label: 'Försäljning och utfört arbete samt övriga momspliktiga intäkter',
-    kind: 'revenue', accounts: [{ from: 3000, to: 3039 }, { from: 3041, to: 3799 }] },
+    kind: 'revenue', sruCode: '7400', accounts: [{ from: 3000, to: 3039 }, { from: 3041, to: 3799 }] },
   { id: 'R2',  label: 'Momsfria intäkter',
-    kind: 'revenue', accounts: [{ from: 3040, to: 3040 }, { from: 3800, to: 3999 }] },
-  { id: 'R3',  label: 'Bil- och bostadsförmån m.m.', kind: 'manual' },
+    kind: 'revenue', sruCode: '7401', accounts: [{ from: 3040, to: 3040 }, { from: 3800, to: 3999 }] },
+  { id: 'R3',  label: 'Bil- och bostadsförmån m.m.', kind: 'manual', sruCode: '7402' },
   { id: 'R4',  label: 'Ränteintäkter m.m.',
-    kind: 'revenue', accounts: [{ from: 8000, to: 8399 }] },
+    kind: 'revenue', sruCode: '7403', accounts: [{ from: 8000, to: 8399 }] },
   { id: 'R5',  label: 'Varor, material och tjänster',
-    kind: 'expense', accounts: [{ from: 4000, to: 4999 }] },
+    kind: 'expense', sruCode: '7500', accounts: [{ from: 4000, to: 4999 }] },
   { id: 'R6',  label: 'Övriga externa kostnader',
-    kind: 'expense', accounts: [{ from: 5000, to: 6999 }] },
+    kind: 'expense', sruCode: '7501', accounts: [{ from: 5000, to: 6999 }] },
   { id: 'R7',  label: 'Anställd personal',
-    kind: 'expense', accounts: [{ from: 7000, to: 7699 }] },
+    kind: 'expense', sruCode: '7502', accounts: [{ from: 7000, to: 7699 }] },
   { id: 'R8',  label: 'Räntekostnader m.m.',
-    kind: 'expense', accounts: [{ from: 8400, to: 8421 }, { from: 8423, to: 8799 }] },
-  { id: 'R9',  label: 'Avskrivningar byggnader och markanläggningar',
-    kind: 'expense', accounts: [{ from: 7810, to: 7829 }] },
-  { id: 'R10', label: 'Avskrivningar maskiner och inventarier',
-    kind: 'expense', accounts: [{ from: 7830, to: 7899 }, { from: 7800, to: 7809 }] },
-  { id: 'R11', label: 'Bokfört resultat', kind: 'computed' },
+    kind: 'expense', sruCode: '7503', accounts: [{ from: 8400, to: 8421 }, { from: 8423, to: 8799 }] },
+  { id: 'R9',  label: 'Avskrivningar och nedskrivningar byggnader och markanläggningar',
+    kind: 'expense', sruCode: '7504', accounts: [{ from: 7820, to: 7829 }] },
+  { id: 'R10', label: 'Avskrivningar och nedskrivningar maskiner/inventarier och immateriella tillgångar',
+    kind: 'expense', sruCode: '7505', accounts: [{ from: 7800, to: 7819 }, { from: 7830, to: 7899 }] },
+  { id: 'R11', label: 'Bokfört resultat', kind: 'computed', sruCode: '7440' },
+  // ── Skattemässiga justeringar — fältkoder ej i kopplingstabellen (exporteras ej) ──
   { id: 'R12', label: 'Bokförda kostnader som inte ska dras av', kind: 'manual' },
   { id: 'R13', label: 'Bokförda intäkter som inte ska tas upp', kind: 'manual' },
   // Egenavgifter: avsättningen bokförs på 8422 i appen och dras som påförd
@@ -87,18 +124,22 @@ export function buildNeRows(
   taxYear: number,
   adjustments: NeAdjustments = {},
 ): NeRow[] {
-  const yearVouchers = new Set(
-    vouchers.filter(v => v.date.slice(0, 4) === String(taxYear)).map(v => v.id!),
-  );
-  const bal = new Map<number, number>();
+  const voucherYear = new Map(vouchers.map(v => [v.id!, parseInt(v.date.slice(0, 4), 10)]));
+
+  // Resultatrader (R) avser årets transaktioner; balansposter (B) värderas
+  // per bokslutsdagen = ackumulerat saldo t.o.m. beskattningsåret
+  const balYear = new Map<number, number>();
+  const balCum  = new Map<number, number>();
   for (const t of transactions) {
-    if (!yearVouchers.has(t.voucherId)) continue;
-    bal.set(t.accountId, (bal.get(t.accountId) ?? 0) + t.amount);
+    const year = voucherYear.get(t.voucherId);
+    if (year === undefined || year > taxYear) continue;
+    balCum.set(t.accountId, (balCum.get(t.accountId) ?? 0) + t.amount);
+    if (year === taxYear) balYear.set(t.accountId, (balYear.get(t.accountId) ?? 0) + t.amount);
   }
 
-  const sumRanges = (ranges: { from: number; to: number }[]): number => {
+  const sumRanges = (map: Map<number, number>, ranges: { from: number; to: number }[]): number => {
     let total = 0;
-    for (const [accountId, saldo] of bal) {
+    for (const [accountId, saldo] of map) {
       if (ranges.some(r => accountId >= r.from && accountId <= r.to)) total += saldo;
     }
     return total;
@@ -108,8 +149,10 @@ export function buildNeRows(
   const rows: NeRow[] = NE_LINES.map(def => {
     let auto = 0;
     if (def.accounts) {
-      const saldo = sumRanges(def.accounts);
-      auto = Math.round(def.kind === 'revenue' ? -saldo : saldo); // hela kronor
+      const isBalance = def.kind === 'asset' || def.kind === 'liability';
+      const saldo = sumRanges(isBalance ? balCum : balYear, def.accounts);
+      const creditPositive = def.kind === 'revenue' || def.kind === 'liability';
+      auto = Math.round(creditPositive ? -saldo : saldo); // hela kronor
     }
     const adj = adjustments[def.id];
     return {

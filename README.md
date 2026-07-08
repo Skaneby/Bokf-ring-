@@ -20,7 +20,7 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 - **AI-hjälp** — inbyggd chattbot som kan svensk skatt, juridik och bokföring och känner din kontoplan; kräver din egen (gratis) Gemini-nyckel som valideras och lagras lokalt
 - **Onboarding** — pedagogisk 8-stegsguide vid första start, alltid tillgänglig via "Visa guiden"
 - **PWA** — installeras på hemskärmen, uppdateras automatiskt
-- **Deklaration via fil** *(beta)* — NE-bilagan (enskild firma) och INK2R/INK2S (aktiebolag) exporteras som SRU-filer (INFO.SRU + BLANKETTER.SRU) med inlämningsguide; fältkoder preliminära tills verifiering mot Skatteverkets testtjänst
+- **Deklaration via fil** *(beta)* — NE-bilagan (enskild firma) och INK2R/INK2S (aktiebolag) exporteras som SRU-filer (INFO.SRU + BLANKETTER.SRU) med inlämningsguide; NE:s fältkoder verifierade mot BAS kopplingstabell, INK2 preliminär
 
 ## Kom igång lokalt
 
@@ -36,7 +36,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test       # 415 enhetstester (tsx + fake-indexeddb)
+npm run test       # 422 enhetstester (tsx + fake-indexeddb)
 npm run lint       # typkontroll (tsc --noEmit)
 npm run build      # produktionsbygge till dist/
 ```

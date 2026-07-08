@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v3 (accounts, vouchers, transactions, invoices, settings, declarations) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 415 enhetstester (Node + fake-indexeddb)
+  test.ts              — 422 enhetstester (Node + fake-indexeddb)
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
     Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
@@ -82,8 +82,8 @@ src/
     tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
     geminiImport.ts    — parseGeminiJson() / validateRows() / resolveAccount() / bookDraftRows()
     invoice.ts         — nummerserie, invoiceTotals(), bokning (faktura/kontant), renderInvoiceHtml()
-    declaration.ts     — NE-blankettrader: buildNeRows() / justeringar / inlämningssteg / renderNePrintHtml()
-    neSru.ts           — mappning NE-rader → SruPackage; fältkodstabell (PRELIMINÄR — VERIFIERAS)
+    declaration.ts     — NE-blankettvy: B1-B16 (ackumulerat) + R1-R48 (år), justeringar, inlämningssteg, utskrift
+    neSru.ts           — NE→SRU; B/R-fältkoder VERIFIERADE (BAS kopplingstabell); justeringsrader exporteras ej
     ink2.ts            — INK2R/INK2S för AB: buildInk2Rows() / buildInk2SruPackage() (PRELIMINÄR)
     sru/               — SRU-export M0: serialize() / parse / Latin-1 / Luhn (deterministisk)
     ai.ts              — AI-inställningar, nyckelvalidering, gateMessage(), buildSystemPrompt(), askAi()
@@ -164,7 +164,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 415 enhetstester
+npm run test         # kör 422 enhetstester
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
 ```

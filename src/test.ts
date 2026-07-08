@@ -1434,13 +1434,24 @@ async function runTests() {
     assert(near(get('R8').value, 0), `NE R8 räntekostnader = 0 — 8422 exkluderad (fick ${get('R8').value})`);
     assert(near(get('R47').value, 63000 - 10000), `NE R47 överskott = 53 000 (fick ${get('R47').value})`);
     assert(near(get('R48').value, 0), 'NE R48 underskott = 0 vid överskott');
+    // Balansposter (ackumulerat per bokslutsdagen)
+    assert(near(get('B9').value, 88000), `NE B9 kassa/bank = 88 000 (fick ${get('B9').value})`);
+    assert(near(get('B14').value, 35000), `NE B14 skatteskulder (moms 2610 + 2514) = 35 000 (fick ${get('B14').value})`);
+    assert(near(get('B10').value, 0), 'NE B10 eget kapital = 0 utan EK-transaktioner');
+    // Verifierade fältkoder ur BAS kopplingstabell
+    assert(get('R1').sruCode === '7400' && get('R11').sruCode === '7440' && get('B9').sruCode === '7280',
+      'NE: fältkoder enligt BAS kopplingstabell (R1=7400, R11=7440, B9=7280)');
+    assert(get('R43').sruCode === undefined, 'NE: R43 saknar fältkod (ej i kopplingstabellen)');
     // Momskonton (2610) påverkar aldrig NE-raderna
     assert(rows.every(r => r.kind === 'computed' || r.adjusted === false), 'NE: inga rader justerade i grundläge'); }
 
   // ── Årsfiltrering ──────────────────────────────────────────────────────
   { const rows2026 = buildNeRows(neVouchers, neTxs, 2026);
     const r1 = rows2026.find(r => r.id === 'R1')!;
-    assert(near(r1.value, 50000), `NE 2026: R1 = 50 000 — åren blandas inte (fick ${r1.value})`); }
+    assert(near(r1.value, 50000), `NE 2026: R1 = 50 000 — åren blandas inte (fick ${r1.value})`);
+    // Balansen 2026 inkluderar däremot tidigare år (ackumulerat)
+    const b9 = rows2026.find(r => r.id === 'B9')!;
+    assert(near(b9.value, 88000 + 50000), `NE 2026: B9 ackumulerar föregående år (fick ${b9.value})`); }
 
   // ── Manuell justering + omräkning av summarader ───────────────────────
   { const rows = buildNeRows(neVouchers, neTxs, 2025, {
@@ -1519,7 +1530,7 @@ async function runTests() {
     program: { name: 'LokalBokforing', version: '2.0' },
   };
 
-  // ── Paketbygge ─────────────────────────────────────────────────────────
+  // ── Paketbygge — verifierade fältkoder ur BAS kopplingstabell ──────────
   { const pkg = buildNeSruPackage(m2Input);
     assert(pkg.blanketter.length === 1, 'NE-SRU: exakt en blankett');
     const b = pkg.blanketter[0];
@@ -1527,12 +1538,16 @@ async function runTests() {
     const get = (code: string) => b.uppgifter.find(u => u.fieldCode === code);
     assert(get('7011')?.value === '2025-01-01', 'NE-SRU: 7011 räkenskapsår från');
     assert(get('7012')?.value === '2025-12-31', 'NE-SRU: 7012 räkenskapsår till');
-    assert(get('7101')?.value === '100000', `NE-SRU: R1 → 7101 = 100000 (fick ${get('7101')?.value})`);
-    assert(get('7143')?.value === '10000', 'NE-SRU: R43 → 7143 = 10000');
-    assert(get('7147') !== undefined && Number(get('7147')!.value) > 0, 'NE-SRU: R47 överskott med');
+    assert(get('7400')?.value === '100000', `NE-SRU: R1 → 7400 = 100000 (fick ${get('7400')?.value})`);
+    assert(get('7440') !== undefined && Number(get('7440')!.value) > 0,
+      `NE-SRU: R11 bokfört resultat → 7440 (fick ${get('7440')?.value})`);
+    assert(get('7280') !== undefined && Number(get('7280')!.value) > 0, 'NE-SRU: B9 kassa/bank → 7280');
+    assert(get('7381') !== undefined, 'NE-SRU: B14 skatteskulder → 7381');
+    // Justeringsrader utan verifierad kod exporteras INTE (R43/R47/R48 m.fl.)
+    assert(b.uppgifter.every(u => !['7143', '7147', '7148', '7101'].includes(u.fieldCode)),
+      'NE-SRU: ingen platshållarkod eller overifierad justeringsrad i filen');
     // Nollrader utelämnas: R7 personal = 0 → ingen uppgiftsrad
-    assert(get('7107') === undefined, 'NE-SRU: nollrad (R7) utelämnas');
-    assert(get('7148') === undefined, 'NE-SRU: R48 = 0 utelämnas');
+    assert(get('7502') === undefined, 'NE-SRU: nollrad (R7 → 7502) utelämnas');
     // Adressen tar bara första raden (SRU-värden får inte innehålla radbrytning)
     assert(pkg.sender.address === 'Storgatan 1', 'NE-SRU: flerradsadress trunkeras till första raden'); }
 
@@ -1551,7 +1566,7 @@ async function runTests() {
   // ── Justeringar följer med i exporten ──────────────────────────────────
   { const adjRows = buildNeRows(m2Vouchers, m2Txs, 2025, { R1: { value: 90000 } });
     const pkg = buildNeSruPackage({ ...m2Input, rows: adjRows });
-    const r1 = pkg.blanketter[0].uppgifter.find(u => u.fieldCode === '7101');
+    const r1 = pkg.blanketter[0].uppgifter.find(u => u.fieldCode === '7400');
     assert(r1?.value === '90000', 'NE-SRU: manuellt justerad rad exporteras med justerat värde'); }
 
   // ── Ogiltiga företagsuppgifter stoppas vid serialisering ──────────────

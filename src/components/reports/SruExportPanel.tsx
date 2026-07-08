@@ -7,7 +7,7 @@ import {
   SRU_FILENAME_INFO, SRU_FILENAME_BLANKETTER,
 } from '../../lib/sru';
 import { buildNeSruPackage, NE_FALTKODER_VERIFIED } from '../../lib/neSru';
-import { buildInk2SruPackage } from '../../lib/ink2';
+import { buildInk2SruPackage, INK2_FALTKODER_VERIFIED } from '../../lib/ink2';
 import { FileDown, ExternalLink, CheckCircle, AlertTriangle } from 'lucide-react';
 
 const APP_VERSION = { name: 'LokalBokforing', version: '2.0' };
@@ -93,14 +93,20 @@ export function SruExportPanel({ taxYear, rows, declaration, type }: Props) {
         Deklarera via fil — SRU-export
       </p>
 
-      {!NE_FALTKODER_VERIFIED && (
+      {(type === 'NE' ? !NE_FALTKODER_VERIFIED : !INK2_FALTKODER_VERIFIED) ? (
         <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>
-            <strong>Fältkoderna är preliminära.</strong> Innan skarp inlämning måste filen
+            <strong>Fältkoderna för {type} är preliminära.</strong> Innan skarp inlämning måste filen
             kontrolleras i Skatteverkets testtjänst för filöverföring — koderna verifieras
             mot aktuell teknisk beskrivning (SKV 269). Använd exporten som teknisk testfil tills dess.
           </span>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Bokföringsdelens fältkoder (B1–B16, R1–R11) följer BAS kopplingstabell för NE.
+          Skattemässiga justeringar (R12–R48) ingår <strong>inte</strong> i filen — komplettera dem
+          i Skatteverkets e-tjänst efter uppladdning. Kontrollera din första fil i testtjänsten.
         </div>
       )}
 

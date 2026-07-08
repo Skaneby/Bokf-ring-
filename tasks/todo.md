@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 415 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 422 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Fakturering (juli 2026)**
 - [x] Fakturor med löpande, obruten nummerserie (räknas bara uppåt, återanvänds aldrig)
@@ -80,11 +80,13 @@ Spec: `docs/deklarationsmodul-spec.md` (SRU-filöverföring + manuell deklaratio
 - [x] M0: `lib/sru/` — datamodell, serialiserare, golden files, property-tester (32 nya tester)
 - [x] M1: Spår 0 — blankettvy NE med manuella justeringar, utskrift, INK1-summering (29 nya tester)
 - [x] M2: Spår A — SRU-export (INFO.SRU + BLANKETTER.SRU), validering, inlämningsguide (20 nya tester)
-  - OBS: fältkoderna för NE:s R-rader är PLATSHÅLLARE (R{n} → 7100+n) — export spärrad bakom bekräftelse tills verifiering mot SKV 269/testtjänsten är gjord (NE_FALTKODER_VERIFIED i lib/neSru.ts)
+  - NE:s fältkoder VERIFIERADE mot BAS kopplingstabell (B1=7200…B16=7383, R1=7400…R11=7440); underlag: docs/underlag-NE-kopplingstabell-BAS.pdf
+  - Blankettvyn utökad med balansposterna B1-B16 (ackumulerade saldon per bokslutsdagen)
+  - Justeringsrader (R12-R48) exporteras EJ ännu — saknar verifierade koder, kompletteras i e-tjänsten
 - [x] M3 (INK2-delen): blankettvy INK2R/INK2S för aktiebolag + SRU-export med två blanketter (24 nya tester)
   - Byråstöd/roller/auditlogg kräver plattformsspåret (backend, flera användare) — utanför lokal app-scope, se docs/deklarationsmodul-spec.md §3-4
 - [ ] M4: Spår B — API-integration mot Skatteverket (kräver avtal + verifierad tjänstebeskrivning)
-- [ ] Verifiera SRU-syntax, encoding och blankettkoder mot Skatteverkets tekniska beskrivning
+- [ ] Verifiera kvarvarande mot Skatteverket: INK2R/INK2S-fältkoder (fortfarande platshållare), NE:s justeringsrader R12-R48, blankettkodernas årsversion (P-suffix), encoding — kör första fil i SKV:s testtjänst
 
 ### Öppet / Förbättringar (prioriterade)
 
