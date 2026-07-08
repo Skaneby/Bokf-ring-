@@ -39,6 +39,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     title: 'Bokför — din vardagsflik',
     body: 'Under "Bokför" registrerar du verifikat. Momshjälpen gör grovjobbet: ange belopp inklusive moms och momssats, så fylls raderna i automatiskt — du väljer bara kostnads- eller intäktskonto.',
     tips: [
+      'Saknar bokföringen databasfil visar fliken en guide: skapa filen med ett klick så auto-sparas allt du bokför',
       'Skanna kvitton med kameran — datum, belopp och moms läses automatiskt (kräver API-nyckel)',
       'Bifoga kvittobilder eller PDF:er — de sparas med verifikatet och följer med i backupen',
       'Snabbvalen bokför eget uttag, egen insättning, F-skatt och egenavgifter med ett klick',

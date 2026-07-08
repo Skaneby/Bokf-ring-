@@ -10,6 +10,7 @@ import {
 } from './lib/bokforingsfil';
 import { Welcome } from './components/Welcome';
 import { OpenBokforing } from './components/OpenBokforing';
+import { FilePrompt } from './components/FilePrompt';
 import {
   LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw, Receipt,
   Sparkles, HelpCircle,
@@ -302,6 +303,11 @@ export default function App() {
               {/* VoucherEntry hålls monterad — halvskrivna verifikationer
                   överlever flikbyten (göms med CSS istället för unmount) */}
               <div className={tab === 'voucher' ? '' : 'hidden'}>
+                {/* Guide: bokföring utan databasfil → erbjud att skapa en innan man bokför */}
+                <FilePrompt
+                  meta={filMeta}
+                  onConnected={m => { setFilMeta(m); setFilOpened(true); }}
+                />
                 <VoucherEntry editId={editId} onEditDone={() => { setEditId(null); if (editId) setTab('reports'); }} />
               </div>
               {tab === 'invoices'  && <Invoices />}

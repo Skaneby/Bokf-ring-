@@ -66,7 +66,9 @@ export async function validateApiKey(apiKey: string): Promise<{ ok: boolean; err
 export const APP_GUIDE = `
 APPENS MODULER OCH FLÖDEN:
 - Översikt: KPI-kort (tillgångar, skulder/eget kapital, intäkter, kostnader, årets resultat).
-- Bokför: dubbelbokföring med balanskrav (debet = kredit). Momshjälpen räknar netto/moms från
+- Bokför: dubbelbokföring med balanskrav (debet = kredit). Om bokföringen saknar databasfil
+  visas en guide överst i fliken med knappen "Skapa databasfil" — den pågående bokföringen
+  behålls och skrivs till filen direkt. Momshjälpen räknar netto/moms från
   bruttobelopp (6/12/25 %). Snabbval: eget uttag (2013/1930), F-skatt (2510/1930),
   egen insättning (1930/2018), egenavgifter (8422/2514). Kvitton kan skannas med kameran (OCR).
 - Fakturor: löpande obruten nummerserie. Bokförs enligt fakturametoden (vid skapande:

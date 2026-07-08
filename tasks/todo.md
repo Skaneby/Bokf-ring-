@@ -48,6 +48,12 @@
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
 - [x] 538 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
+**Bokför-guiden: databasfil först (juli 2026)**
+- [x] Guide överst i Bokför-fliken när bokföringen saknar databasfil: förklarar risken pedagogiskt
+- [x] "Skapa databasfil"-knapp kopplar den PÅGÅENDE bokföringen till fil direkt (ingen omväg via Byt bokföring) — auto-sparningen startar omedelbart
+- [x] Fallback utan FS-stöd: "Ladda ned backup nu"-knapp istället
+- [x] Avfärdbar per session ("Senare — jag förstår risken"); onboarding + AI-guiden förklarar flödet
+
 **Databasidentitet & synkkontroll (juli 2026)**
 - [x] Varje bokföring får unikt databas-ID + revision + tidsstämpel (stämplas i filen vid varje sparning)
 - [x] Vid öppning jämförs fil ↔ webbläsare: samma & synkad → tyst; filen nyare (annan dator) → tyst

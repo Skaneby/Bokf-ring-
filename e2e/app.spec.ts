@@ -35,6 +35,13 @@ async function gotoTab(page: Page, name: string) {
 // Bokför ett inköp med momshjälpen: brutto inkl. 25 % moms mot konto 5410
 async function bookPurchase(page: Page, gross: string) {
   await gotoTab(page, 'Bokför');
+  // Guide när bokföringen saknar databasfil: förklaring + skapa-knapp,
+  // avfärdas för sessionen ("utan fil"-flödet i testerna)
+  const prompt = page.getByText('din bokföring har ingen databasfil ännu');
+  if (await prompt.isVisible().catch(() => false)) {
+    await expect(page.getByRole('button', { name: /Skapa databasfil/ })).toBeVisible();
+    await page.getByRole('button', { name: /Senare — jag förstår risken/ }).click();
+  }
   await page.getByPlaceholder('T.ex. Inköp kontorsmaterial').fill('Kontorsmaterial E2E');
 
   const vatSection = page.locator('div').filter({ has: page.getByText('Momshjälp', { exact: true }) }).last();
