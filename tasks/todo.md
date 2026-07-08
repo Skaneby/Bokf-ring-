@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 325 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, smoke tests
+- [x] 354 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Fakturering (juli 2026)**
 - [x] Fakturor med löpande, obruten nummerserie (räknas bara uppåt, återanvänds aldrig)
@@ -70,7 +70,7 @@
 Spec: `docs/deklarationsmodul-spec.md` (SRU-filöverföring + manuell deklaration + framtida API-spår)
 
 - [x] M0: `lib/sru/` — datamodell, serialiserare, golden files, property-tester (32 nya tester)
-- [ ] M1: Spår 0 — komplett blankettvy NE/INK1 med fältkoder för manuell deklaration
+- [x] M1: Spår 0 — blankettvy NE med manuella justeringar, utskrift, INK1-summering (29 nya tester)
 - [ ] M2: Spår A — SRU-export (INFO.SRU + BLANKETTER.SRU), validering, inlämningsguide
 - [ ] M3: INK2 + byråstöd
 - [ ] M4: Spår B — API-integration mot Skatteverket (kräver avtal + verifierad tjänstebeskrivning)

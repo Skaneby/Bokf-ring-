@@ -1,20 +1,22 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { ResultatTab } from './reports/ResultatTab';
-import { BalansTab }   from './reports/BalansTab';
-import { HuvudbokTab } from './reports/HuvudbokTab';
-import { SkattTab }    from './reports/SkattTab';
-import { BackupTab }   from './reports/BackupTab';
+import { ResultatTab }    from './reports/ResultatTab';
+import { BalansTab }      from './reports/BalansTab';
+import { HuvudbokTab }    from './reports/HuvudbokTab';
+import { SkattTab }       from './reports/SkattTab';
+import { DeklarationTab } from './reports/DeklarationTab';
+import { BackupTab }      from './reports/BackupTab';
 
-type Tab = 'resultat' | 'balans' | 'huvudbok' | 'skatt' | 'backup';
+type Tab = 'resultat' | 'balans' | 'huvudbok' | 'skatt' | 'deklaration' | 'backup';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'resultat',  label: 'Resultaträkning'     },
-  { id: 'balans',    label: 'Balansräkning'        },
-  { id: 'huvudbok',  label: 'Huvudbok'              },
-  { id: 'skatt',     label: 'Skatt & Deklaration'  },
-  { id: 'backup',    label: 'Säkerhetskopiering'   },
+  { id: 'resultat',    label: 'Resultaträkning'    },
+  { id: 'balans',      label: 'Balansräkning'       },
+  { id: 'huvudbok',    label: 'Huvudbok'             },
+  { id: 'skatt',       label: 'Skatt & Deklaration' },
+  { id: 'deklaration', label: 'Deklaration (NE)'    },
+  { id: 'backup',      label: 'Säkerhetskopiering'  },
 ];
 
 export function Reports({ onEditVoucher, onReset }: { onEditVoucher: (id: number) => void; onReset: () => void }) {
@@ -50,11 +52,12 @@ export function Reports({ onEditVoucher, onReset }: { onEditVoucher: (id: number
         </nav>
       </div>
 
-      {tab === 'resultat' && <ResultatTab accounts={accounts} transactions={transactions} />}
-      {tab === 'balans'   && <BalansTab   accounts={accounts} transactions={transactions} />}
-      {tab === 'huvudbok' && <HuvudbokTab accounts={accounts} transactions={transactions} vouchers={vouchers} onEditVoucher={onEditVoucher} />}
-      {tab === 'skatt'    && <SkattTab    accounts={accounts} transactions={transactions} />}
-      {tab === 'backup'   && <BackupTab   onReset={onReset} />}
+      {tab === 'resultat'    && <ResultatTab accounts={accounts} transactions={transactions} />}
+      {tab === 'balans'      && <BalansTab   accounts={accounts} transactions={transactions} />}
+      {tab === 'huvudbok'    && <HuvudbokTab accounts={accounts} transactions={transactions} vouchers={vouchers} onEditVoucher={onEditVoucher} />}
+      {tab === 'skatt'       && <SkattTab    accounts={accounts} transactions={transactions} />}
+      {tab === 'deklaration' && <DeklarationTab vouchers={vouchers} transactions={transactions} />}
+      {tab === 'backup'      && <BackupTab   onReset={onReset} />}
     </div>
   );
 }

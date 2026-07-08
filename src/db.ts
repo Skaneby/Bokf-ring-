@@ -55,12 +55,28 @@ export interface Setting {
   value: unknown;
 }
 
+// Manuella justeringar per blankettrad — bokförda värden räknas alltid om
+export interface DeclarationField {
+  value: number;
+  note?: string;
+}
+
+export interface Declaration {
+  id?: number;
+  taxYear: number;              // beskattningsår
+  type: 'NE';                   // fler blankettyper i M3 (INK2 …)
+  fields: Record<string, DeclarationField>; // lineId ('R1' …) → justering
+  status: 'draft' | 'klar';
+  updated_at: number;
+}
+
 export class AccountingDB extends Dexie {
   accounts!: Table<Account>;
   vouchers!: Table<Voucher>;
   transactions!: Table<Transaction>;
   invoices!: Table<Invoice>;
   settings!: Table<Setting>;
+  declarations!: Table<Declaration>;
 
   constructor() {
     super('AccountingDB');
@@ -76,6 +92,15 @@ export class AccountingDB extends Dexie {
       transactions: '++id, voucherId, accountId',
       invoices: '++id, number, status, date',
       settings: 'key'
+    });
+    // v3: deklarationsmodul — manuella justeringar per beskattningsår
+    this.version(3).stores({
+      accounts: 'id, type',
+      vouchers: '++id, date',
+      transactions: '++id, voucherId, accountId',
+      invoices: '++id, number, status, date',
+      settings: 'key',
+      declarations: '++id, taxYear'
     });
   }
 }

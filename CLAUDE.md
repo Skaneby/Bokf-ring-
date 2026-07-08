@@ -48,9 +48,9 @@ git push origin main
 ```
 src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
-  db.ts                — Dexie-schema v2 (accounts, vouchers, transactions, invoices, settings) + PATCH_ACCOUNTS
+  db.ts                — Dexie-schema v3 (accounts, vouchers, transactions, invoices, settings, declarations) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 325 enhetstester (Node + fake-indexeddb)
+  test.ts              — 354 enhetstester (Node + fake-indexeddb)
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
     Welcome.tsx        — visas vid tom DB; ladda JSON, importera SIE4, eller starta nytt
@@ -69,7 +69,8 @@ src/
       ResultatTab.tsx  — resultaträkning
       BalansTab.tsx    — balansräkning
       HuvudbokTab.tsx  — huvudbok med paginering (25/sida), redigera/radera verifikat
-      SkattTab.tsx     — NE-bilaga, egenavgifter, momsdeklaration
+      SkattTab.tsx     — NE-bilaga (översikt), egenavgifter, momsdeklaration
+      DeklarationTab.tsx — blankettvy NE per beskattningsår: justera rader, skriv ut, status
       BackupTab.tsx    — JSON-backup, SIE4 import/export, "Byt bokföring"
   lib/
     backup.ts          — buildBackupData() / applyBackupData() / exportBackup()
@@ -79,6 +80,8 @@ src/
     tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
     geminiImport.ts    — parseGeminiJson() / validateRows() / resolveAccount() / bookDraftRows()
     invoice.ts         — nummerserie, invoiceTotals(), bokning (faktura/kontant), renderInvoiceHtml()
+    declaration.ts     — NE-blankettrader: buildNeRows() / justeringar / renderNePrintHtml()
+    sru/               — SRU-export M0: serialize() / parse / Latin-1 / Luhn (deterministisk)
     utils.ts           — formatCurrency()
 ```
 
@@ -156,7 +159,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 325 enhetstester
+npm run test         # kör 354 enhetstester
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
 ```

@@ -24,6 +24,10 @@ import {
   toIdNumber12, luhnValid, luhnCheckDigit, decodeLatin1,
   SruError, SruPackage, SruBlankett,
 } from './lib/sru';
+import {
+  buildNeRows, taxYearsAvailable, getDeclaration, saveAdjustment,
+  setDeclarationStatus, renderNePrintHtml,
+} from './lib/declaration';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -81,6 +85,7 @@ async function resetDb() {
   await db.accounts.clear();
   await db.invoices.clear();
   await db.settings.clear();
+  await db.declarations.clear();
   await initializeDb();
 }
 
@@ -1363,6 +1368,129 @@ async function runTests() {
       `Property-test: ${N} slumpade paket — determinism, round-trip, #FIL_SLUT, encoding`,
       failures.slice(0, 3).join('; '));
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 19. DEKLARATION — BLANKETTVY NE (M1)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 19. Deklaration NE ────────────────────────────────\n');
+
+  await resetDb();
+
+  // Bokföring 2025: försäljning 100 000 (moms 25 000), momsfri intäkt 5 000,
+  // varuinköp 30 000, externa kostnader 12 000, egenavgiftsavsättning 10 000
+  await addVoucher('2025-03-01', 'Försäljning', [
+    { accountId: 1930, amount: 125000 },
+    { accountId: 3000, amount: -100000 },
+    { accountId: 2610, amount: -25000 },
+  ]);
+  await addVoucher('2025-04-01', 'Momsfri försäljning', [
+    { accountId: 1930, amount: 5000 },
+    { accountId: 3040, amount: -5000 },
+  ]);
+  await addVoucher('2025-05-01', 'Varuinköp', [
+    { accountId: 4000, amount: 30000 },
+    { accountId: 1930, amount: -30000 },
+  ]);
+  await addVoucher('2025-06-01', 'Bankavgifter', [
+    { accountId: 6570, amount: 12000 },
+    { accountId: 1930, amount: -12000 },
+  ]);
+  await addVoucher('2025-12-31', 'Avsättning egenavgifter', [
+    { accountId: 8422, amount: 10000 },
+    { accountId: 2514, amount: -10000 },
+  ]);
+  // Annan årgång — ska INTE ingå i 2025
+  await addVoucher('2026-01-15', 'Försäljning nästa år', [
+    { accountId: 1930, amount: 50000 },
+    { accountId: 3000, amount: -50000 },
+  ]);
+
+  const neVouchers = await db.vouchers.toArray();
+  const neTxs      = await db.transactions.toArray();
+
+  // ── taxYearsAvailable ──────────────────────────────────────────────────
+  { const years = taxYearsAvailable(neVouchers);
+    assert(years[0] === 2026 && years[1] === 2025 && years.length === 2,
+      `taxYearsAvailable: [2026, 2025] (fick ${JSON.stringify(years)})`); }
+
+  // ── Automappning per rad ───────────────────────────────────────────────
+  { const rows = buildNeRows(neVouchers, neTxs, 2025);
+    const get = (id: string) => rows.find(r => r.id === id)!;
+    assert(near(get('R1').value, 100000),  `NE R1 momspliktiga intäkter = 100 000 (fick ${get('R1').value})`);
+    assert(near(get('R2').value, 5000),    `NE R2 momsfria intäkter = 5 000 (fick ${get('R2').value})`);
+    assert(near(get('R5').value, 30000),   `NE R5 varor/material = 30 000 (fick ${get('R5').value})`);
+    assert(near(get('R6').value, 12000),   `NE R6 övriga externa = 12 000 (fick ${get('R6').value})`);
+    assert(near(get('R43').value, 10000),  `NE R43 egenavgifter (8422) = 10 000 (fick ${get('R43').value})`);
+    assert(near(get('R11').value, 100000 + 5000 - 30000 - 12000),
+      `NE R11 bokfört resultat = 63 000 (fick ${get('R11').value})`);
+    // R8 exkluderar 8422 (egenavgifter är inte räntekostnad)
+    assert(near(get('R8').value, 0), `NE R8 räntekostnader = 0 — 8422 exkluderad (fick ${get('R8').value})`);
+    assert(near(get('R47').value, 63000 - 10000), `NE R47 överskott = 53 000 (fick ${get('R47').value})`);
+    assert(near(get('R48').value, 0), 'NE R48 underskott = 0 vid överskott');
+    // Momskonton (2610) påverkar aldrig NE-raderna
+    assert(rows.every(r => r.kind === 'computed' || r.adjusted === false), 'NE: inga rader justerade i grundläge'); }
+
+  // ── Årsfiltrering ──────────────────────────────────────────────────────
+  { const rows2026 = buildNeRows(neVouchers, neTxs, 2026);
+    const r1 = rows2026.find(r => r.id === 'R1')!;
+    assert(near(r1.value, 50000), `NE 2026: R1 = 50 000 — åren blandas inte (fick ${r1.value})`); }
+
+  // ── Manuell justering + omräkning av summarader ───────────────────────
+  { const rows = buildNeRows(neVouchers, neTxs, 2025, {
+      R1:  { value: 90000, note: 'Rättelse: privat andel' },
+      R12: { value: 2000 },
+    });
+    const get = (id: string) => rows.find(r => r.id === id)!;
+    assert(get('R1').value === 90000 && get('R1').adjusted, 'Justering: R1 använder manuellt värde');
+    assert(near(get('R1').auto, 100000), 'Justering: bokfört värde bevaras som referens');
+    assert(get('R1').note === 'Rättelse: privat andel', 'Justering: anteckning följer med');
+    assert(near(get('R11').value, 90000 + 5000 - 30000 - 12000),
+      `Justering: R11 räknas om från justerade värden (fick ${get('R11').value})`);
+    assert(near(get('R47').value, 53000 - 10000 + 2000),
+      `Justering: R47 = R11 + R12 − R43 = 45 000 (fick ${get('R47').value})`); }
+
+  // ── Underskott → R48 ───────────────────────────────────────────────────
+  { const rows = buildNeRows(neVouchers, neTxs, 2025, { R6: { value: 80000 } });
+    const get = (id: string) => rows.find(r => r.id === id)!;
+    assert(near(get('R48').value, 80000 - 12000 - 53000), // nytt resultat: 63000−68000−10000 = −15000
+      `Underskott: R48 = 15 000 (fick ${get('R48').value})`);
+    assert(near(get('R47').value, 0), 'Underskott: R47 = 0'); }
+
+  // ── Avrundning till hela kronor ───────────────────────────────────────
+  { await addVoucher('2025-07-01', 'Öresförsäljning', [
+      { accountId: 1930, amount: 100.49 },
+      { accountId: 3040, amount: -100.49 },
+    ]);
+    const rows = buildNeRows(await db.vouchers.toArray(), await db.transactions.toArray(), 2025);
+    const r2 = rows.find(r => r.id === 'R2')!;
+    assert(Number.isInteger(r2.value), `Avrundning: R2 är hela kronor (fick ${r2.value})`); }
+
+  // ── Persistens ─────────────────────────────────────────────────────────
+  await saveAdjustment(2025, 'R1', { value: 95000, note: 'Test' });
+  { const dec = await getDeclaration(2025);
+    assert(dec !== undefined && dec.fields.R1?.value === 95000 && dec.status === 'draft',
+      'Persistens: justering sparad med status draft'); }
+  await saveAdjustment(2025, 'R12', { value: 500 });
+  { const dec = await getDeclaration(2025);
+    assert(dec?.fields.R1?.value === 95000 && dec?.fields.R12?.value === 500,
+      'Persistens: flera justeringar samexisterar'); }
+  await saveAdjustment(2025, 'R1', null);
+  { const dec = await getDeclaration(2025);
+    assert(dec?.fields.R1 === undefined && dec?.fields.R12?.value === 500,
+      'Persistens: null återställer raden utan att röra andra'); }
+  await setDeclarationStatus(2025, 'klar');
+  { const dec = await getDeclaration(2025);
+    assert(dec?.status === 'klar', 'Persistens: status klar sparas'); }
+
+  // ── Utskriftsvy ────────────────────────────────────────────────────────
+  { const rows = buildNeRows(neVouchers, neTxs, 2025, { R1: { value: 90000, note: 'Privat andel' } });
+    const html = renderNePrintHtml(2025, rows, 'Enkla Firman');
+    assert(html.includes('NE-bilagan') && html.includes('2025'), 'Utskrift: rubrik med beskattningsår');
+    assert(html.includes('Enkla Firman'), 'Utskrift: företagsnamn med');
+    assert(html.includes('R11'), 'Utskrift: summarad R11 med');
+    assert(html.includes('Privat andel'), 'Utskrift: justeringsanteckning med');
+    assert(html.includes('<script') === false, 'Utskrift: ingen oescapad HTML'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING
