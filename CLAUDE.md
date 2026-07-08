@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 522 enhetstester (Node + fake-indexeddb)
+  test.ts              — 538 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -113,6 +113,8 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
 - **PWA service worker** — använd `registerType: 'autoUpdate'` + `skipWaiting: true` + `clientsClaim: true` — annars fastnar gamla SW och servar stale cache på användarens enhet
 
 ### Bokföringsfil
+- **Databasidentitet:** dbId (UUID) + revision + modifiedAt i settings ('dbIdentity') och i filen; bumpIdentity() vid varje writeToFile; compareDb() avgör öppningsflödet (same/local-newer/different/no-local/legacy-file) — konfliktvyer i OpenBokforing
+- **Identitetsnycklarna ('dbIdentity','bokforingsfil') är exkluderade från auto-sparningens hooks** — annars evig sparloop
 - **IndexedDB är arbetskopian, filen är databasen** — auto-sparning (debounced 2,5 s) skriver hela backupen till handlen vid varje tabelländring (Dexie-hooks via watchDatabase)
 - **"Byt bokföring" MÅSTE koppla från filen före tömning** — sparfunktionen läser meta per sparning och vägrar skriva utan handle; annars skrivs en tom databas över användarens fil
 - **FileSystemFileHandle är strukturklonbar** och persisteras i settings; behörighet kräver användargest per besök (OpenBokforing-gaten)
@@ -179,7 +181,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 522 enhetstester
+npm run test         # kör 538 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)

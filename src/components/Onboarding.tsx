@@ -20,7 +20,8 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     tips: [
       'Ta en JSON-backup regelbundet: sidomenyn → "Ladda ned backup"',
       'Rensar du webbläsardata försvinner bokföringen — utan backup är den borta',
-      'Ny eller annan bokföring? "Byt bokföring" i sidomenyn raderar allt (efter bekräftelse) och tar dig till startvalet: starta nytt, ladda backup eller importera SIE4',
+      'Varje bokföring har ett unikt databas-ID och versionsnummer — appen kontrollerar vid öppning att fil och webbläsare är samma databas i synk, och varnar annars',
+      'Ny eller annan bokföring? "Byt bokföring" i sidomenyn raderar allt (efter bekräftelse) och tar dig till startvalet',
     ],
   },
   {

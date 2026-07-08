@@ -87,7 +87,11 @@ APPENS MODULER OCH FLÖDEN:
   välj var .bokforing.json-filen sparas; appen minns filen, sparar dit automatiskt och
   frågar "Öppna <namn>" vid nästa besök), "Skapa utan fil" (endast i webbläsaren),
   "Öppna befintlig bokföringsfil", "Ladda in JSON-backup" eller "Importera SIE4-fil".
-  Bokföringens namn och sparstatus visas under logotypen i sidomenyn.
+  Bokföringens namn och sparstatus visas under logotypen i sidomenyn ("Synkad med fil · v<revision>").
+  SYNKSKYDD: varje bokföring har ett unikt databas-ID och ett revisionsnummer som sparas både
+  i webbläsaren och i filen. Vid öppning kontrolleras att det är SAMMA databas: är webbläsarens
+  kopia nyare än filen får man välja version, och är det en HELT ANNAN bokföring varnar appen
+  tydligt innan något ersätts — man kan aldrig omedvetet bokföra i fel databas.
   En befintlig bokföring byts via "Byt bokföring" längst ned i sidomenyn ELLER
   Rapporter → Säkerhetskopiering → Byt bokföring — det kopplar från filen och
   RADERAR all lokal data efter bekräftelse (ta backup först!), sedan visas startskärmen igen.

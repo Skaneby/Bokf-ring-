@@ -46,7 +46,16 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 522 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 538 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+
+**Databasidentitet & synkkontroll (juli 2026)**
+- [x] Varje bokföring får unikt databas-ID + revision + tidsstämpel (stämplas i filen vid varje sparning)
+- [x] Vid öppning jämförs fil ↔ webbläsare: samma & synkad → tyst; filen nyare (annan dator) → tyst
+- [x] Webbläsaren nyare → pedagogisk konfliktvy med versionskort och två säkra val
+- [x] Annat ID → tydlig varning "Det här är en annan bokföring" innan webbläsarkopian ersätts
+- [x] Identiteten adopteras vid inläsning; äldre filer utan ID får nytt; "Byt bokföring" ger nytt ID
+- [x] Sparloop-skydd: identitets-/filmeta-skrivningar triggar inte auto-sparning
+- [x] Sidomenyn visar synkstatus med version: "Synkad med fil · v128"
 
 **Bokföringsdatabas som fil (juli 2026)**
 - [x] Skapa bokföring: namnge + välj var .bokforing.json-filen sparas (File System Access API)

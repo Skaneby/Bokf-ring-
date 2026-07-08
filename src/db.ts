@@ -201,5 +201,75 @@ export async function initializeDb(): Promise<{ hasData: boolean }> {
     }
   }
 
+  // Varje bokföringsdatabas har en identitet (id + revision) — krävs för
+  // att kunna verifiera att fil och webbläsare är SAMMA databas i synk
+  if (!(await getIdentity())) await newIdentity();
+
   return { hasData: accountCount > 0 };
+}
+
+// ── Databasidentitet ──────────────────────────────────────────────────────────
+// Unikt ID skapas när bokföringen skapas och följer den för alltid.
+// Revisionen räknas upp vid varje sparning till fil — gör det möjligt att
+// upptäcka att en fil och webbläsarens kopia glidit isär.
+
+export interface DbIdentity {
+  id: string;         // UUID — samma i filen och i webbläsaren = samma bokföring
+  revision: number;   // ökar vid varje filsparning
+  modifiedAt: string; // ISO-tidsstämpel för senaste sparning/ändring
+}
+
+const IDENTITY_KEY = 'dbIdentity';
+
+export async function getIdentity(): Promise<DbIdentity | null> {
+  const row = await db.settings.get(IDENTITY_KEY);
+  return (row?.value as DbIdentity | undefined) ?? null;
+}
+
+export async function setIdentity(identity: DbIdentity): Promise<void> {
+  await db.settings.put({ key: IDENTITY_KEY, value: identity });
+}
+
+export async function newIdentity(): Promise<DbIdentity> {
+  const identity: DbIdentity = {
+    id: crypto.randomUUID(),
+    revision: 0,
+    modifiedAt: new Date().toISOString(),
+  };
+  await setIdentity(identity);
+  return identity;
+}
+
+export async function clearIdentity(): Promise<void> {
+  await db.settings.delete(IDENTITY_KEY);
+}
+
+// Räknas upp vid varje sparning till bokföringsfilen
+export async function bumpIdentity(): Promise<DbIdentity> {
+  const current = (await getIdentity()) ?? await newIdentity();
+  const bumped: DbIdentity = {
+    ...current,
+    revision: current.revision + 1,
+    modifiedAt: new Date().toISOString(),
+  };
+  await setIdentity(bumped);
+  return bumped;
+}
+
+// Jämför webbläsarens identitet med en fils — grunden för synkvarningarna
+export type DbCompare =
+  | 'same'         // samma databas, filen är lika ny eller nyare → öppna
+  | 'local-newer'  // samma databas men webbläsaren har nyare ändringar → fråga
+  | 'different'    // en ANNAN bokföring → varna innan webbläsarens kopia ersätts
+  | 'no-local'     // webbläsaren är tom → öppna utan frågor
+  | 'legacy-file'; // äldre fil utan identitet → öppna och stämpla vid nästa sparning
+
+export function compareDb(
+  local: DbIdentity | null,
+  file: { dbId?: string; revision?: number },
+): DbCompare {
+  if (!file.dbId) return 'legacy-file';
+  if (!local) return 'no-local';
+  if (local.id !== file.dbId) return 'different';
+  return (file.revision ?? 0) >= local.revision ? 'same' : 'local-newer';
 }

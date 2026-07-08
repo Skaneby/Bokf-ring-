@@ -1,4 +1,4 @@
-import { db, Account, Voucher, Transaction } from '../db';
+import { db, Account, Voucher, Transaction, getIdentity, setIdentity, newIdentity } from '../db';
 import { bufferToBase64, base64ToBuffer } from './attachments';
 
 // v2: kvittobilagor följer med som base64. v1-backuper (utan attachments)
@@ -14,6 +14,11 @@ export interface BackupAttachment {
 export interface BackupData {
   version: number;
   exported_at: string;
+  // Databasidentitet — gör att fil och webbläsare kan verifieras som SAMMA bokföring
+  dbId?: string;
+  revision?: number;
+  modifiedAt?: string;
+  bokforingName?: string;
   accounts: Account[];
   vouchers: Voucher[];
   transactions: Transaction[];
@@ -21,15 +26,22 @@ export interface BackupData {
 }
 
 export async function buildBackupData(): Promise<BackupData> {
-  const [accounts, vouchers, transactions, attachments] = await Promise.all([
+  const [accounts, vouchers, transactions, attachments, identity, filMeta] = await Promise.all([
     db.accounts.toArray(),
     db.vouchers.toArray(),
     db.transactions.toArray(),
     db.attachments.toArray(),
+    getIdentity(),
+    db.settings.get('bokforingsfil'),
   ]);
+  const name = (filMeta?.value as { name?: string } | undefined)?.name;
   return {
     version: 2,
     exported_at: new Date().toISOString(),
+    dbId: identity?.id,
+    revision: identity?.revision,
+    modifiedAt: identity?.modifiedAt,
+    bokforingName: name,
     accounts, vouchers, transactions,
     attachments: attachments.map(a => ({
       voucherId: a.voucherId,
@@ -68,6 +80,16 @@ export async function applyBackupData(data: BackupData): Promise<{ vouchers: num
       }));
     }
   });
+  // Adoptera databasens identitet från filen — annars ny (äldre filer utan ID)
+  if (data.dbId) {
+    await setIdentity({
+      id: data.dbId,
+      revision: data.revision ?? 0,
+      modifiedAt: data.modifiedAt ?? new Date().toISOString(),
+    });
+  } else {
+    await newIdentity();
+  }
   return { vouchers: data.vouchers.length, transactions: data.transactions.length };
 }
 

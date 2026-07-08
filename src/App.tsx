@@ -1,7 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { VoucherEntry } from './components/VoucherEntry';
-import { initializeDb, db } from './db';
+import { initializeDb, clearIdentity, db, DbIdentity } from './db';
 import { exportBackup } from './lib/backup';
 import { isOnboardingDone, markOnboardingDone } from './lib/ai';
 import {
@@ -53,6 +53,7 @@ export default function App() {
   const [filOpened, setFilOpened] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saver, setSaver] = useState<AutoSaver | null>(null);
+  const [dbRevision, setDbRevision] = useState<number | null>(null);
 
   useEffect(() => {
     initializeDb()
@@ -73,6 +74,8 @@ export default function App() {
       const current = await getBokforingsfil();
       if (!current?.handle) return;
       await writeToFile(current.handle, current.name);
+      const identity = (await db.settings.get('dbIdentity'))?.value as DbIdentity | undefined;
+      setDbRevision(identity?.revision ?? null);
     });
     watchDatabase(s);
     const unsub = s.subscribe(setSaveStatus);
@@ -136,6 +139,7 @@ export default function App() {
     // Koppla från filen FÖRST — annars auto-sparas den tömda databasen dit
     saver?.suspend();
     await clearBokforingsfil();
+    await clearIdentity(); // nästa bokföring är en ANNAN databas → nytt ID
     setFilMeta(null);
     setFilOpened(false);
     await db.transaction('rw', db.transactions, db.vouchers, db.accounts, db.attachments, async () => {
@@ -182,7 +186,7 @@ export default function App() {
                   }`} />
                   {saveStatus === 'saving' ? 'Sparar till fil…'
                    : saveStatus === 'error' ? 'Sparfel — klicka för nytt försök'
-                   : 'Sparas till fil automatiskt'}
+                   : `Synkad med fil${dbRevision !== null ? ` · v${dbRevision}` : ''}`}
                 </button>
               ) : (
                 <p className="mt-0.5 text-[11px] text-slate-500">Endast i webbläsaren — ta backup!</p>

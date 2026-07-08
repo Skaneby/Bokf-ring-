@@ -3,7 +3,10 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
-import { db, initializeDb } from './db';
+import {
+  db, initializeDb, getIdentity, setIdentity, newIdentity, clearIdentity,
+  bumpIdentity, compareDb,
+} from './db';
 import { exportSIE, importSIE, decodeSIEBuffer } from './lib/sie';
 import { buildBackupData, applyBackupData } from './lib/backup';
 import { splitVat, vatRows, VAT_OUT, VAT_IN } from './lib/vat';
@@ -2207,6 +2210,80 @@ async function runTests() {
     await clearBokforingsfil(); // = "Byt bokföring"
     await save();
     assert(!wrote, 'Filskydd: tömd databas skrivs ALDRIG till frånkopplad fil'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 30. DATABASIDENTITET & SYNKKONTROLL
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 30. Databasidentitet & synk ───────────────────────\n');
+
+  await resetDb();
+
+  // ── Identitet skapas automatiskt och följer databasen ──────────────────
+  { const id = await getIdentity();
+    assert(id !== null && id.revision === 0 && id.id.length >= 32,
+      'Identitet: skapas automatiskt vid initiering (UUID, revision 0)'); }
+
+  { const before = (await getIdentity())!;
+    const bumped = await bumpIdentity();
+    assert(bumped.revision === before.revision + 1 && bumped.id === before.id,
+      'Identitet: bump höjer revisionen men behåller ID:t');
+    assert(bumped.modifiedAt >= before.modifiedAt, 'Identitet: tidsstämpeln uppdateras'); }
+
+  // ── compareDb: alla synkfall ───────────────────────────────────────────
+  { const local = { id: 'abc-123', revision: 5, modifiedAt: '2026-07-08T10:00:00Z' };
+    assert(compareDb(local, { dbId: 'abc-123', revision: 5 }) === 'same',
+      'Synk: samma ID + samma revision → öppna tyst');
+    assert(compareDb(local, { dbId: 'abc-123', revision: 9 }) === 'same',
+      'Synk: filen nyare (annan dator) → öppna tyst');
+    assert(compareDb(local, { dbId: 'abc-123', revision: 3 }) === 'local-newer',
+      'Synk: webbläsaren nyare → VARNING med val (tappa inte ändringar)');
+    assert(compareDb(local, { dbId: 'xyz-999', revision: 99 }) === 'different',
+      'Synk: annat ID → VARNING: annan bokföring (bokför inte i fel databas)');
+    assert(compareDb(null, { dbId: 'abc-123', revision: 1 }) === 'no-local',
+      'Synk: tom webbläsare → öppna utan frågor');
+    assert(compareDb(local, {}) === 'legacy-file',
+      'Synk: äldre fil utan ID → öppnas och stämplas vid nästa sparning'); }
+
+  // ── Identiteten följer med i fil/backup och adopteras vid inläsning ────
+  { const identity = (await getIdentity())!;
+    const backup = await buildBackupData();
+    assert(backup.dbId === identity.id && backup.revision === identity.revision,
+      'Identitet: dbId + revision stämplas in i backup/fil');
+
+    // Inläsning på "annan dator": identiteten adopteras — samma databas
+    await clearIdentity();
+    await applyBackupData(JSON.parse(JSON.stringify(backup)));
+    const adopted = (await getIdentity())!;
+    assert(adopted.id === identity.id && adopted.revision === identity.revision,
+      'Identitet: adopteras vid inläsning → fil och webbläsare är SAMMA databas');
+
+    // Äldre backup utan ID → ny identitet (kan inte förväxlas med någon annan)
+    const legacy = JSON.parse(JSON.stringify(backup));
+    delete legacy.dbId; delete legacy.revision; delete legacy.modifiedAt;
+    await applyBackupData(legacy);
+    const fresh = (await getIdentity())!;
+    assert(fresh.id !== identity.id, 'Identitet: äldre fil utan ID får en NY identitet'); }
+
+  // ── Sparloop-skyddet: identitetsskrivningar triggar INTE auto-sparning ──
+  { let dirty = 0;
+    const spy = { markDirty: () => { dirty++; } };
+    // Samma nyckelfilter som watchDatabase använder
+    const skip = (key: string) => ['dbIdentity', 'bokforingsfil'].includes(key);
+    const simulateSettingsWrite = (key: string) => { if (!skip(key)) spy.markDirty(); };
+    simulateSettingsWrite('dbIdentity');
+    simulateSettingsWrite('bokforingsfil');
+    assert(dirty === 0, 'Sparloop-skydd: identitet/filmeta räknas inte som dataändring');
+    simulateSettingsWrite('company');
+    assert(dirty === 1, 'Sparloop-skydd: riktiga inställningsändringar sparas fortfarande'); }
+
+  // ── Byt bokföring: identiteten rensas → nästa bokföring är en annan DB ──
+  { const before = (await getIdentity())!;
+    await clearIdentity();
+    assert((await getIdentity()) === null, 'Byt bokföring: identiteten rensas');
+    await initializeDb();
+    const next = (await getIdentity())!;
+    assert(next.id !== before.id, 'Byt bokföring: ny bokföring får NYTT ID — kan aldrig förväxlas'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

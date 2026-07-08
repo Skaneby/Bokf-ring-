@@ -10,7 +10,7 @@
 // Fallback: utan File System Access API (Firefox/Safari) lever bokföringen
 // enbart i webbläsaren, med namn, och manuell backup rekommenderas.
 
-import { db } from '../db';
+import { db, bumpIdentity } from '../db';
 import { buildBackupData, applyBackupData } from './backup';
 
 const META_KEY = 'bokforingsfil';
@@ -61,10 +61,30 @@ export async function verifyPermission(handle: FileSystemFileHandle): Promise<bo
 }
 
 export async function writeToFile(handle: FileSystemFileHandle, name: string): Promise<void> {
+  await bumpIdentity(); // varje filsparning höjer revisionen — grunden för synkkontrollen
   const backup = { ...(await buildBackupData()), bokforingName: name };
   const writable = await handle.createWritable();
   await writable.write(JSON.stringify(backup));
   await writable.close();
+}
+
+// Läser filens identitet UTAN att tillämpa något — används för synkkontrollen
+export interface FileInfo {
+  name?: string;
+  dbId?: string;
+  revision?: number;
+  modifiedAt?: string;
+}
+
+export async function inspectFile(handle: FileSystemFileHandle): Promise<FileInfo> {
+  const file = await handle.getFile();
+  const data = JSON.parse(await file.text());
+  return {
+    name: data.bokforingName,
+    dbId: data.dbId,
+    revision: data.revision,
+    modifiedAt: data.modifiedAt,
+  };
 }
 
 export async function readFromFile(handle: FileSystemFileHandle): Promise<{ name?: string }> {
@@ -124,15 +144,22 @@ export function createAutoSaver(save: () => Promise<void>, delayMs = 2500) {
 export type AutoSaver = ReturnType<typeof createAutoSaver>;
 
 // Registrerar ändringskrokar på alla datatabeller → markDirty.
-// (Sparningen skriver inte till settings, så ingen loop uppstår.)
+// Identitets- och filmeta-nycklarna exkluderas — sparningen själv skriver
+// dem (bumpIdentity) och skulle annars trigga en evig sparloop.
+const SETTINGS_KEYS_EXCLUDED_FROM_SYNC = new Set(['dbIdentity', 'bokforingsfil']);
+
 export function watchDatabase(saver: AutoSaver): void {
-  const tables = [
+  const dataTables = [
     db.accounts, db.vouchers, db.transactions,
-    db.invoices, db.declarations, db.attachments, db.settings,
+    db.invoices, db.declarations, db.attachments,
   ];
-  for (const table of tables) {
+  for (const table of dataTables) {
     table.hook('creating', () => { saver.markDirty(); });
     table.hook('updating', () => { saver.markDirty(); });
     table.hook('deleting', () => { saver.markDirty(); });
   }
+  const skip = (key: unknown) => SETTINGS_KEYS_EXCLUDED_FROM_SYNC.has(String(key));
+  db.settings.hook('creating', key => { if (!skip(key)) saver.markDirty(); });
+  db.settings.hook('updating', (_mods, key) => { if (!skip(key)) saver.markDirty(); });
+  db.settings.hook('deleting', key => { if (!skip(key)) saver.markDirty(); });
 }
