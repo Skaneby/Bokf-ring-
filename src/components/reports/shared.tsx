@@ -1,4 +1,5 @@
 import React from 'react';
+import { Account, Transaction, Voucher } from '../../db';
 
 export function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -34,4 +35,37 @@ export function buildBalMap(transactions: { accountId: number; amount: number }[
   const bal = new Map<number, number>();
   transactions.forEach(t => bal.set(t.accountId, (bal.get(t.accountId) ?? 0) + t.amount));
   return bal;
+}
+
+/**
+ * Avgör om ett verifikat matchar en fritextsökning i huvudboken.
+ * Matchar mot beskrivning, datum, kontonummer/kontonamn (via accounts-uppslag)
+ * eller transaktionsbelopp (både "1250" och "1250.00" ska träffa).
+ * Tom söktermer matchar allt.
+ */
+export function matchesSearch(
+  voucher: Voucher,
+  transactions: Transaction[],
+  accounts: Account[],
+  term: string
+): boolean {
+  const q = term.trim().toLowerCase();
+  if (q === '') return true;
+
+  if (voucher.description.toLowerCase().includes(q)) return true;
+  if (voucher.date.toLowerCase().includes(q)) return true;
+
+  const voucherTransactions = transactions.filter(t => t.voucherId === voucher.id);
+
+  for (const t of voucherTransactions) {
+    const account = accounts.find(a => a.id === t.accountId);
+    if (String(t.accountId).includes(q)) return true;
+    if (account?.name.toLowerCase().includes(q)) return true;
+
+    const abs = Math.abs(t.amount);
+    if (abs.toFixed(2).includes(q)) return true;
+    if (String(abs).includes(q)) return true;
+  }
+
+  return false;
 }

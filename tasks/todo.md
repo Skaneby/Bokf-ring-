@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 429 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 452 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Fakturering (juli 2026)**
 - [x] Fakturor med löpande, obruten nummerserie (räknas bara uppåt, återanvänds aldrig)
@@ -104,9 +104,9 @@ Spec: `docs/deklarationsmodul-spec.md` (SRU-filöverföring + manuell deklaratio
 
 ### Öppet / Förbättringar (prioriterade)
 
-- [ ] **P1 — Sökfunktion i huvudbok**: störst vardagsnytta, minst insats (filtrera på beskrivning/konto/belopp)
-- [ ] **P2 — Periodfiltrering i rapporter** (månad/kvartal/år): krävs som grund för P3, stor nytta vid momsdeklaration
-- [ ] **P3 — Momsrapport per period**: bygger på P2 — visar rutorna 05/10-12/48/49 per redovisningsperiod
+- [x] **P1 — Sökfunktion i huvudbok**: sök på beskrivning/datum/konto/belopp, träffräknare, filtrering före paginering (via rutinarbete-agenten)
+- [x] **P2 — Periodfiltrering i rapporter**: år/kvartal/månad-väljare; resultat/huvudbok/moms = periodens transaktioner, balans = ackumulerat t.o.m. periodslut (lib/period.ts)
+- [x] **P3 — Momsrapport per period**: ny flik "Moms (period)" — rutorna 05/10-12/48/49 för vald redovisningsperiod
 - [ ] **P4 — Årsavslut**: nollställ resultatkonton mot 2010 vid nytt räkenskapsår; viktig vid årsskiftet, kräver domännoggrannhet
 - [ ] **P5 — Kvittobilagor**: spara kvittobild kopplad till verifikation (IndexedDB blob); störst insats, lagringstungt
 - [x] Export av NE-bilagan som utskriftsvänlig vy — klar via "Skriv ut underlag" i Deklarationsfliken

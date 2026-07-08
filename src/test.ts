@@ -34,6 +34,8 @@ import {
   getAiSettings, saveAiSettings, hasValidKey, gateMessage, NO_KEY_REPLY,
   buildSystemPrompt, isOnboardingDone, markOnboardingDone,
 } from './lib/ai';
+import { matchesSearch } from './components/reports/shared';
+import { periodRange, periodLabel, splitByPeriod } from './lib/period';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -1748,6 +1750,118 @@ async function runTests() {
   assert((await isOnboardingDone()) === false, 'Onboarding: visas för nya användare');
   await markOnboardingDone();
   assert((await isOnboardingDone()) === true, 'Onboarding: flaggan sparas — visas inte igen');
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 23. HUVUDBOKSSÖK
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 23. Huvudbokssök ─────────────────────────\n');
+
+  {
+    const searchAccounts = [
+      { id: 1930, name: 'Företagskonto / Bank', type: 'asset' as const },
+      { id: 5410, name: 'Förbrukningsinventarier', type: 'expense' as const },
+    ];
+    const searchVoucher = { id: 1, date: '2026-03-15', description: 'Kontorsmaterial', created_at: 0 };
+    const searchTransactions = [
+      { id: 1, voucherId: 1, accountId: 5410, amount: 1250 },
+      { id: 2, voucherId: 1, accountId: 1930, amount: -1250 },
+    ];
+
+    assert(
+      matchesSearch(searchVoucher, searchTransactions, searchAccounts, 'kontor'),
+      'Huvudbokssök: träff på beskrivning (case-insensitivt)'
+    );
+    assert(
+      matchesSearch(searchVoucher, searchTransactions, searchAccounts, '1930'),
+      'Huvudbokssök: träff på kontonummer'
+    );
+    assert(
+      matchesSearch(searchVoucher, searchTransactions, searchAccounts, 'Bank'),
+      'Huvudbokssök: träff på kontonamn via uppslag'
+    );
+    assert(
+      matchesSearch(searchVoucher, searchTransactions, searchAccounts, '1250') &&
+      matchesSearch(searchVoucher, searchTransactions, searchAccounts, '1250.00'),
+      'Huvudbokssök: träff på belopp i båda formaten'
+    );
+    assert(
+      !matchesSearch(searchVoucher, searchTransactions, searchAccounts, 'saknasinteexisterande'),
+      'Huvudbokssök: ingen träff ger false'
+    );
+    assert(
+      matchesSearch(searchVoucher, searchTransactions, searchAccounts, ''),
+      'Huvudbokssök: tom sökterm matchar allt'
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 24. PERIODFILTRERING & MOMSRAPPORT PER PERIOD (P2/P3)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 24. Periodfiltrering ──────────────────────────────\n');
+
+  // ── periodRange: gränser inkl. skottår ─────────────────────────────────
+  { const y = periodRange({ year: 2025 });
+    assert(y.from === '2025-01-01' && y.to === '2025-12-31', 'periodRange: helår');
+    const q2 = periodRange({ year: 2025, quarter: 2 });
+    assert(q2.from === '2025-04-01' && q2.to === '2025-06-30', 'periodRange: kvartal 2 = apr–jun');
+    const q4 = periodRange({ year: 2025, quarter: 4 });
+    assert(q4.to === '2025-12-31', 'periodRange: kvartal 4 slutar 31 dec');
+    const feb24 = periodRange({ year: 2024, month: 2 });
+    assert(feb24.to === '2024-02-29', 'periodRange: februari skottår → 29 dagar');
+    const feb25 = periodRange({ year: 2025, month: 2 });
+    assert(feb25.to === '2025-02-28', 'periodRange: februari vanligt år → 28 dagar'); }
+
+  // ── periodLabel ────────────────────────────────────────────────────────
+  assert(periodLabel(null) === 'Alla perioder', 'periodLabel: null → alla perioder');
+  assert(periodLabel({ year: 2025, quarter: 3 }) === 'kvartal 3 2025', 'periodLabel: kvartal');
+  assert(periodLabel({ year: 2025, month: 5 }) === 'maj 2025', 'periodLabel: månad');
+
+  // ── splitByPeriod: resultat = period, balans = ackumulerat ─────────────
+  await resetDb();
+  await addVoucher('2025-02-10', 'Försäljning Q1', [
+    { accountId: 1930, amount: 10000 }, { accountId: 3040, amount: -10000 },
+  ]);
+  await addVoucher('2025-05-10', 'Försäljning Q2', [
+    { accountId: 1930, amount: 20000 }, { accountId: 3040, amount: -20000 },
+  ]);
+  await addVoucher('2025-05-20', 'Inköp Q2 med moms', [
+    { accountId: 5410, amount: 4000 }, { accountId: 2640, amount: 1000 },
+    { accountId: 1930, amount: -5000 },
+  ]);
+  await addVoucher('2025-08-10', 'Försäljning Q3 med moms', [
+    { accountId: 1930, amount: 12500 }, { accountId: 3000, amount: -10000 },
+    { accountId: 2610, amount: -2500 },
+  ]);
+
+  const pVouchers = await db.vouchers.toArray();
+  const pTxs      = await db.transactions.toArray();
+
+  { const q2 = splitByPeriod(pVouchers, pTxs, { year: 2025, quarter: 2 });
+    // inPeriod: enbart Q2-verifikaten (2 st, 6 transaktioner)
+    assert(q2.voucherIdsInPeriod.size === 2, `split Q2: 2 verifikat i perioden (fick ${q2.voucherIdsInPeriod.size})`);
+    const q2sales = q2.inPeriod.filter(t => t.accountId === 3040).reduce((s, t) => s + t.amount, 0);
+    assert(near(q2sales, -20000), 'split Q2: resultat räknar bara periodens försäljning');
+    // throughEnd: ackumulerat t.o.m. 30 juni — bank = 10000+20000−5000
+    const bankThrough = q2.throughEnd.filter(t => t.accountId === 1930).reduce((s, t) => s + t.amount, 0);
+    assert(near(bankThrough, 25000), `split Q2: balans ackumulerar t.o.m. periodslut (bank ${bankThrough})`);
+    // Q3-försäljningen ingår varken i period eller balans
+    assert(!q2.throughEnd.some(t => t.accountId === 2610), 'split Q2: Q3-transaktioner utanför balansunderlaget'); }
+
+  { const all = splitByPeriod(pVouchers, pTxs, null);
+    assert(all.inPeriod.length === pTxs.length && all.throughEnd.length === pTxs.length,
+      'split null: ingen filtrering'); }
+
+  // ── Momsrapport per period (P3): calcMomsLines på periodens transaktioner ──
+  { const q3 = splitByPeriod(pVouchers, pTxs, { year: 2025, quarter: 3 });
+    const moms = calcMomsLines(q3.inPeriod);
+    assert(near(moms.box05, 10000), `Momsrapport Q3: ruta 05 = 10 000 (fick ${moms.box05})`);
+    assert(near(moms.box10, 2500), 'Momsrapport Q3: ruta 10 = 2 500');
+    assert(near(moms.box49, 2500), 'Momsrapport Q3: ruta 49 = 2 500 att betala');
+    const q2moms = calcMomsLines(splitByPeriod(pVouchers, pTxs, { year: 2025, quarter: 2 }).inPeriod);
+    assert(near(q2moms.box48, 1000) && near(q2moms.box49, -1000),
+      'Momsrapport Q2: ingående moms 1 000 → att återfå'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

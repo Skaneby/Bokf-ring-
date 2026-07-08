@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v3 (accounts, vouchers, transactions, invoices, settings, declarations) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 429 enhetstester (Node + fake-indexeddb)
+  test.ts              — 452 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -71,7 +71,8 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
       shared.tsx       — Card / Row / TotalRow / buildBalMap
       ResultatTab.tsx  — resultaträkning
       BalansTab.tsx    — balansräkning
-      HuvudbokTab.tsx  — huvudbok med paginering (25/sida), redigera/radera verifikat
+      HuvudbokTab.tsx  — huvudbok: sök (matchesSearch i shared), paginering, redigera/radera
+      MomsTab.tsx      — momsrapport per period (rutorna 05-49 på periodens transaktioner)
       SkattTab.tsx     — NE-bilaga (översikt), egenavgifter, momsdeklaration
       DeklarationTab.tsx — blankettvy NE/INK2 per beskattningsår: justera rader, skriv ut, status, SRU-export
       BackupTab.tsx    — JSON-backup, SIE4 import/export, "Byt bokföring"
@@ -83,6 +84,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
     geminiImport.ts    — parseGeminiJson() / validateRows() / resolveAccount() / bookDraftRows()
     invoice.ts         — nummerserie, invoiceTotals(), bokning (faktura/kontant), renderInvoiceHtml()
+    period.ts          — periodRange/splitByPeriod: resultat = period, balans = ackumulerat t.o.m. periodslut
     declaration.ts     — NE-blankettvy: B1-B16 (ackumulerat) + R1-R48 (år), justeringar, inlämningssteg, utskrift
     neSru.ts           — NE→SRU; B/R-fältkoder VERIFIERADE (BAS kopplingstabell); justeringsrader exporteras ej
     ink2.ts            — INK2R officiella poster 2.1-3.27, VERIFIERADE koder (BAS); INK2S exporteras ej
@@ -165,7 +167,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 429 enhetstester
+npm run test         # kör 452 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)

@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Account, Transaction, Voucher, db } from '../../db';
-import { Pencil, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pencil, Trash2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { matchesSearch } from './shared';
 
 const PAGE_SIZE = 25;
+
+const inputCls =
+  'w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm text-slate-900 ' +
+  'placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 ' +
+  'focus:border-transparent';
 
 interface Props {
   accounts: Account[];
@@ -14,9 +20,18 @@ interface Props {
 export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }: Props) {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
 
-  const totalPages = Math.ceil(vouchers.length / PAGE_SIZE);
-  const pageVouchers = vouchers.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  useEffect(() => {
+    setPage(0);
+  }, [search]);
+
+  const filteredVouchers = search.trim() === ''
+    ? vouchers
+    : vouchers.filter(v => matchesSearch(v, transactions, accounts, search));
+
+  const totalPages = Math.ceil(filteredVouchers.length / PAGE_SIZE);
+  const pageVouchers = filteredVouchers.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Gruppera transaktioner per verifikat en gång — O(V+T) istället för O(V×T)
   const byVoucher = new Map<number, Transaction[]>();
@@ -39,6 +54,29 @@ export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }:
 
   return (
     <div className="space-y-4">
+      <div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Sök beskrivning, konto eller belopp…"
+            aria-label="Sök i huvudbok"
+            className={inputCls}
+          />
+        </div>
+        {search.trim() !== '' && (
+          <p className="mt-1.5 text-xs text-slate-400">
+            {filteredVouchers.length} av {vouchers.length} verifikationer matchar
+          </p>
+        )}
+      </div>
+
+      {filteredVouchers.length === 0 && (
+        <p className="text-sm text-slate-400">Inga verifikationer matchar sökningen.</p>
+      )}
+
       {pageVouchers.map(v => {
         const vt = byVoucher.get(v.id!) ?? [];
         return (
@@ -122,7 +160,7 @@ export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }:
             <ChevronLeft className="h-4 w-4" /> Föregående
           </button>
           <span className="text-sm text-slate-500">
-            Sida {page + 1} av {totalPages} ({vouchers.length} verifikationer)
+            Sida {page + 1} av {totalPages} ({filteredVouchers.length} verifikationer)
           </span>
           <button
             onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
