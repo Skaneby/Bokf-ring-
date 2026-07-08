@@ -46,7 +46,14 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 484 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 492 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+
+**Fakturaarkiv & utskick (juli 2026)**
+- [x] Fakturafilen arkiveras i databasen exakt som den skapades — senare ändringar av uppgifter/mall påverkar aldrig arkivet
+- [x] "Visa"-knapp öppnar den arkiverade fakturan; alla utskick använder arkivfilen
+- [x] Auto-nedladdning av fakturafilen till datorn vid skapande (inställning, på som standard)
+- [x] E-post-knappen laddar ned filen + öppnar mailprogrammet förifyllt (mottagare, belopp, bankgiro, förfallodatum) — mailto kan aldrig bifoga filer (webbstandard)
+- [x] Statusfilter i fakturalistan: Alla / Obetalda (räknare) / Betalda
 
 **Fakturering (juli 2026)**
 - [x] Fakturor med löpande, obruten nummerserie (räknas bara uppåt, återanvänds aldrig)

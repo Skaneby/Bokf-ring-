@@ -139,6 +139,20 @@ export function InvoiceSettings() {
           Fakturanummer räknas alltid uppåt och återanvänds aldrig — nummerserien ska vara obruten enligt bokföringslagen.
           Ändra bara startnumret om du byter från ett annat faktureringssystem.
         </p>
+        <label className="flex items-start gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={s.autoDownloadInvoice !== false}
+            onChange={e => set({ autoDownloadInvoice: e.target.checked })}
+            className="mt-0.5"
+          />
+          <span>
+            Ladda ned fakturafilen till datorn automatiskt när fakturan skapas
+            <span className="block text-xs text-slate-400">
+              Fakturan arkiveras alltid i appen oavsett — med nedladdningen får du dessutom en egen fil i din nedladdningsmapp.
+            </span>
+          </span>
+        </label>
       </div>
 
       {/* Fakturamall */}

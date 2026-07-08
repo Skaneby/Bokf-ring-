@@ -15,6 +15,7 @@ export interface CompanySettings {
   nextInvoiceNumber: number;   // räknas bara uppåt — garanterar obruten serie
   defaultMethod: InvoiceMethod;
   template?: string;           // egen HTML-mall (importerad fil); tom = standardmall
+  autoDownloadInvoice?: boolean; // ladda ned fakturafilen till datorn vid skapande
 }
 
 export const DEFAULT_COMPANY: CompanySettings = {
@@ -22,6 +23,7 @@ export const DEFAULT_COMPANY: CompanySettings = {
   paymentTermsDays: 30,
   nextInvoiceNumber: 1,
   defaultMethod: 'faktura',
+  autoDownloadInvoice: true,
 };
 
 const SETTINGS_KEY = 'company';
@@ -145,9 +147,30 @@ export async function createInvoice(data: NewInvoice): Promise<Invoice> {
       createdVoucherId,
       created_at: Date.now(),
     };
+    // Arkivera fakturafilen i det skick den skapades — den sparade kopian
+    // påverkas aldrig av senare ändringar i uppgifter eller mall
+    invoice.documentHtml = renderInvoiceHtml(invoice, settings);
     invoice.id = (await db.invoices.add(invoice)) as number;
     return invoice;
   });
+}
+
+// Arkiverad fil om den finns, annars om-rendering (fakturor skapade före arkivfunktionen)
+export async function getInvoiceHtml(invoice: Invoice): Promise<string> {
+  if (invoice.documentHtml) return invoice.documentHtml;
+  return renderInvoiceHtml(invoice, await getCompanySettings());
+}
+
+export const invoiceFileName = (invoice: Invoice) => `faktura-${invoice.number}.html`;
+
+export function downloadInvoiceFile(invoice: Invoice, html: string): void {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = invoiceFileName(invoice);
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function registerPayment(invoiceId: number, paidDate: string): Promise<void> {

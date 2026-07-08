@@ -16,7 +16,7 @@ import {
   invoiceTotals, invoiceCreationLines, invoicePaymentLines,
   createInvoice, registerPayment, cancelInvoice,
   getCompanySettings, saveCompanySettings, renderInvoiceHtml,
-  DEFAULT_COMPANY,
+  getInvoiceHtml, invoiceFileName, DEFAULT_COMPANY,
 } from './lib/invoice';
 import { InvoiceRow } from './db';
 import {
@@ -2026,6 +2026,53 @@ async function runTests() {
   { await addAttachment(attVoucherId, makeFile('igen.png', 'image/png', [1]));
     await deleteAttachmentsForVoucher(attVoucherId);
     assert((await db.attachments.count()) === 0, 'Bilagor: kaskadradering vid verifikatradering'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 27. FAKTURAARKIV (lokal fakturafil)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 27. Fakturaarkiv ──────────────────────────────────\n');
+
+  await resetDb();
+  await saveCompanySettings({
+    ...DEFAULT_COMPANY, name: 'Arkiv AB', orgnr: '165560000167', bankgiro: '123-4567',
+  });
+
+  const archInv = await createInvoice({
+    date: '2026-07-01', dueDate: '2026-07-31',
+    customerName: 'Arkivkund AB',
+    rows: [{ description: 'Tjänst', qty: 1, unitPrice: 1000, vatRate: 25 }],
+    method: 'faktura',
+  });
+
+  // ── Arkivering vid skapande ────────────────────────────────────────────
+  assert(!!archInv.documentHtml, 'Arkiv: fakturafilen sparas i databasen vid skapande');
+  assert(archInv.documentHtml!.includes('Arkivkund AB') && archInv.documentHtml!.includes('Arkiv AB'),
+    'Arkiv: kund och företag i den arkiverade filen');
+  assert(archInv.documentHtml!.includes('123-4567'), 'Arkiv: bankgiro i den arkiverade filen');
+  assert(invoiceFileName(archInv) === 'faktura-1.html', 'Arkiv: filnamn faktura-{nummer}.html');
+
+  // ── Snapshot-immutabilitet: senare ändringar påverkar INTE arkivet ─────
+  { await saveCompanySettings({
+      ...(await getCompanySettings()), name: 'HELT NYTT NAMN AB', bankgiro: '999-9999',
+    });
+    const stored = (await db.invoices.get(archInv.id!))!;
+    const html = await getInvoiceHtml(stored);
+    assert(html.includes('Arkiv AB') && !html.includes('HELT NYTT NAMN AB'),
+      'Arkiv: arkiverad faktura opåverkad av senare företagsändringar');
+    assert(html.includes('123-4567') && !html.includes('999-9999'),
+      'Arkiv: arkiverat bankgiro opåverkat'); }
+
+  // ── Fallback för fakturor skapade före arkivfunktionen ─────────────────
+  { const stored = (await db.invoices.get(archInv.id!))!;
+    delete stored.documentHtml;
+    const html = await getInvoiceHtml(stored);
+    assert(html.includes('Arkivkund AB') && html.includes('HELT NYTT NAMN AB'),
+      'Arkiv: äldre faktura utan arkiv om-renderas med aktuella uppgifter'); }
+
+  // ── Arkivet följer med i backupen (ligger på invoice-posten) ───────────
+  { const stored = (await db.invoices.get(archInv.id!))!;
+    assert(stored.documentHtml!.length > 500, 'Arkiv: HTML persisterad i invoices-tabellen (ingår i Dexie-datat)'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

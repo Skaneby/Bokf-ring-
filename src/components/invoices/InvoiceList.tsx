@@ -3,10 +3,10 @@ import { format } from 'date-fns';
 import { Invoice } from '../../db';
 import { formatCurrency } from '../../lib/utils';
 import {
-  invoiceTotals, registerPayment, cancelInvoice,
-  renderInvoiceHtml, getCompanySettings,
+  invoiceTotals, registerPayment, cancelInvoice, getCompanySettings,
+  getInvoiceHtml, invoiceFileName, downloadInvoiceFile,
 } from '../../lib/invoice';
-import { Printer, Download, Share2, Mail, Ban, CheckCircle } from 'lucide-react';
+import { Printer, Download, Share2, Mail, Ban, CheckCircle, Eye } from 'lucide-react';
 
 const STATUS_BADGE: Record<Invoice['status'], { label: string; cls: string }> = {
   obetald:   { label: 'Obetald',   cls: 'bg-amber-100 text-amber-700'     },
@@ -14,32 +14,30 @@ const STATUS_BADGE: Record<Invoice['status'], { label: string; cls: string }> = 
   makulerad: { label: 'Makulerad', cls: 'bg-slate-100 text-slate-500'     },
 };
 
-async function getHtml(inv: Invoice): Promise<string> {
-  return renderInvoiceHtml(inv, await getCompanySettings());
+// Alla åtgärder använder den ARKIVERADE fakturafilen (som den skapades)
+
+// Visa fakturan i ny flik
+async function viewInvoice(inv: Invoice) {
+  const url = URL.createObjectURL(new Blob([await getInvoiceHtml(inv)], { type: 'text/html' }));
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// "Skicka" i en lokal app = skriv ut/PDF, dela som fil, ladda ned eller maila
 async function printInvoice(inv: Invoice) {
   const w = window.open('', '_blank');
   if (!w) return;
-  w.document.write(await getHtml(inv));
+  w.document.write(await getInvoiceHtml(inv));
   w.document.close();
   w.focus();
   setTimeout(() => w.print(), 250); // låt layouten hinna renderas
 }
 
 async function downloadInvoice(inv: Invoice) {
-  const blob = new Blob([await getHtml(inv)], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `faktura-${inv.number}.html`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadInvoiceFile(inv, await getInvoiceHtml(inv));
 }
 
 async function shareInvoice(inv: Invoice) {
-  const file = new File([await getHtml(inv)], `faktura-${inv.number}.html`, { type: 'text/html' });
+  const file = new File([await getInvoiceHtml(inv)], invoiceFileName(inv), { type: 'text/html' });
   if (navigator.canShare?.({ files: [file] })) {
     await navigator.share({ files: [file], title: `Faktura ${inv.number}` }).catch(() => {});
   } else {
@@ -47,12 +45,20 @@ async function shareInvoice(inv: Invoice) {
   }
 }
 
-function mailInvoice(inv: Invoice) {
+// E-post: mailto kan aldrig bifoga filer (webbstandard) — därför laddas
+// fakturafilen ned automatiskt samtidigt som mailet öppnas förifyllt,
+// så att användaren bara drar in filen.
+async function mailInvoice(inv: Invoice) {
+  await downloadInvoice(inv);
   const totals = invoiceTotals(inv.rows);
-  const subject = encodeURIComponent(`Faktura ${inv.number}`);
+  const company = await getCompanySettings();
+  const subject = encodeURIComponent(`Faktura ${inv.number}${company.name ? ` från ${company.name}` : ''}`);
   const body = encodeURIComponent(
-    `Hej!\n\nHär kommer faktura ${inv.number} på ${formatCurrency(totals.grossTotal)}, ` +
-    `förfallodatum ${inv.dueDate}.\n\nFakturan bifogas (ladda ned den från appen och bifoga i detta mail).\n\nVänliga hälsningar`,
+    `Hej!\n\nHär kommer faktura ${inv.number} på ${formatCurrency(totals.grossTotal)}.\n` +
+    `Förfallodatum: ${inv.dueDate}` +
+    (company.bankgiro ? `\nBetalas till bankgiro ${company.bankgiro} — ange fakturanummer ${inv.number}.` : '') +
+    `\n\n(Bifoga filen ${invoiceFileName(inv)} som just laddades ned till din dator.)\n\n` +
+    `Vänliga hälsningar${company.name ? `\n${company.name}` : ''}`,
   );
   window.location.href = `mailto:${inv.customerEmail ?? ''}?subject=${subject}&body=${body}`;
 }
@@ -62,6 +68,10 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
   const [payDate,      setPayDate]      = useState(format(new Date(), 'yyyy-MM-dd'));
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [error,        setError]        = useState('');
+  const [filter,       setFilter]       = useState<'alla' | 'obetald' | 'betald'>('alla');
+
+  const visible = filter === 'alla' ? invoices : invoices.filter(i => i.status === filter);
+  const unpaidCount = invoices.filter(i => i.status === 'obetald').length;
 
   const doPay = async (id: number) => {
     setError('');
@@ -89,9 +99,32 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
 
   return (
     <div className="space-y-3">
+      {/* Statusfilter — obetalda fakturor är de som ska bokföras som betalda */}
+      <div className="flex flex-wrap gap-2">
+        {([['alla', 'Alla'], ['obetald', `Obetalda (${unpaidCount})`], ['betald', 'Betalda']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setFilter(id)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+              filter === id
+                ? 'bg-slate-900 text-white'
+                : 'border border-slate-200 text-slate-600 hover:border-slate-900'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {error && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>}
 
-      {invoices.map(inv => {
+      {visible.length === 0 && (
+        <p className="text-sm text-slate-400">
+          {filter === 'obetald' ? 'Inga obetalda fakturor — allt är bokfört. 🎉' : 'Inga fakturor i det här filtret.'}
+        </p>
+      )}
+
+      {visible.map(inv => {
         const totals = invoiceTotals(inv.rows);
         const badge  = STATUS_BADGE[inv.status];
         return (
@@ -117,6 +150,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
 
             {/* Åtgärder */}
             <div className="flex flex-wrap items-center gap-1 border-t border-slate-100 bg-slate-50 px-3 py-2">
+              <IconBtn onClick={() => viewInvoice(inv)}     icon={Eye}      label="Visa" />
               <IconBtn onClick={() => printInvoice(inv)}    icon={Printer}  label="Skriv ut / PDF" />
               <IconBtn onClick={() => downloadInvoice(inv)} icon={Download} label="Ladda ned" />
               <IconBtn onClick={() => shareInvoice(inv)}    icon={Share2}   label="Dela" />

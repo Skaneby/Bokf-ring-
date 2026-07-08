@@ -109,15 +109,33 @@ test('@desktop fakturaflöde: inställningar → skapa → bokförd → betald �
   await expectAmount(page, page.getByText('Att betala').locator('..'), '1250,00');
   await page.getByRole('button', { name: 'Skapa faktura' }).click();
 
-  // Lista: faktura 1, obetald, bokförd (fakturametoden)
+  // Lista: faktura 1, obetald, bokförd (fakturametoden) + arkivfilen nedladdad
   await expect(page.getByText('Faktura 1', { exact: true })).toBeVisible();
-  await expect(page.getByText('Obetald')).toBeVisible();
+  await expect(page.getByText(/Obetalda \(1\)/)).toBeVisible(); // statusfilter räknar
   await expect(page.getByText('skapad och bokförd')).toBeVisible();
+
+  // "Visa" öppnar den ARKIVERADE fakturafilen i ny flik
+  const popup = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Visa', exact: true }).click();
+  const invoiceView = await popup;
+  await expect(invoiceView.locator('body')).toContainText('Kund E2E AB');
+  await expect(invoiceView.locator('body')).toContainText('Faktura');
+  await invoiceView.close();
+
+  // E-post: laddar ned filen och öppnar mailto (mailto kan inte bifoga — filen följer separat)
+  const mailDl = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'E-post' }).click();
+  expect((await mailDl).suggestedFilename()).toBe('faktura-1.html');
 
   // Registrera betalning
   await page.getByRole('button', { name: 'Registrera betalning' }).click();
   await page.getByRole('button', { name: 'Bekräfta' }).click();
   await expect(page.getByText('Betald', { exact: true })).toBeVisible();
+
+  // Statusfilter: obetalda är nu tomt
+  await page.getByRole('button', { name: /Obetalda \(0\)/ }).click();
+  await expect(page.getByText(/Inga obetalda fakturor/)).toBeVisible();
+  await page.getByRole('button', { name: 'Alla', exact: true }).click();
 
   // Rapporter: intäkt 1 000 (netto), balans: bank 1 250 efter betalning
   await gotoTab(page, 'Rapporter');

@@ -51,7 +51,8 @@ export function Invoices() {
       {justCreated && tab === 'lista' && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           Faktura {justCreated.number} skapad
-          {justCreated.method === 'faktura' ? ' och bokförd' : ''} — skriv ut eller dela den nedan.
+          {justCreated.method === 'faktura' ? ' och bokförd' : ''} — arkiverad i appen (knappen "Visa"){' '}
+          och nedladdad som fil om inställningen är på. Skicka via E-post, Dela eller Skriv ut nedan.
         </div>
       )}
 

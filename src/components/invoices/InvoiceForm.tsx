@@ -3,7 +3,7 @@ import { format, addDays } from 'date-fns';
 import { InvoiceRow, InvoiceMethod, Invoice } from '../../db';
 import { formatCurrency } from '../../lib/utils';
 import {
-  createInvoice, invoiceTotals, getCompanySettings,
+  createInvoice, invoiceTotals, getCompanySettings, downloadInvoiceFile,
 } from '../../lib/invoice';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -57,6 +57,11 @@ export function InvoiceForm({ onCreated }: { onCreated: (inv: Invoice) => void }
         customerEmail: customerEmail.trim() || undefined,
         rows: validRows,
       });
+      // Spara fakturafilen lokalt på datorn (inställning, på som standard)
+      const settings = await getCompanySettings();
+      if (settings.autoDownloadInvoice !== false && inv.documentHtml) {
+        downloadInvoiceFile(inv, inv.documentHtml);
+      }
       onCreated(inv);
     } catch {
       setError('Kunde inte skapa fakturan. Försök igen.');

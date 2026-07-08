@@ -47,6 +47,9 @@ export interface Invoice {
   paidDate?: string;
   createdVoucherId?: number; // verifikat bokfört vid skapande (fakturametoden)
   paidVoucherId?: number;    // verifikat bokfört vid betalning
+  // Arkiverad fakturafil: HTML:n exakt som när fakturan skapades — ändras
+  // aldrig även om företagsuppgifter/mall ändras senare
+  documentHtml?: string;
   created_at: number;
 }
 
