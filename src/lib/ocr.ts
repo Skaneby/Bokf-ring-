@@ -1,5 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
 export interface ReceiptData {
   date?: string;            // YYYY-MM-DD
   amount?: number;          // inkl. moms
@@ -13,6 +11,8 @@ export async function scanReceipt(file: File): Promise<ReceiptData> {
   if (!apiKey) throw new Error('GEMINI_API_KEY saknas');
 
   const base64 = await toBase64(file);
+  // Ladda SDK:n först när skanning används — hålls utanför startbundeln
+  const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 

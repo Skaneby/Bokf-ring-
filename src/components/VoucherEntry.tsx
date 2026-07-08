@@ -222,7 +222,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
             <div>
               <label className="mb-1 block text-xs text-slate-500">Belopp (kr)</label>
               <input
-                type="number" step="0.01" min="0"
+                type="number" step="0.01" min="0" inputMode="decimal"
                 value={quickAmount}
                 onChange={e => setQuickAmount(e.target.value)}
                 placeholder="0.00"
@@ -301,7 +301,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
                 <div>
                   <label className="mb-1 block text-xs text-slate-500">Belopp inkl. moms</label>
                   <input
-                    type="number" step="0.01" min="0"
+                    type="number" step="0.01" min="0" inputMode="decimal"
                     value={vatGross}
                     onChange={e => setVatGross(e.target.value)}
                     placeholder="0.00"
@@ -348,11 +348,12 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
           </div>
 
           {rows.map((row, i) => (
-            <div key={i} className="border-t border-slate-100 first:border-0 p-3 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-[1fr_7rem_7rem_2rem] sm:items-center sm:gap-2 sm:px-4 sm:py-2">
+            <div key={i} className="border-t border-slate-100 first:border-0 p-3 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-[1fr_7rem_7rem_2.75rem] sm:items-center sm:gap-2 sm:px-4 sm:py-2">
               {/* Account — full width on mobile */}
               <select
                 value={row.accountId}
                 onChange={e => updateRow(i, 'accountId', e.target.value)}
+                aria-label={`Konto rad ${i + 1}`}
                 className={cls}
               >
                 <option value="">Välj konto…</option>
@@ -366,22 +367,24 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
                 <div className="sm:contents">
                   <label className="sm:hidden text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5 block">Debet</label>
                   <input
-                    type="number" step="0.01" min="0"
+                    type="number" step="0.01" min="0" inputMode="decimal"
                     value={row.debit}
                     onChange={e => updateRow(i, 'debit', e.target.value)}
                     disabled={row.credit !== ''}
                     placeholder="0.00"
+                    aria-label={`Debet rad ${i + 1}`}
                     className={cls}
                   />
                 </div>
                 <div className="sm:contents">
                   <label className="sm:hidden text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5 block">Kredit</label>
                   <input
-                    type="number" step="0.01" min="0"
+                    type="number" step="0.01" min="0" inputMode="decimal"
                     value={row.credit}
                     onChange={e => updateRow(i, 'credit', e.target.value)}
                     disabled={row.debit !== ''}
                     placeholder="0.00"
+                    aria-label={`Kredit rad ${i + 1}`}
                     className={cls}
                   />
                 </div>
@@ -390,7 +393,8 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
               <div className="flex justify-end sm:justify-center">
                 <button
                   type="button" onClick={() => removeRow(i)} disabled={rows.length <= 2}
-                  className="rounded p-1.5 text-slate-300 transition-colors hover:text-red-500 disabled:opacity-0"
+                  aria-label={`Ta bort rad ${i + 1}`}
+                  className="rounded p-2.5 text-slate-300 transition-colors hover:text-red-500 disabled:opacity-0"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -398,13 +402,16 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
             </div>
           ))}
 
-          {/* Totals */}
-          <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 grid grid-cols-[1fr_7rem_7rem_2rem] gap-2 items-center">
-            <span className="text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 hidden sm:block">Summa</span>
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 sm:hidden">Summa</span>
-            <span className="font-semibold tabular-nums text-slate-900 text-sm">{totalDebit.toFixed(2)}</span>
-            <span className="font-semibold tabular-nums text-slate-900 text-sm">{totalCredit.toFixed(2)}</span>
-            <span />
+          {/* Totals — flex på mobil (raderna staplas där), grid linjerad med kolumnerna på desktop */}
+          <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 flex items-center justify-between gap-2 sm:grid sm:grid-cols-[1fr_7rem_7rem_2.75rem] sm:gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 sm:text-right">Summa</span>
+            <span className="font-semibold tabular-nums text-slate-900 text-sm">
+              <span className="sm:hidden text-[10px] font-semibold uppercase text-slate-400 mr-1">D</span>{totalDebit.toFixed(2)}
+            </span>
+            <span className="font-semibold tabular-nums text-slate-900 text-sm">
+              <span className="sm:hidden text-[10px] font-semibold uppercase text-slate-400 mr-1">K</span>{totalCredit.toFixed(2)}
+            </span>
+            <span className="hidden sm:block" />
           </div>
           {Math.abs(diff) > 0.01 && (
             <div className="px-4 py-1.5 text-right text-xs text-red-500">

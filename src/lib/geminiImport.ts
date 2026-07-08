@@ -100,11 +100,17 @@ export function lookupDict(row: GeminiRow): number | null {
 // Accounts that carry VAT/system postings — never suggested as main account.
 const SYSTEM_ACCOUNTS = new Set([1930, 1910, 2610, 2620, 2630, 2640, 2514, 8422]);
 
-export async function lookupHistory(description: string): Promise<number | null> {
+type VoucherLike = { id?: number; description: string };
+
+export async function lookupHistory(
+  description: string,
+  allVouchers?: VoucherLike[],
+): Promise<number | null> {
   const words = description.toLowerCase().split(/\s+/).filter(w => w.length > 3);
   if (words.length === 0) return null;
 
-  const vouchers = await db.vouchers.toArray();
+  // Anroparen kan skicka in förladdade vouchers — undviker en tabellskanning per rad
+  const vouchers = allVouchers ?? await db.vouchers.toArray();
   const matched  = vouchers.filter(v => words.some(w => v.description.toLowerCase().includes(w)));
   if (matched.length === 0) return null;
 
@@ -122,18 +128,20 @@ export async function lookupHistory(description: string): Promise<number | null>
 
 export async function resolveAccount(
   row: GeminiRow,
+  allVouchers?: VoucherLike[],
 ): Promise<{ account: number | null; source: ResolveSource }> {
   if (row.suggested_account) return { account: row.suggested_account, source: 'gemini' };
   const dict = lookupDict(row);
   if (dict !== null)           return { account: dict, source: 'dict' };
-  const hist = await lookupHistory(row.description);
+  const hist = await lookupHistory(row.description, allVouchers);
   if (hist !== null)           return { account: hist, source: 'history' };
   return { account: null, source: 'none' };
 }
 
 export async function toDraftRows(rows: GeminiRow[]): Promise<DraftRow[]> {
+  const allVouchers = await db.vouchers.toArray();
   return Promise.all(rows.map(async row => {
-    const { account, source } = await resolveAccount(row);
+    const { account, source } = await resolveAccount(row, allVouchers);
     return { row, resolvedAccount: account, resolveSource: source };
   }));
 }

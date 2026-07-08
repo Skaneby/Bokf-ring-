@@ -25,6 +25,7 @@ export function GeminiImport() {
   const [drafts,    setDrafts]    = useState<DraftRow[]>([]);
   const [selected,  setSelected]  = useState<(number | null)[]>([]);
   const [parseErr,  setParseErr]  = useState('');
+  const [bookErr,   setBookErr]   = useState('');
   const [saving,    setSaving]    = useState(false);
   const [bookedN,   setBookedN]   = useState(0);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -53,10 +54,13 @@ export function GeminiImport() {
       .filter((x): x is { row: GeminiRow; account: number } => x.account !== null);
     if (approved.length === 0) return;
     setSaving(true);
+    setBookErr('');
     try {
       const n = await bookDraftRows(approved);
       setBookedN(n);
       setPhase('done');
+    } catch {
+      setBookErr('Kunde inte bokföra verifikationerna. Ingenting sparades — försök igen.');
     } finally {
       setSaving(false);
     }
@@ -131,8 +135,8 @@ export function GeminiImport() {
                 key={i}
                 className={`rounded-xl border bg-white overflow-hidden ${acc ? 'border-slate-200' : 'border-red-200'}`}
               >
-                {/* Row header */}
-                <div className="flex items-start gap-3 px-5 py-4">
+                {/* Row header — staplas på mobil så kontoväljaren inte klämmer texten */}
+                <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap gap-2 items-center mb-1">
                       <span className="text-sm font-medium text-slate-900">{d.row.description}</span>
@@ -149,14 +153,15 @@ export function GeminiImport() {
                   </div>
 
                   {/* Account selector */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 sm:shrink-0">
                     <select
                       value={acc ?? ''}
                       onChange={e => {
                         const v = e.target.value ? Number(e.target.value) : null;
                         setSelected(s => s.map((x, j) => j === i ? v : x));
                       }}
-                      className={`rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
+                      aria-label={`Konto för ${d.row.description}`}
+                      className={`min-w-0 flex-1 sm:flex-none rounded-lg border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 ${
                         acc ? 'border-slate-200' : 'border-red-300 bg-red-50'
                       }`}
                     >
@@ -167,7 +172,8 @@ export function GeminiImport() {
                     </select>
                     <button
                       onClick={() => removeRow(i)}
-                      className="rounded p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                      aria-label={`Ta bort ${d.row.description}`}
+                      className="rounded p-2.5 text-slate-300 hover:text-red-500 transition-colors"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -196,6 +202,13 @@ export function GeminiImport() {
             );
           })}
         </div>
+
+        {bookErr && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            {bookErr}
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-2">

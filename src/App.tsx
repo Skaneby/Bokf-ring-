@@ -1,25 +1,33 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { VoucherEntry } from './components/VoucherEntry';
-import { ChartOfAccounts } from './components/ChartOfAccounts';
-import { Reports } from './components/Reports';
 import { Welcome } from './components/Welcome';
-import { GeminiImport } from './components/GeminiImport';
 import { initializeDb, db } from './db';
 import { exportBackup } from './lib/backup';
-import { LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw } from 'lucide-react';
+import {
+  LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw, Receipt,
+} from 'lucide-react';
+
+// Lazy-laddade flikar — hålls utanför startbundeln
+const ChartOfAccounts = lazy(() => import('./components/ChartOfAccounts').then(m => ({ default: m.ChartOfAccounts })));
+const Reports         = lazy(() => import('./components/Reports').then(m => ({ default: m.Reports })));
+const GeminiImport    = lazy(() => import('./components/GeminiImport').then(m => ({ default: m.GeminiImport })));
+const Invoices        = lazy(() => import('./components/Invoices').then(m => ({ default: m.Invoices })));
 
 const APP_URL = 'https://skaneby.github.io/Bokf-ring-/';
 
 const NAV = [
   { id: 'dashboard', label: 'Översikt',   icon: LayoutDashboard },
   { id: 'voucher',   label: 'Bokför',     icon: BookOpen },
+  { id: 'invoices',  label: 'Fakturor',   icon: Receipt },
   { id: 'accounts',  label: 'Kontoplan',  icon: List },
   { id: 'reports',   label: 'Rapporter',  icon: FileText },
   { id: 'import',    label: 'Importera',  icon: FileJson },
 ] as const;
 
 type TabId = typeof NAV[number]['id'];
+
+const Loading = () => <div className="text-sm text-slate-400">Laddar…</div>;
 
 export default function App() {
   const [tab, setTab]       = useState<TabId>('dashboard');
@@ -28,6 +36,7 @@ export default function App() {
   const [editId, setEditId] = useState<number | null>(null);
   const [ready,   setReady]   = useState(false);
   const [hasData, setHasData] = useState(false);
+  const [confirmSwitch, setConfirmSwitch] = useState(false);
 
   useEffect(() => {
     initializeDb()
@@ -60,14 +69,13 @@ export default function App() {
     setCopied(true);
   };
 
-
   const handleSwitchBooks = async () => {
-    if (!window.confirm('Byt bokföring? All befintlig data raderas.')) return;
     await db.transaction('rw', db.transactions, db.vouchers, db.accounts, async () => {
       await db.transactions.clear();
       await db.vouchers.clear();
       await db.accounts.clear();
     });
+    setConfirmSwitch(false);
     setMobile(false);
     setHasData(false);
   };
@@ -80,6 +88,7 @@ export default function App() {
       {/* ── Sidebar ───────────────────────────────────────────────── */}
       <aside className={`
         fixed inset-y-0 left-0 z-30 flex w-56 flex-col bg-slate-900
+        pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)]
         transition-transform duration-200
         ${mobile ? 'translate-x-0' : '-translate-x-full'}
         md:relative md:translate-x-0
@@ -109,7 +118,7 @@ export default function App() {
         </nav>
 
         {/* Quick backup */}
-        <div className="px-3 py-4 border-t border-slate-800">
+        <div className="px-3 py-4 border-t border-slate-800 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.15em] text-slate-500 uppercase">
             Säkerhet
           </p>
@@ -131,13 +140,33 @@ export default function App() {
             <Link className="h-4 w-4 shrink-0" />
             {copied ? 'Länk kopierad!' : 'Dela appen'}
           </button>
-          <button
-            onClick={handleSwitchBooks}
-            className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-red-900/40 hover:text-red-400 transition-colors"
-          >
-            <RefreshCw className="h-4 w-4 shrink-0" />
-            Byt bokföring
-          </button>
+          {confirmSwitch ? (
+            <div className="mt-1 rounded-lg bg-red-900/30 p-3 space-y-2">
+              <p className="text-xs text-red-300">All data raderas. Säkert?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSwitchBooks}
+                  className="flex-1 rounded-md bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700 transition-colors"
+                >
+                  Ja, radera
+                </button>
+                <button
+                  onClick={() => setConfirmSwitch(false)}
+                  className="flex-1 rounded-md bg-slate-800 px-2 py-1.5 text-xs text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  Avbryt
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmSwitch(true)}
+              className="w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-red-900/40 hover:text-red-400 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4 shrink-0" />
+              Byt bokföring
+            </button>
+          )}
         </div>
       </aside>
 
@@ -152,20 +181,31 @@ export default function App() {
       {/* ── Main ──────────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
-        <header className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white md:hidden">
+        <header className="flex items-center justify-between bg-slate-900 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-white md:hidden">
           <span className="font-bold tracking-tight">Bokföring</span>
-          <button onClick={() => setMobile(true)} className="p-1 text-slate-400 hover:text-white">
+          <button
+            onClick={() => setMobile(true)}
+            aria-label="Öppna meny"
+            className="p-2 text-slate-400 hover:text-white"
+          >
             <Menu className="h-5 w-5" />
           </button>
         </header>
 
-        <main className="flex-1 overflow-auto p-5 md:p-8">
+        <main className="flex-1 overflow-auto p-5 md:p-8 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-5xl">
-            {tab === 'dashboard' && <Dashboard />}
-            {tab === 'voucher'   && <VoucherEntry editId={editId} onEditDone={() => { setEditId(null); if (editId) setTab('reports'); }} />}
-            {tab === 'accounts'  && <ChartOfAccounts />}
-            {tab === 'reports'   && <Reports onEditVoucher={editVoucher} onReset={() => setHasData(false)} />}
-            {tab === 'import'    && <GeminiImport />}
+            <Suspense fallback={<Loading />}>
+              {tab === 'dashboard' && <Dashboard />}
+              {/* VoucherEntry hålls monterad — halvskrivna verifikationer
+                  överlever flikbyten (göms med CSS istället för unmount) */}
+              <div className={tab === 'voucher' ? '' : 'hidden'}>
+                <VoucherEntry editId={editId} onEditDone={() => { setEditId(null); if (editId) setTab('reports'); }} />
+              </div>
+              {tab === 'invoices'  && <Invoices />}
+              {tab === 'accounts'  && <ChartOfAccounts />}
+              {tab === 'reports'   && <Reports onEditVoucher={editVoucher} onReset={() => setHasData(false)} />}
+              {tab === 'import'    && <GeminiImport />}
+            </Suspense>
           </div>
         </main>
       </div>

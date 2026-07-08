@@ -33,9 +33,9 @@ export function SkattTab({ accounts: _accounts, transactions }: Props) {
   };
 
   const neRow = (label: string, value: number, bold = false, indent = false) => (
-    <div className={`flex items-center justify-between px-5 py-2 ${bold ? 'border-t border-slate-100 bg-slate-50' : ''}`}>
-      <span className={`text-sm ${indent ? 'pl-4 text-slate-500' : bold ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>{label}</span>
-      <span className={`tabular-nums text-sm ${bold ? 'font-semibold text-slate-900' : value < 0 ? 'text-red-500' : 'text-slate-900'}`}>
+    <div className={`flex items-center justify-between gap-3 px-5 py-2 ${bold ? 'border-t border-slate-100 bg-slate-50' : ''}`}>
+      <span className={`min-w-0 break-words text-sm ${indent ? 'pl-4 text-slate-500' : bold ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>{label}</span>
+      <span className={`shrink-0 tabular-nums text-sm ${bold ? 'font-semibold text-slate-900' : value < 0 ? 'text-red-500' : 'text-slate-900'}`}>
         {formatCurrency(value)}
       </span>
     </div>
@@ -44,8 +44,8 @@ export function SkattTab({ accounts: _accounts, transactions }: Props) {
   const momsRow = (box: string, label: string, value: number, bold = false) => (
     <div className={`flex items-center gap-3 px-5 py-2 ${bold ? 'border-t border-slate-100 bg-slate-50' : ''}`}>
       <span className="w-10 shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-center text-[11px] font-bold text-slate-500">{box}</span>
-      <span className={`flex-1 text-sm ${bold ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>{label}</span>
-      <span className={`tabular-nums text-sm ${bold ? 'font-semibold' : ''} ${value < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+      <span className={`min-w-0 flex-1 break-words text-sm ${bold ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>{label}</span>
+      <span className={`shrink-0 tabular-nums text-sm ${bold ? 'font-semibold' : ''} ${value < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
         {formatCurrency(value)}
       </span>
     </div>

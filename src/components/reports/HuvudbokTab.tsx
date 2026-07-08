@@ -18,6 +18,13 @@ export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }:
   const totalPages = Math.ceil(vouchers.length / PAGE_SIZE);
   const pageVouchers = vouchers.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
+  // Gruppera transaktioner per verifikat en gång — O(V+T) istället för O(V×T)
+  const byVoucher = new Map<number, Transaction[]>();
+  for (const t of transactions) {
+    const list = byVoucher.get(t.voucherId);
+    if (list) list.push(t); else byVoucher.set(t.voucherId, [t]);
+  }
+
   const deleteVoucher = async (id: number) => {
     await db.transaction('rw', db.vouchers, db.transactions, async () => {
       await db.transactions.where('voucherId').equals(id).delete();
@@ -33,20 +40,20 @@ export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }:
   return (
     <div className="space-y-4">
       {pageVouchers.map(v => {
-        const vt = transactions.filter(t => t.voucherId === v.id);
+        const vt = byVoucher.get(v.id!) ?? [];
         return (
           <div key={v.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                 Ver {v.id}
               </span>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3 min-w-0">
                 <span className="text-sm font-medium text-slate-900">
                   {v.date} — {v.description}
                 </span>
                 <button
                   onClick={() => onEditVoucher(v.id!)}
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                  className="flex items-center gap-1 rounded-md px-2.5 py-2 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
                 >
                   <Pencil className="h-3 w-3" /> Redigera
                 </button>
@@ -68,7 +75,7 @@ export function HuvudbokTab({ accounts, transactions, vouchers, onEditVoucher }:
                 ) : (
                   <button
                     onClick={() => setConfirmDelete(v.id!)}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    className="flex items-center gap-1 rounded-md px-2.5 py-2 text-xs text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                   >
                     <Trash2 className="h-3 w-3" /> Ta bort
                   </button>

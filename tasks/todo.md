@@ -46,7 +46,24 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 245 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, smoke tests
+- [x] 293 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, smoke tests
+
+**Fakturering (juli 2026)**
+- [x] Fakturor med löpande, obruten nummerserie (räknas bara uppåt, återanvänds aldrig)
+- [x] Bokföring enligt fakturametoden (vid skapande, 1510) eller kontantmetoden (vid betalning)
+- [x] Registrera betalning + makulera (bokför reversering)
+- [x] HTML-fakturamall — standard eller importerad egen mall med {{tokens}}
+- [x] Skicka: skriv ut/PDF, ladda ned, dela (Web Share), e-post
+- [x] Företagsinställningar: orgnr, momsnr, bankgiro, betalningsvillkor
+- [x] Nytt konto 1510 Kundfordringar (patchas in i befintliga databaser)
+
+**Optimeringar (juli 2026)**
+- [x] Halvskrivna verifikationer överlever flikbyte (VoucherEntry hålls monterad)
+- [x] Lazy loading: Gemini SDK + fyra flikar utanför startbundeln (401 → 364 kB)
+- [x] Enhetliga inline-bekräftelser (inga window.confirm/alert)
+- [x] Mobil: inputMode=decimal, safe-area-insets, större touch-ytor, responsiva fakturarader
+- [x] Tillgänglighet: aria-labels på ikonknappar och radväljare
+- [x] @types/react installerat — typkontrollen fungerar på riktigt
 
 ### Öppet / Förbättringar
 

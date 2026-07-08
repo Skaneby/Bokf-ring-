@@ -21,10 +21,46 @@ export interface Transaction {
   amount: number; // Positive = Debit, Negative = Credit
 }
 
+export interface InvoiceRow {
+  description: string;
+  qty: number;
+  unitPrice: number; // exkl. moms
+  vatRate: 0 | 6 | 12 | 25;
+}
+
+// Bokföringsmetod: 'faktura' bokförs vid skapande (1510), 'kontant' först vid betalning
+export type InvoiceMethod = 'faktura' | 'kontant';
+export type InvoiceStatus = 'obetald' | 'betald' | 'makulerad';
+
+export interface Invoice {
+  id?: number;
+  number: number; // Löpande fakturanummer — obruten serie, återanvänds aldrig
+  date: string;
+  dueDate: string;
+  customerName: string;
+  customerAddress?: string;
+  customerOrgnr?: string;
+  customerEmail?: string;
+  rows: InvoiceRow[];
+  method: InvoiceMethod;
+  status: InvoiceStatus;
+  paidDate?: string;
+  createdVoucherId?: number; // verifikat bokfört vid skapande (fakturametoden)
+  paidVoucherId?: number;    // verifikat bokfört vid betalning
+  created_at: number;
+}
+
+export interface Setting {
+  key: string;
+  value: unknown;
+}
+
 export class AccountingDB extends Dexie {
   accounts!: Table<Account>;
   vouchers!: Table<Voucher>;
   transactions!: Table<Transaction>;
+  invoices!: Table<Invoice>;
+  settings!: Table<Setting>;
 
   constructor() {
     super('AccountingDB');
@@ -33,6 +69,14 @@ export class AccountingDB extends Dexie {
       vouchers: '++id, date',
       transactions: '++id, voucherId, accountId'
     });
+    // v2: fakturamodul — invoices + settings (företagsuppgifter, nummerserie, mall)
+    this.version(2).stores({
+      accounts: 'id, type',
+      vouchers: '++id, date',
+      transactions: '++id, voucherId, accountId',
+      invoices: '++id, number, status, date',
+      settings: 'key'
+    });
   }
 }
 
@@ -40,6 +84,7 @@ export const db = new AccountingDB();
 
 // Basic BAS 2026 setup
 export const defaultAccounts: Account[] = [
+  { id: 1510, name: 'Kundfordringar', type: 'asset' },
   { id: 1910, name: 'Kassa', type: 'asset' },
   { id: 1930, name: 'Företagskonto / Bank', type: 'asset' },
   { id: 2010, name: 'Eget kapital', type: 'equity' },
@@ -68,6 +113,7 @@ export const defaultAccounts: Account[] = [
 
 // Accounts added after initial release — patched into existing databases on startup
 const PATCH_ACCOUNTS: Account[] = [
+  { id: 1510, name: 'Kundfordringar', type: 'asset' },
   { id: 2013, name: 'Egna uttag', type: 'equity' },
   { id: 2018, name: 'Egna insättningar', type: 'equity' },
   { id: 2510, name: 'Skatteskulder (F-skatt)', type: 'liability' },

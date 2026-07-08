@@ -7,10 +7,11 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 ## Funktioner
 
 - **Dubbelbokföring** med automatisk balansvalidering (debet = kredit, alltid)
-- **BAS-kontoplan** med 24 standardkonton, fullt redigerbar
+- **BAS-kontoplan** med 25 standardkonton, fullt redigerbar
 - **Momshjälp** — ange bruttobelopp och momssats (6/12/25 %), raderna fylls i automatiskt
 - **OCR-skanning** — fota ett kvitto, Gemini Vision läser datum, belopp, moms och leverantör
 - **Gemini-import** — klistra in JSON från en Gemini Gem och bokför flera verifikationer i ett svep, med kontoförslag från AI, ordbok och bokföringshistorik
+- **Fakturering** — skapa fakturor med löpande nummerserie (obruten enligt bokföringslagen), egen HTML-mall eller standardmall, skriv ut/PDF, dela eller maila; bokförs enligt faktura- eller kontantmetoden
 - **Snabbval** — eget uttag, egen insättning, F-skatt och egenavgifter med ett klick
 - **Rapporter** — resultaträkning, balansräkning, huvudbok (med paginering)
 - **Skatt & deklaration** — NE-bilagan (SKV 2161) sammanställs automatiskt, egenavgifter beräknas per åldersgrupp, momsdeklarationens rutor summeras
@@ -32,7 +33,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test       # 245 enhetstester (tsx + fake-indexeddb)
+npm run test       # 293 enhetstester (tsx + fake-indexeddb)
 npm run lint       # typkontroll (tsc --noEmit)
 npm run build      # produktionsbygge till dist/
 ```

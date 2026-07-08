@@ -12,6 +12,13 @@ import {
   parseGeminiJson, validateRows, lookupDict, buildVoucherLines,
   GeminiRow,
 } from './lib/geminiImport';
+import {
+  invoiceTotals, invoiceCreationLines, invoicePaymentLines,
+  createInvoice, registerPayment, cancelInvoice,
+  getCompanySettings, saveCompanySettings, renderInvoiceHtml,
+  DEFAULT_COMPANY,
+} from './lib/invoice';
+import { InvoiceRow } from './db';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -67,6 +74,8 @@ async function resetDb() {
   await db.transactions.clear();
   await db.vouchers.clear();
   await db.accounts.clear();
+  await db.invoices.clear();
+  await db.settings.clear();
   await initializeDb();
 }
 
@@ -85,7 +94,7 @@ async function runTests() {
 
   await resetDb();
   const accountCount = await db.accounts.count();
-  assert(accountCount === 24, `Exakt 24 standardkonton (fick ${accountCount})`);
+  assert(accountCount === 25, `Exakt 25 standardkonton (fick ${accountCount})`);
 
   const accs = await db.accounts.toArray();
   assert(accs.some(a => a.id === 1930 && a.type === 'asset'),     'Konto 1930 är tillgång');
@@ -1013,6 +1022,140 @@ async function runTests() {
     const lines = buildVoucherLines(row, 3002);
     assert(isBalanced(lines), 'buildVoucherLines: intäkt 12% moms — balanserad');
     assert(lines.some(l => l.accountId === 2620 && l.amount < 0), 'buildVoucherLines: intäkt 12% moms — kredit 2620 (inte 2610)'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 17. FAKTURERING
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 17. Fakturering ───────────────────────────────────\n');
+
+  await resetDb();
+
+  const sumLines = (lines: { amount: number }[]) => lines.reduce((s, l) => s + l.amount, 0);
+
+  // ── invoiceTotals: belopp och momsgrupper ─────────────────────────────
+  { const rows: InvoiceRow[] = [
+      { description: 'Konsult', qty: 10, unitPrice: 950,  vatRate: 25 },
+      { description: 'Resa',    qty: 1,  unitPrice: 450,  vatRate: 6  },
+      { description: 'Bok',     qty: 2,  unitPrice: 100,  vatRate: 6  },
+    ];
+    const t = invoiceTotals(rows);
+    assert(near(t.netTotal, 10150),   `invoiceTotals: netto 10 150 kr (fick ${t.netTotal})`);
+    assert(near(t.vatTotal, 2375 + 39), `invoiceTotals: moms 2 414 kr (fick ${t.vatTotal})`);
+    assert(near(t.grossTotal, 12564), `invoiceTotals: brutto 12 564 kr (fick ${t.grossTotal})`);
+    assert(t.groups.length === 2, 'invoiceTotals: två momsgrupper (25% och 6%)');
+    const g6 = t.groups.find(g => g.rate === 6)!;
+    assert(near(g6.net, 650) && near(g6.vat, 39), 'invoiceTotals: 6%-gruppen = 650 netto / 39 moms'); }
+
+  // ── invoiceCreationLines: fakturametoden vid skapande ─────────────────
+  { const rows: InvoiceRow[] = [{ description: 'Arbete', qty: 1, unitPrice: 10000, vatRate: 25 }];
+    const lines = invoiceCreationLines(rows);
+    assert(near(sumLines(lines), 0), 'invoiceCreationLines: raderna balanserar');
+    assert(lines.some(l => l.accountId === 1510 && near(l.amount, 12500)), 'invoiceCreationLines: 1510 debet 12 500 (brutto)');
+    assert(lines.some(l => l.accountId === 3000 && near(l.amount, -10000)), 'invoiceCreationLines: 3000 kredit 10 000 (netto)');
+    assert(lines.some(l => l.accountId === 2610 && near(l.amount, -2500)), 'invoiceCreationLines: 2610 kredit 2 500 (moms)'); }
+
+  // Momsfri rad → inget momskonto
+  { const lines = invoiceCreationLines([{ description: 'Momsfritt', qty: 1, unitPrice: 5000, vatRate: 0 }]);
+    assert(near(sumLines(lines), 0), 'invoiceCreationLines momsfri: balanserar');
+    assert(lines.some(l => l.accountId === 3040 && near(l.amount, -5000)), 'invoiceCreationLines momsfri: 3040 kredit');
+    assert(!lines.some(l => [2610, 2620, 2630].includes(l.accountId)), 'invoiceCreationLines momsfri: inga momskonton'); }
+
+  // ── invoicePaymentLines ────────────────────────────────────────────────
+  { const rows: InvoiceRow[] = [{ description: 'Arbete', qty: 1, unitPrice: 10000, vatRate: 25 }];
+    const faktura = invoicePaymentLines(rows, 'faktura');
+    assert(near(sumLines(faktura), 0), 'invoicePaymentLines faktura: balanserar');
+    assert(faktura.some(l => l.accountId === 1930 && near(l.amount, 12500)), 'invoicePaymentLines faktura: 1930 debet brutto');
+    assert(faktura.some(l => l.accountId === 1510 && near(l.amount, -12500)), 'invoicePaymentLines faktura: 1510 kredit brutto');
+    assert(faktura.length === 2, 'invoicePaymentLines faktura: exakt 2 rader');
+
+    const kontant = invoicePaymentLines(rows, 'kontant');
+    assert(near(sumLines(kontant), 0), 'invoicePaymentLines kontant: balanserar');
+    assert(kontant.some(l => l.accountId === 1930 && near(l.amount, 12500)), 'invoicePaymentLines kontant: 1930 debet brutto');
+    assert(kontant.some(l => l.accountId === 3000 && near(l.amount, -10000)), 'invoicePaymentLines kontant: 3000 kredit netto');
+    assert(kontant.some(l => l.accountId === 2610 && near(l.amount, -2500)), 'invoicePaymentLines kontant: 2610 kredit moms');
+    assert(!kontant.some(l => l.accountId === 1510), 'invoicePaymentLines kontant: 1510 används inte'); }
+
+  // ── createInvoice: löpande nummerserie ────────────────────────────────
+  const mkInvoice = (method: 'faktura' | 'kontant', price = 1000) => createInvoice({
+    date: '2026-07-01', dueDate: '2026-07-31',
+    customerName: 'Testkund AB',
+    rows: [{ description: 'Tjänst', qty: 1, unitPrice: price, vatRate: 25 }],
+    method,
+  });
+
+  const inv1 = await mkInvoice('faktura');
+  const inv2 = await mkInvoice('faktura');
+  const inv3 = await mkInvoice('kontant');
+  assert(inv1.number === 1 && inv2.number === 2 && inv3.number === 3,
+    `createInvoice: löpande nummer 1, 2, 3 (fick ${inv1.number}, ${inv2.number}, ${inv3.number})`);
+
+  assert(inv1.createdVoucherId !== undefined, 'createInvoice fakturametoden: verifikat bokfört vid skapande');
+  assert(inv3.createdVoucherId === undefined, 'createInvoice kontantmetoden: INGET verifikat vid skapande');
+
+  { const b = await getBalances();
+    // Två fakturor à 1250 brutto bokförda mot 1510
+    assert(near(b.assets, 2500), `Fakturametoden: tillgångar (1510) = 2 500 kr (fick ${b.assets})`);
+    assert(near(b.revenue, 2000), `Fakturametoden: intäkter = 2 000 kr (fick ${b.revenue})`);
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Balansekvationen håller efter fakturaskapande'); }
+
+  // ── registerPayment ────────────────────────────────────────────────────
+  await registerPayment(inv1.id!, '2026-07-15');
+  { const paid = await db.invoices.get(inv1.id!);
+    assert(paid?.status === 'betald' && paid.paidDate === '2026-07-15', 'registerPayment: status betald + datum');
+    assert(paid?.paidVoucherId !== undefined, 'registerPayment: betalningsverifikat bokfört'); }
+
+  await registerPayment(inv3.id!, '2026-07-20');
+  { const b = await getBalances();
+    // inv1 betald (1250 flyttat 1510→1930), inv2 kvar på 1510 (1250), inv3 kontant betald (+1250 till 1930, +1000 intäkt)
+    assert(near(b.assets, 3750), `Efter betalningar: tillgångar = 3 750 kr (fick ${b.assets})`);
+    assert(near(b.revenue, 3000), `Efter betalningar: intäkter = 3 000 kr (fick ${b.revenue})`);
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Balansekvationen håller efter betalningar'); }
+
+  // Dubbelbetalning ska avvisas
+  { let threw = false;
+    try { await registerPayment(inv1.id!, '2026-07-16'); } catch { threw = true; }
+    assert(threw, 'registerPayment: redan betald faktura avvisas'); }
+
+  // ── cancelInvoice: makulering vänder bokningen, numret återanvänds inte ──
+  const inv4 = await mkInvoice('faktura');
+  assert(inv4.number === 4, 'createInvoice: nummer 4 efter tre tidigare');
+  const balBefore = await getBalances();
+  await cancelInvoice(inv4.id!, '2026-07-21');
+  { const cancelled = await db.invoices.get(inv4.id!);
+    assert(cancelled?.status === 'makulerad', 'cancelInvoice: status makulerad');
+    const b = await getBalances();
+    assert(near(b.assets, balBefore.assets - 1250), 'cancelInvoice: 1510 återställt (reversering bokförd)');
+    assert(near(b.revenue, balBefore.revenue - 1000), 'cancelInvoice: intäkten återförd');
+    assert(near(b.assets, b.liabilities + b.netIncome), 'Balansekvationen håller efter makulering'); }
+
+  const inv5 = await mkInvoice('kontant');
+  assert(inv5.number === 5, 'Nummerserien fortsätter efter makulering — nummer återanvänds aldrig');
+
+  // Betald faktura kan inte makuleras
+  { let threw = false;
+    try { await cancelInvoice(inv1.id!, '2026-07-22'); } catch { threw = true; }
+    assert(threw, 'cancelInvoice: betald faktura kan inte makuleras'); }
+
+  // ── Inställningar ──────────────────────────────────────────────────────
+  { await saveCompanySettings({ ...DEFAULT_COMPANY, name: 'Mitt Företag AB', nextInvoiceNumber: 100 });
+    const s = await getCompanySettings();
+    assert(s.name === 'Mitt Företag AB' && s.nextInvoiceNumber === 100, 'Företagsinställningar sparas och läses');
+    const inv100 = await mkInvoice('kontant');
+    assert(inv100.number === 100, 'Startnummer från inställningar respekteras'); }
+
+  // ── renderInvoiceHtml ──────────────────────────────────────────────────
+  { const s = await getCompanySettings();
+    const html = renderInvoiceHtml(inv1, { ...s, name: 'Mitt Företag AB', bankgiro: '123-4567' });
+    assert(html.includes('Faktura'), 'renderInvoiceHtml: innehåller rubrik');
+    assert(html.includes('Testkund AB'), 'renderInvoiceHtml: kundnamn med');
+    assert(html.includes('Mitt Företag AB'), 'renderInvoiceHtml: företagsnamn med');
+    assert(html.includes('123-4567'), 'renderInvoiceHtml: bankgiro med');
+    assert(!html.includes('{{'), 'renderInvoiceHtml: alla tokens ersatta');
+    // HTML-injektion i kundnamn ska escapas
+    const evil = { ...inv1, customerName: '<script>alert(1)</script>' };
+    const html2 = renderInvoiceHtml(evil, s);
+    assert(!html2.includes('<script>alert'), 'renderInvoiceHtml: kundnamn HTML-escapas'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

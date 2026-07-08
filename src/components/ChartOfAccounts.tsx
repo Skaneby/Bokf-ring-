@@ -28,6 +28,8 @@ export function ChartOfAccounts() {
   const [adding, setAdding] = useState(false);
   const [form,   setForm]   = useState<Partial<Account>>({ type: 'expense' });
   const [err,    setErr]    = useState('');
+  const [confirmId, setConfirmId] = useState<number | null>(null);
+  const [deleteErr, setDeleteErr] = useState('');
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,13 +45,15 @@ export function ChartOfAccounts() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Radera kontot?')) return;
+    setDeleteErr('');
     const txCount = await db.transactions.where('accountId').equals(id).count();
     if (txCount > 0) {
-      alert(`Kan inte radera: kontot har ${txCount} bokförda transaktioner.`);
+      setDeleteErr(`Konto ${id} kan inte raderas — det har ${txCount} bokförda transaktioner.`);
+      setConfirmId(null);
       return;
     }
     await db.accounts.delete(id);
+    setConfirmId(null);
   };
 
   if (!accounts) return <div className="text-sm text-slate-400">Laddar…</div>;
@@ -138,6 +142,10 @@ export function ChartOfAccounts() {
         </form>
       )}
 
+      {deleteErr && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{deleteErr}</p>
+      )}
+
       {/* Table */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-sm">
@@ -165,13 +173,31 @@ export function ChartOfAccounts() {
                     {TYPE_LABELS[a.type]}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleDelete(a.id)}
-                    className="rounded p-1 text-slate-300 transition-colors hover:text-red-500"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  {confirmId === a.id ? (
+                    <span className="inline-flex items-center gap-1">
+                      <button
+                        onClick={() => handleDelete(a.id)}
+                        className="rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        Radera
+                      </button>
+                      <button
+                        onClick={() => setConfirmId(null)}
+                        className="rounded-md px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 transition-colors"
+                      >
+                        Avbryt
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => { setConfirmId(a.id); setDeleteErr(''); }}
+                      aria-label={`Radera konto ${a.id}`}
+                      className="rounded p-2 text-slate-300 transition-colors hover:text-red-500"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
