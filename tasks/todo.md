@@ -65,6 +65,17 @@
 - [x] Tillgänglighet: aria-labels på ikonknappar och radväljare
 - [x] @types/react installerat — typkontrollen fungerar på riktigt
 
+### Deklarationsmodul (planerad — spec klar)
+
+Spec: `docs/deklarationsmodul-spec.md` (SRU-filöverföring + manuell deklaration + framtida API-spår)
+
+- [ ] M0: `lib/sru/` — datamodell, serialiserare, golden files, property-tester
+- [ ] M1: Spår 0 — komplett blankettvy NE/INK1 med fältkoder för manuell deklaration
+- [ ] M2: Spår A — SRU-export (INFO.SRU + BLANKETTER.SRU), validering, inlämningsguide
+- [ ] M3: INK2 + byråstöd
+- [ ] M4: Spår B — API-integration mot Skatteverket (kräver avtal + verifierad tjänstebeskrivning)
+- [ ] Verifiera SRU-syntax, encoding och blankettkoder mot Skatteverkets tekniska beskrivning
+
 ### Öppet / Förbättringar
 
 - [ ] Periodfiltrering i rapporter (månad/kvartal/år)
