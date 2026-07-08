@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 492 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 508 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Fakturaarkiv & utskick (juli 2026)**
 - [x] Fakturafilen arkiveras i databasen exakt som den skapades — senare ändringar av uppgifter/mall påverkar aldrig arkivet
@@ -63,6 +63,12 @@
 - [x] Skicka: skriv ut/PDF, ladda ned, dela (Web Share), e-post
 - [x] Företagsinställningar: orgnr, momsnr, bankgiro, betalningsvillkor
 - [x] Nytt konto 1510 Kundfordringar (patchas in i befintliga databaser)
+
+**AI-formatering & skapa bokföring (juli 2026)**
+- [x] AI-svaren renderas som formaterad Markdown (egen säker parser, ingen rå HTML): rubriker, listor, konteringstabeller, kodblock, fetstil
+- [x] Systemprompten kräver pedagogiskt format: kort svar först, konteringar ALLTID som tabell | Konto | Debet | Kredit |, numrerade appinstruktioner, 💡-tips
+- [x] AI:n kan förklara hur man skapar/byter bokföring (startskärmens tre val + "Byt bokföring" med raderingsvarning)
+- [x] Ny förslagsfråga "Hur skapar jag en ny bokföring?" + onboarding-tips om bytesflödet
 
 **AI-hjälp & onboarding (juli 2026)**
 - [x] AI-chattbot (flik "AI-hjälp"): expert på svensk skatt/juridik/bokföring + appen själv

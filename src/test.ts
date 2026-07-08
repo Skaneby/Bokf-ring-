@@ -36,6 +36,7 @@ import {
 } from './lib/ai';
 import { matchesSearch } from './components/reports/shared';
 import { periodRange, periodLabel, splitByPeriod } from './lib/period';
+import { parseBlocks, parseInline } from './lib/markdown';
 import { calcYearEnd, performYearEnd, RESULT_DISPOSITION_ACCOUNT } from './lib/yearEnd';
 import {
   addAttachment, deleteAttachment, deleteAttachmentsForVoucher, attachmentCounts,
@@ -2073,6 +2074,69 @@ async function runTests() {
   // ── Arkivet följer med i backupen (ligger på invoice-posten) ───────────
   { const stored = (await db.invoices.get(archInv.id!))!;
     assert(stored.documentHtml!.length > 500, 'Arkiv: HTML persisterad i invoices-tabellen (ingår i Dexie-datat)'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 28. MARKDOWN-RENDERING & AI-PEDAGOGIK
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 28. Markdown & AI-pedagogik ───────────────────────\n');
+
+  // ── Inline-parsning ────────────────────────────────────────────────────
+  { const segs = parseInline('Bokför på **1930 Bank** med `2640` som *ingående* moms');
+    assert(segs.some(x => x.kind === 'bold' && x.text === '1930 Bank'), 'MD: **fetstil** parsas');
+    assert(segs.some(x => x.kind === 'code' && x.text === '2640'), 'MD: `inline-kod` parsas');
+    assert(segs.some(x => x.kind === 'italic' && x.text === 'ingående'), 'MD: *kursiv* parsas');
+    assert(segs[0].kind === 'text' && segs[0].text === 'Bokför på ', 'MD: text runt tokens bevaras'); }
+
+  // ── Blockparsning: typiskt AI-svar med kontering som tabell ────────────
+  { const md = [
+      'Så här bokför du inköpet:',
+      '',
+      '### Kontering',
+      '| Konto | Debet | Kredit |',
+      '|-------|-------|--------|',
+      '| **5410** Förbrukningsinventarier | 1 000 | |',
+      '| **2640** Ingående moms | 250 | |',
+      '| **1930** Bank | | 1 250 |',
+      '',
+      '1. Gå till fliken Bokför',
+      '2. Använd momshjälpen',
+      '',
+      '- Debet = kredit alltid',
+      '- Kvittot kan bifogas',
+      '',
+      '```',
+      'moms = brutto × 25 / 125',
+      '```',
+    ].join('\n');
+    const blocks = parseBlocks(md);
+    const kinds = blocks.map(b => b.kind);
+    assert(JSON.stringify(kinds) === JSON.stringify(['paragraph', 'heading', 'table', 'list', 'list', 'code']),
+      `MD: blockstruktur korrekt (fick ${kinds.join(',')})`);
+    const table = blocks.find(b => b.kind === 'table') as Extract<typeof blocks[0], { kind: 'table' }>;
+    assert(table.header.length === 3 && table.rows.length === 3, 'MD: tabell 3 kolumner × 3 rader');
+    assert(table.rows[0][0].some(x => x.kind === 'bold' && x.text === '5410'), 'MD: fetstil inuti tabellcell');
+    const ordered = blocks.filter(b => b.kind === 'list') as Extract<typeof blocks[0], { kind: 'list' }>[];
+    assert(ordered[0].ordered === true && ordered[0].items.length === 2, 'MD: numrerad lista');
+    assert(ordered[1].ordered === false && ordered[1].items.length === 2, 'MD: punktlista');
+    const code = blocks.find(b => b.kind === 'code') as Extract<typeof blocks[0], { kind: 'code' }>;
+    assert(code.text === 'moms = brutto × 25 / 125', 'MD: kodblock bevaras ordagrant'); }
+
+  // Flerraders paragraf slås ihop; rubriknivåer
+  { const blocks = parseBlocks('# Stor rubrik\nrad ett\nrad två');
+    assert(blocks[0].kind === 'heading' && (blocks[0] as { level: number }).level === 1, 'MD: H1-nivå');
+    assert(blocks[1].kind === 'paragraph', 'MD: efterföljande rader blir paragraf'); }
+
+  // ── Systemprompten: pedagogiskt format + skapa bokföring ───────────────
+  { const prompt = buildSystemPrompt({
+      accounts: await db.accounts.toArray(), voucherCount: 0, invoiceCount: 0, years: [],
+    });
+    assert(prompt.includes('| Konto | Debet | Kredit |'), 'AI-prompt: konteringar som tabell-instruktion');
+    assert(prompt.includes('Markdown'), 'AI-prompt: markdown-formatkrav');
+    assert(prompt.includes('Starta ny bokföring') && prompt.includes('Byt bokföring'),
+      'AI-prompt: kan förklara hur man skapar och byter bokföring');
+    assert(prompt.includes('RADERAR') && prompt.includes('backup'),
+      'AI-prompt: varnar att byte raderar data och nämner backup'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

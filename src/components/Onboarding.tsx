@@ -20,7 +20,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     tips: [
       'Ta en JSON-backup regelbundet: sidomenyn → "Ladda ned backup"',
       'Rensar du webbläsardata försvinner bokföringen — utan backup är den borta',
-      'Appen kan installeras på hemskärmen som en vanlig app (PWA)',
+      'Ny eller annan bokföring? "Byt bokföring" i sidomenyn raderar allt (efter bekräftelse) och tar dig till startvalet: starta nytt, ladda backup eller importera SIE4',
     ],
   },
   {

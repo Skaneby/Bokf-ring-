@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 492 enhetstester (Node + fake-indexeddb)
+  test.ts              — 508 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -92,6 +92,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     ink2.ts            — INK2R officiella poster 2.1-3.27, VERIFIERADE koder (BAS); INK2S exporteras ej
     sru/               — SRU-export M0: serialize() / parse / Latin-1 / Luhn (deterministisk)
     ai.ts              — AI-inställningar, nyckelvalidering, gateMessage(), buildSystemPrompt(), askAi()
+    markdown.ts        — säker MD-parser för AI-svar (block+inline, testbar); renderas i components/Markdown.tsx
     utils.ts           — formatCurrency()
 ```
 
@@ -171,7 +172,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 492 enhetstester
+npm run test         # kör 508 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)

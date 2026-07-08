@@ -37,7 +37,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test          # 492 enhetstester (tsx + fake-indexeddb)
+npm run test          # 508 enhetstester (tsx + fake-indexeddb)
 npm run test:e2e      # E2E i webbläsare: desktop 1280px + mobil 375px (Playwright)
 npm run lint          # typkontroll (tsc --noEmit)
 npm run build         # produktionsbygge till dist/

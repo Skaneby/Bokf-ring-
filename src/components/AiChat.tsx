@@ -6,12 +6,13 @@ import {
   validateApiKey, buildSystemPrompt, askAi, ChatMsg,
 } from '../lib/ai';
 import { taxYearsAvailable } from '../lib/declaration';
+import { Markdown } from './Markdown';
 import { Sparkles, Send, Settings, CheckCircle, Loader2 } from 'lucide-react';
 
 const SUGGESTIONS = [
+  'Hur skapar jag en ny bokföring i appen?',
   'Hur bokför jag ett inköp med 25 % moms?',
   'Vad är skillnaden mellan fakturametoden och kontantmetoden?',
-  'Hur fungerar egenavgifter och var i appen hanterar jag dem?',
   'Hur exporterar jag min deklaration som SRU-filer?',
 ];
 
@@ -196,12 +197,12 @@ export function AiChat() {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm ${
+            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
               m.role === 'user'
-                ? 'bg-slate-900 text-white'
+                ? 'whitespace-pre-wrap bg-slate-900 text-sm text-white'
                 : 'bg-slate-100 text-slate-800'
             }`}>
-              {m.text}
+              {m.role === 'user' ? m.text : <Markdown text={m.text} />}
             </div>
           </div>
         ))}
