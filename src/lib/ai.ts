@@ -74,9 +74,10 @@ APPENS MODULER OCH FLÖDEN:
 - Fakturor: löpande obruten nummerserie. Bokförs enligt fakturametoden (vid skapande:
   1510 Kundfordringar mot intäkt+moms; betalning: 1930 mot 1510) eller kontantmetoden
   (allt bokförs vid betalning). Skriv ut/PDF, dela, e-post. Makulering vänder bokningen.
-  Företagsuppgifter och fakturamall under Fakturor → Inställningar. Fakturamallen är en
-  färdig grundmall som användaren kan ANPASSA (färg/text/typsnitt/layout) direkt i appen —
-  kopplingarna {{fält}} måste behållas och appen varnar/blockerar om kritiska tas bort.
+  Företagsuppgifter och fakturamall under Fakturor → Inställningar. Fakturamallen anpassas
+  visuellt (WYSIWYG) under Fakturor → Inställningar → "Anpassa utseende": accentfärg, rubrikfärg,
+  typsnitt, rubriktext, fottext och logotyp med live-förhandsvisning. Mallen genereras från temat
+  så kopplingarna behålls alltid. Ett avancerat HTML-läge finns för proffs (varnar om kritiska fält tas bort).
 - Kontoplan: BAS-standardkonton, radering blockeras om kontot har transaktioner.
 - Rapporter: Resultaträkning, Balansräkning, Huvudbok (redigera/radera verifikat, paginerad),
   Skatt & Deklaration (NE-översikt, egenavgifter per åldersgrupp, momsdeklarationens rutor),

@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 572 enhetstester (Node + fake-indexeddb)
+  test.ts              — 581 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -67,7 +67,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     invoices/
       InvoiceForm.tsx  — skapa faktura; metod väljs per faktura (faktura/kontant)
       InvoiceList.tsx  — statusfilter, visa/skriv ut/dela/e-posta ARKIVERAD fil, registrera betalning, makulera
-      InvoiceSettings.tsx — företagsuppgifter, nummerserie, anpassa fakturamall (validateTemplate skyddar kopplingar)
+      InvoiceSettings.tsx — företagsuppgifter, nummerserie, WYSIWYG-temaredigerare + avancerat HTML-läge
     reports/
       shared.tsx       — Card / Row / TotalRow / buildBalMap
       ResultatTab.tsx  — resultaträkning
@@ -84,7 +84,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     ocr.ts             — scanReceipt(file) via Gemini Vision
     tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
     geminiImport.ts    — parseGeminiJson() / validateRows() / resolveAccount() / bookDraftRows()
-    invoice.ts         — nummerserie, invoiceTotals(), bokning (faktura/kontant), arkivering (documentHtml)
+    invoice.ts         — nummerserie, invoiceTotals(), bokning, arkivering, buildTemplateFromTheme (WYSIWYG-tema)
     period.ts          — periodRange/splitByPeriod: resultat = period, balans = ackumulerat t.o.m. periodslut
     yearEnd.ts         — årsavslut: 8999→2019 (31/12) + omföring till 2010 (1/1); 8999 exkluderas ur resultatrapporter
     attachments.ts     — kvittobilagor: ArrayBuffer i IndexedDB, 8 MB-gräns, base64 för backup, kaskadradering
@@ -184,7 +184,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 572 enhetstester
+npm run test         # kör 581 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)

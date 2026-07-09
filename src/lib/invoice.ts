@@ -18,7 +18,8 @@ export interface CompanySettings {
   paymentTermsDays: number;
   nextInvoiceNumber: number;   // räknas bara uppåt — garanterar obruten serie
   defaultMethod: InvoiceMethod;
-  template?: string;           // egen HTML-mall (importerad fil); tom = standardmall
+  invoiceTheme?: InvoiceTheme; // visuellt tema (WYSIWYG-redigeraren)
+  template?: string;           // avancerad rå HTML-override; vinner över temat
   autoDownloadInvoice?: boolean; // ladda ned fakturafilen till datorn vid skapande
 }
 
@@ -267,18 +268,65 @@ export function validateTemplate(html: string): TemplateValidation {
   return { missingRequired, missingRecommended, ok: missingRequired.length === 0 };
 }
 
-// Standardmall — självständig (inline CSS, inga externa beroenden) så att den
-// arkiverade fakturafilen renderas korrekt även offline långt senare.
-export const DEFAULT_TEMPLATE = `<!doctype html>
+// ── Visuellt tema (WYSIWYG) ────────────────────────────────────────────────────
+// Användaren justerar dessa via den visuella redigeraren; mallen GENERERAS från
+// temat så att alla {{kopplingar}} alltid finns kvar. Självständig (inline CSS,
+// inbäddad logo som data-URI) — arkivfilen renderas offline långt senare.
+
+export type InvoiceFont = 'grotesk' | 'sans' | 'serif';
+
+export interface InvoiceTheme {
+  accent: string;       // accentfärg (ATT BETALA, Sändare)
+  heading: string;      // rubrik-/tabellhuvudfärg
+  font: InvoiceFont;
+  headingText: string;  // "FAKTURA"
+  footerText: string;   // tackrader (fottext, \n = radbrytning)
+  logoDataUri?: string; // inbäddad logotyp (data:image/…)
+}
+
+export const DEFAULT_THEME: InvoiceTheme = {
+  accent: '#0D9488',
+  heading: '#0F172A',
+  font: 'grotesk',
+  headingText: 'FAKTURA',
+  footerText: 'Tack för förtroendet.\nBetalning oss tillhanda senast förfallodagen.',
+};
+
+export const FONT_STACKS: Record<InvoiceFont, string> = {
+  grotesk: "'Trebuchet MS','Segoe UI',system-ui,-apple-system,sans-serif",
+  sans:    "-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
+  serif:   "Georgia,'Times New Roman',Times,serif",
+};
+
+export const FONT_LABELS: Record<InvoiceFont, string> = {
+  grotesk: 'Modern (grotesk)', sans: 'Ren sans-serif', serif: 'Klassisk serif',
+};
+
+const isHexColor = (c: string) => /^#[0-9a-fA-F]{3,8}$/.test(c);
+const isDataImage = (u: string) => /^data:image\/(png|jpe?g|gif|webp|svg\+xml);/.test(u);
+const safeColor = (c: string, fallback: string) => (isHexColor(c) ? c : fallback);
+
+// Genererar mall-HTML (med {{tokens}} kvar) från ett tema. Temavärden
+// (färger/text/logo) saneras; kopplingarna är alltid med.
+export function buildTemplateFromTheme(theme: InvoiceTheme): string {
+  const navy = safeColor(theme.heading, DEFAULT_THEME.heading);
+  const teal = safeColor(theme.accent, DEFAULT_THEME.accent);
+  const font = FONT_STACKS[theme.font] ?? FONT_STACKS.grotesk;
+  const headingText = esc(theme.headingText || 'FAKTURA');
+  const footer = esc(theme.footerText || '').replace(/\n/g, '<br>');
+  const logo = theme.logoDataUri && isDataImage(theme.logoDataUri)
+    ? `<img src="${theme.logoDataUri}" alt="" style="max-height:56px;max-width:220px;margin-bottom:16px;display:block">`
+    : '';
+  return `<!doctype html>
 <html lang="sv">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Faktura {{number}}</title>
 <style>
-  :root { --navy:#0F172A; --teal:#0D9488; --line:#E2E8F0; --muted:#76777d; --soft:#45464d; }
+  :root { --navy:${navy}; --teal:${teal}; --line:#E2E8F0; --muted:#76777d; --soft:#45464d; }
   * { box-sizing: border-box; }
-  body { font-family: 'Manrope','Inter',-apple-system,'Segoe UI',Roboto,sans-serif;
+  body { font-family: ${font};
          color: var(--navy); background:#f8f9ff; margin:0; padding:32px 16px; }
   .sheet { background:#fff; max-width:800px; margin:0 auto; padding:56px;
            border:1px solid var(--line); box-shadow:0 10px 30px rgba(15,23,42,.08); }
@@ -327,7 +375,7 @@ export const DEFAULT_TEMPLATE = `<!doctype html>
   <div class="sheet">
     <div class="row">
       <div>
-        <h1>FAKTURA</h1>
+        ${logo}<h1>${headingText}</h1>
         <div style="margin-top:14px"><span class="label">Fakturanummer:</span>
           <span class="mono" style="font-weight:600">{{number}}</span></div>
       </div>
@@ -391,12 +439,16 @@ export const DEFAULT_TEMPLATE = `<!doctype html>
       <div style="text-align:right">
         <h3>Adress</h3>
         <div class="kv" style="white-space:pre-line">{{companyAddress}}</div>
-        <div class="thanks">Tack för förtroendet.<br>Betalning oss tillhanda senast förfallodagen.<br>Ange fakturanummer {{number}} vid betalning.</div>
+        <div class="thanks">${footer}<br>Ange fakturanummer {{number}} vid betalning.</div>
       </div>
     </div>
   </div>
 </body>
 </html>`;
+}
+
+// Grundmall = temat med standardvärden (startpunkt för avancerad HTML-redigering + tester)
+export const DEFAULT_TEMPLATE = buildTemplateFromTheme(DEFAULT_THEME);
 
 const STATUS_LABEL: Record<Invoice['status'], string> = {
   obetald: 'Obetald', betald: 'Betald', makulerad: 'Makulerad',
@@ -451,6 +503,9 @@ export function renderInvoiceHtml(invoice: Invoice, company: CompanySettings): s
     grossTotal:      formatCurrency(totals.grossTotal),
   };
 
-  const template = company.template?.trim() ? company.template : DEFAULT_TEMPLATE;
+  // Prioritet: avancerad rå HTML → visuellt tema → grundtema
+  const template = company.template?.trim()
+    ? company.template
+    : buildTemplateFromTheme(company.invoiceTheme ?? DEFAULT_THEME);
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] ?? '');
 }

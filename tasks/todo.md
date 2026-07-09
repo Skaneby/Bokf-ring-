@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 572 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 581 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Bokför-guiden: databasfil först (juli 2026)**
 - [x] Guide överst i Bokför-fliken när bokföringen saknar databasfil: förklarar risken pedagogiskt
@@ -77,6 +77,14 @@
 - [x] AI-nyckeln (hemlighet) och filhandtaget ingår EJ i filen; manipulerad backup kan inte injicera dem
 - [x] wipeBokforing: "Byt bokföring"/återställning rensar även fakturor/deklarationer/företagsuppgifter (ny bokföring ärver inget); AI-nyckel + onboarding behålls
 - [x] applyBackupData rensar+återställer invoices/declarations korrekt (tidigare stale-data kvar)
+
+**WYSIWYG-fakturamall (juli 2026)**
+- [x] Visuell temaredigerare: accentfärg, rubrikfärg, typsnitt, rubriktext, fottext, logotyp
+- [x] Live-förhandsvisning (iframe) uppdateras direkt medan man justerar
+- [x] Mallen GENERERAS från temat (buildTemplateFromTheme) → kopplingarna kan aldrig brytas visuellt
+- [x] Logotyp bäddas in som data-URI (max 500 kB, fungerar offline); temavärden saneras mot injektion
+- [x] Avancerat HTML-läge kvar för proffs (rå template vinner över temat), med kopplingskontroll
+- [x] Grundmall = temat med standardvärden; "Återställ grundmall" nollställer båda
 
 **Anpassbar fakturamall (juli 2026)**
 - [x] Grundmallen med alla {{kopplingar}} är standard; användaren anpassar färg/text/typsnitt/layout i appen

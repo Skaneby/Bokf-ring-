@@ -21,6 +21,7 @@ import {
   getCompanySettings, saveCompanySettings, renderInvoiceHtml,
   getInvoiceHtml, invoiceFileName, DEFAULT_COMPANY,
   DEFAULT_TEMPLATE, validateTemplate, REQUIRED_TOKENS,
+  buildTemplateFromTheme, DEFAULT_THEME, InvoiceTheme,
 } from './lib/invoice';
 import { InvoiceRow } from './db';
 import {
@@ -1248,6 +1249,50 @@ async function runTests() {
     const html = renderInvoiceHtml(inv1, { ...DEFAULT_COMPANY, name: 'Färg AB', orgnr: '165560000167', template: custom });
     assert(html.includes('RÄKNING') && html.includes('#7c3aed') && !html.includes('{{'),
       'Mallvalidering: anpassad mall renderar med användarens ändringar + alla kopplingar'); }
+
+  // ── Visuellt tema (WYSIWYG): genererad mall behåller alltid kopplingarna ─
+  { // Grundmallen ÄR temat med standardvärden
+    assert(DEFAULT_TEMPLATE === buildTemplateFromTheme(DEFAULT_THEME),
+      'Tema: DEFAULT_TEMPLATE = grundtemat');
+
+    // Godtyckligt tema → alla kritiska kopplingar finns kvar (kan aldrig brytas visuellt)
+    const wild: InvoiceTheme = {
+      accent: '#ff0066', heading: '#101828', font: 'serif',
+      headingText: 'RÄKNING', footerText: 'Tack!\nBetala i tid.',
+      logoDataUri: 'data:image/png;base64,iVBORw0KGgo=',
+    };
+    const tpl = buildTemplateFromTheme(wild);
+    assert(validateTemplate(tpl).ok, 'Tema: genererad mall passerar kopplingskontrollen');
+    assert(REQUIRED_TOKENS.every(r => tpl.includes(`{{${r.token}}}`)), 'Tema: alla kritiska tokens med');
+
+    // Temavärden slår igenom i genererad HTML
+    assert(tpl.includes('#ff0066') && tpl.includes('RÄKNING') && tpl.includes('Georgia'),
+      'Tema: accentfärg, rubrik och typsnitt appliceras');
+    assert(tpl.includes('Betala i tid.') && tpl.includes('data:image/png;base64,iVBORw0KGgo='),
+      'Tema: fottext (radbrytning) och inbäddad logo med');
+
+    // Sanering: ogiltig färg faller tillbaka, script i text escapas, ogiltig logo droppas
+    const evil: InvoiceTheme = {
+      ...DEFAULT_THEME, accent: 'javascript:alert(1)',
+      headingText: '<script>x</script>', logoDataUri: 'javascript:alert(1)',
+    };
+    const safe = buildTemplateFromTheme(evil);
+    assert(!safe.includes('javascript:alert') && !safe.includes('<script>x'),
+      'Tema: färg/logo/text saneras (ingen injektion)');
+    assert(safe.includes(DEFAULT_THEME.accent), 'Tema: ogiltig färg → standardaccent');
+
+    // Rendering med tema (utan rå template) ger korrekt faktura
+    const htmlT = renderInvoiceHtml(inv1, { ...DEFAULT_COMPANY, name: 'Tema AB', orgnr: '165560000167',
+      invoiceTheme: { ...DEFAULT_THEME, accent: '#0055ff', headingText: 'OFFERT' } });
+    assert(htmlT.includes('OFFERT') && htmlT.includes('#0055ff') && !htmlT.includes('{{'),
+      'Tema: renderInvoiceHtml använder temat när ingen rå HTML finns');
+
+    // Rå template (avancerat) VINNER över temat
+    const htmlR = renderInvoiceHtml(inv1, { ...DEFAULT_COMPANY, name: 'X', orgnr: '165560000167',
+      invoiceTheme: { ...DEFAULT_THEME, headingText: 'TEMA' },
+      template: DEFAULT_TEMPLATE.replace('FAKTURA', 'RÅ-HTML') });
+    assert(htmlR.includes('RÅ-HTML') && !htmlR.includes('TEMA'),
+      'Tema: rå HTML-mall vinner över det visuella temat'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // 18. SRU-EXPORT (M0 — deklarationsmodulen)
