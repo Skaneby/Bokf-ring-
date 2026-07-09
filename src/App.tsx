@@ -40,12 +40,49 @@ type TabId = typeof NAV[number]['id'];
 
 const Loading = () => <div className="text-sm text-slate-400">Laddar…</div>;
 
+// Synlig startskärm (aldrig en tom vit yta) medan databasen initieras
+const StartupLoading = () => (
+  <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+    <p className="text-sm text-slate-400">Startar bokföringen…</p>
+  </div>
+);
+
+// Startfel — ersätter den vita skärmen med något åtgärdbart
+const StartupError = ({ message }: { message: string }) => (
+  <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+    <div className="w-full max-w-md space-y-4 text-center">
+      <h1 className="text-2xl font-bold text-slate-900">Kunde inte starta</h1>
+      <p className="rounded-lg bg-slate-100 px-4 py-3 text-left text-sm text-slate-600">{message}</p>
+      <p className="text-xs text-slate-400">
+        Prova att ladda om. Använder du privat/inkognitoläge — stäng av det, eftersom appen
+        behöver spara data lokalt.
+      </p>
+      <div className="flex flex-wrap justify-center gap-2">
+        <button
+          onClick={() => window.location.reload()}
+          className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700 transition-colors"
+        >
+          Ladda om
+        </button>
+        <a
+          href={`${location.pathname}?reset=1`}
+          className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+        >
+          Rensa cache och starta om
+        </a>
+      </div>
+    </div>
+  </div>
+);
+
 export default function App() {
   const [tab, setTab]       = useState<TabId>('dashboard');
   const [mobile, setMobile] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [ready,   setReady]   = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const [hasData, setHasData] = useState(false);
   const [confirmSwitch, setConfirmSwitch] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
@@ -57,13 +94,26 @@ export default function App() {
   const [dbRevision, setDbRevision] = useState<number | null>(null);
 
   useEffect(() => {
+    let done = false;
+    // Om IndexedDB hänger (känt iOS Safari-läge) surfar vi ett fel i stället
+    // för en oändlig vit skärm efter en timeout.
+    const timeout = setTimeout(() => {
+      if (!done) setInitError('Databasen svarar inte. Detta kan hända i privat surfläge eller när lagringen är blockerad.');
+    }, 10_000);
     initializeDb()
       .then(async ({ hasData }) => {
-        setFilMeta(await getBokforingsfil());
+        done = true; clearTimeout(timeout);
+        try { setFilMeta(await getBokforingsfil()); } catch { /* filminne ej kritiskt */ }
         setHasData(hasData);
+        setInitError(null);
         setReady(true);
       })
-      .catch(err => { console.error(err); setReady(true); });
+      .catch(err => {
+        done = true; clearTimeout(timeout);
+        console.error(err);
+        setInitError(err instanceof Error ? err.message : 'Kunde inte starta appen.');
+      });
+    return () => clearTimeout(timeout);
   }, []);
 
   // Auto-sparning till bokföringsfilen när den är öppnad
@@ -98,7 +148,8 @@ export default function App() {
     isOnboardingDone().then(done => { if (!done) setShowGuide(true); });
   }, [ready, hasData]);
 
-  if (!ready) return null;
+  if (!ready && initError) return <StartupError message={initError} />;
+  if (!ready) return <StartupLoading />;
 
   // Appen minns en bokföringsfil → be om ett klick för att öppna den
   if (filMeta?.handle && !filOpened) {

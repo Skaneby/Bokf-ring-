@@ -289,6 +289,34 @@ test('@desktop kvittobilagor: bifoga vid bokning → syns i huvudbok → radera'
   await expect(page.getByLabel('Öppna bilagan faktura.pdf')).toBeVisible();
 });
 
+test('@mobile fakturadesign (WYSIWYG) fungerar på liten skärm', async ({ page }) => {
+  await freshStart(page);
+  await gotoTab(page, 'Fakturor');
+  await page.getByRole('button', { name: 'Inställningar' }).click();
+
+  // Öppna den visuella temaredigeraren
+  await page.getByRole('button', { name: /Anpassa utseende/ }).click();
+
+  // Kontrollerna finns och fungerar på mobil
+  await expect(page.getByLabel('Accentfärg')).toBeVisible();
+  await page.getByLabel('Rubriktext').fill('OFFERT');
+
+  // Live-förhandsvisningen (iframe) renderar den ändrade rubriken
+  const preview = page.frameLocator('iframe[title="Förhandsvisning av faktura"]');
+  await expect(preview.locator('h1')).toHaveText('OFFERT');
+
+  // Spara temat
+  await page.getByRole('button', { name: 'Spara utseende' }).click();
+  await expect(page.getByText('Sparat ✓')).toBeVisible();
+  await expect(page.getByText(/Anpassat tema/)).toBeVisible();
+
+  // Ingen horisontell scroll trots redigeraren
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MOBIL — responsivitet
 // ═══════════════════════════════════════════════════════════════════════════

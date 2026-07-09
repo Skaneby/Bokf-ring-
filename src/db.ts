@@ -250,9 +250,26 @@ export async function setIdentity(identity: DbIdentity): Promise<void> {
   await db.settings.put({ key: IDENTITY_KEY, value: identity });
 }
 
+// UUID v4 med fallback — crypto.randomUUID finns först i Safari 15.4.
+// Äldre iOS/Safari skulle annars kasta och krascha initieringen.
+export function genId(): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch { /* faller igenom till reservlösningen */ }
+  const b = new Uint8Array(16);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40; // version 4
+  b[8] = (b[8] & 0x3f) | 0x80; // variant
+  const h = [...b].map(x => x.toString(16).padStart(2, '0'));
+  return `${h.slice(0, 4).join('')}-${h.slice(4, 6).join('')}-${h.slice(6, 8).join('')}-${h.slice(8, 10).join('')}-${h.slice(10, 16).join('')}`;
+}
+
 export async function newIdentity(): Promise<DbIdentity> {
   const identity: DbIdentity = {
-    id: crypto.randomUUID(),
+    id: genId(),
     revision: 0,
     modifiedAt: new Date().toISOString(),
   };

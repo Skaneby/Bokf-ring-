@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 581 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 584 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Bokför-guiden: databasfil först (juli 2026)**
 - [x] Guide överst i Bokför-fliken när bokföringen saknar databasfil: förklarar risken pedagogiskt
@@ -77,6 +77,12 @@
 - [x] AI-nyckeln (hemlighet) och filhandtaget ingår EJ i filen; manipulerad backup kan inte injicera dem
 - [x] wipeBokforing: "Byt bokföring"/återställning rensar även fakturor/deklarationer/företagsuppgifter (ny bokföring ärver inget); AI-nyckel + onboarding behålls
 - [x] applyBackupData rensar+återställer invoices/declarations korrekt (tidigare stale-data kvar)
+
+**iOS/Safari vit skärm-fix + robust start (juli 2026)**
+- [x] crypto.randomUUID (Safari <15.4) → genId() med UUID v4-fallback, kraschar aldrig
+- [x] Aldrig oändlig vit skärm: synlig startspinner + felskärm med "Ladda om"/"Rensa cache" vid init-timeout (10 s) eller fel
+- [x] Automatisk återhämtning från förlegad service worker/borttagna chunkar (main.tsx) — rensar SW+cache och laddar om en gång (loop-skydd)
+- [x] E2E: WYSIWYG-fakturadesign verifierad på mobil (375px) — färg/rubrik/live-förhandsvisning + ingen horisontell scroll
 
 **WYSIWYG-fakturamall (juli 2026)**
 - [x] Visuell temaredigerare: accentfärg, rubrikfärg, typsnitt, rubriktext, fottext, logotyp

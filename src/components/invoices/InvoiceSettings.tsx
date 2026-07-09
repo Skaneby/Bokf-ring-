@@ -263,7 +263,8 @@ export function InvoiceSettings() {
                 <ColorField label="Rubrikfärg" value={theme.heading} onChange={v => setTheme2({ heading: v })} />
               </div>
               <Field label="Typsnitt">
-                <select value={theme.font} onChange={e => setTheme2({ font: e.target.value as InvoiceFont })} className={cls}>
+                <select value={theme.font} onChange={e => setTheme2({ font: e.target.value as InvoiceFont })}
+                        aria-label="Typsnitt" className={cls}>
                   {(Object.keys(FONT_LABELS) as InvoiceFont[]).map(f => (
                     <option key={f} value={f}>{FONT_LABELS[f]}</option>
                   ))}
@@ -271,10 +272,12 @@ export function InvoiceSettings() {
               </Field>
               <Field label="Rubriktext">
                 <input type="text" value={theme.headingText} maxLength={40}
+                       aria-label="Rubriktext"
                        onChange={e => setTheme2({ headingText: e.target.value })} className={cls} />
               </Field>
               <Field label="Fottext (tackrader)">
                 <textarea value={theme.footerText} rows={2} maxLength={200}
+                          aria-label="Fottext"
                           onChange={e => setTheme2({ footerText: e.target.value })}
                           className={cls + ' resize-none'} />
               </Field>

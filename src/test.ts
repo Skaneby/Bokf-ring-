@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
   db, initializeDb, getIdentity, setIdentity, newIdentity, clearIdentity,
-  bumpIdentity, compareDb, wipeBokforing,
+  bumpIdentity, compareDb, wipeBokforing, genId,
 } from './db';
 import { exportSIE, importSIE, decodeSIEBuffer } from './lib/sie';
 import { buildBackupData, applyBackupData } from './lib/backup';
@@ -2407,6 +2407,20 @@ async function runTests() {
   { const id = await getIdentity();
     assert(id !== null && id.revision === 0 && id.id.length >= 32,
       'Identitet: skapas automatiskt vid initiering (UUID, revision 0)'); }
+
+  // ── genId: UUID v4 med fallback (kraschar inte på äldre Safari) ────────
+  { const re = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    assert(re.test(genId()), 'genId: giltigt UUID v4-format');
+    const ids = new Set(Array.from({ length: 200 }, () => genId()));
+    assert(ids.size === 200, 'genId: unika ID (ingen kollision på 200)');
+    // Fallbacken (utan crypto.randomUUID) ger fortfarande giltigt UUID
+    const orig = (globalThis.crypto as { randomUUID?: unknown }).randomUUID;
+    try {
+      (globalThis.crypto as { randomUUID?: unknown }).randomUUID = undefined;
+      assert(re.test(genId()), 'genId: fallback ger giltigt UUID utan crypto.randomUUID');
+    } finally {
+      (globalThis.crypto as { randomUUID?: unknown }).randomUUID = orig;
+    } }
 
   { const before = (await getIdentity())!;
     const bumped = await bumpIdentity();

@@ -42,6 +42,14 @@
 
 - **_headers fungerar inte på GitHub Pages**: Netlify-specifikt. Använd meta http-equiv i HTML istället.
 
+## iOS / Safari
+
+- **crypto.randomUUID kräver Safari 15.4+** — äldre iPad/iOS kastar. Använd genId() (getRandomValues-fallback). Samma för andra nya API:er: feature-detektera, kasta aldrig vid init.
+
+- **Vit skärm = init som hänger/kraschar före React-mount** — ErrorBoundary fångar INTE fel vid modulladdning eller om `if(!ready) return null` fastnar. Visa alltid en synlig spinner + timeout→felskärm, aldrig `return null`.
+
+- **Vit skärm på EN enhet (t.ex. iPad) men inte andra = förlegad service worker** som servar borttagna hashade chunkar. Lyssna på error/unhandledrejection efter chunk-fel → rensa SW+cache + ladda om en gång (sessionStorage-loopskydd).
+
 ## PWA / Service Worker
 
 - **skipWaiting + clientsClaim är obligatoriska**: Utan dem installeras ny SW men aktiveras aldrig förrän alla flikar stängs. Konfigurera alltid `registerType: 'autoUpdate'` + `workbox: { skipWaiting: true, clientsClaim: true }`.
