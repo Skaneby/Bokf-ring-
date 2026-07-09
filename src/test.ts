@@ -16,6 +16,7 @@ import {
   GeminiRow, CATEGORY_MAP,
 } from './lib/geminiImport';
 import { defaultAccounts } from './db';
+import { buildSeedBackup, seedDatabase, SEED_COMPANY } from './seed';
 import {
   invoiceTotals, invoiceCreationLines, invoicePaymentLines,
   createInvoice, registerPayment, cancelInvoice,
@@ -2638,6 +2639,51 @@ async function runTests() {
     await initializeDb();
     const next = (await getIdentity())!;
     assert(next.id !== before.id, 'Byt bokföring: ny bokföring får NYTT ID — kan aldrig förväxlas'); }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 29. SEED — testdata som populerar hela appen (test mot Skatteverket)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  console.log('\n── 29. Seed / testdata ───────────────────────────────\n');
+
+  // Varje seed-verifikat måste balansera (dubbel bokföring)
+  { const seed = buildSeedBackup();
+    const perVoucher = new Map<number, number>();
+    for (const t of seed.transactions)
+      perVoucher.set(t.voucherId, (perVoucher.get(t.voucherId) ?? 0) + t.amount);
+    const unbalanced = [...perVoucher.entries()].filter(([, sum]) => Math.abs(Math.round(sum * 100) / 100) > 0.01);
+    assert(unbalanced.length === 0, `Seed: alla verifikationer balanserar (obalanserade: ${JSON.stringify(unbalanced)})`);
+    assert(seed.vouchers.length >= 20, `Seed: minst 20 verifikationer (fick ${seed.vouchers.length})`);
+    assert(seed.version === 3, 'Seed: backup-format v3'); }
+
+  // Laddas in via samma väg som JSON-import och populerar alla delar
+  { const { vouchers } = await seedDatabase();
+    assert((await db.accounts.count()) === 76, 'Seed: hela kontoplanen (76 konton)');
+    assert((await db.vouchers.count()) === vouchers, 'Seed: alla verifikationer inlästa');
+    assert((await db.attachments.count()) === 1, 'Seed: kvittobilaga inläst');
+    assert((await db.invoices.count()) === 2, 'Seed: fakturor inlästa');
+    const c = await getCompanySettings();
+    assert(c.name === SEED_COMPANY.name && c.nextInvoiceNumber === 3, 'Seed: företagsuppgifter + nummerserie');
+
+    // Momsrapporten får värden i ALLA relevanta rutor (vanlig moms + omvänd + import)
+    const txs = await db.transactions.toArray();
+    const m = calcMomsLines(txs);
+    assert(m.box05 > 0, 'Seed: ruta 05 momspliktig försäljning > 0');
+    assert(m.box20 > 0 && m.box21 > 0 && m.box22 > 0, 'Seed: rutor 20/21/22 (förvärv) > 0');
+    assert(m.box50 > 0, 'Seed: ruta 50 (varuimport) > 0');
+    assert(m.box48 > 0, 'Seed: ruta 48 ingående moms > 0 (inkl. förvärvsmoms)');
+    assert(Number.isFinite(m.box49), 'Seed: ruta 49 beräknas');
+
+    // NE-bilagan → SRU byggs utan fel (bevisar att id/fältkoder passerar pipelinen)
+    const neRows = buildNeRows(await db.vouchers.toArray(), txs, 2025);
+    const pkg = buildNeSruPackage({
+      taxYear: 2025, rows: neRows, company: SEED_COMPANY,
+      createdAt: { date: '20251231', time: '235959' },
+      program: { name: 'LokalBokforing', version: '2.0' },
+    });
+    assert(pkg.blanketter.length === 1, 'Seed: NE-SRU-paket byggs (redo för Skatteverkets testtjänst)');
+    assert(Number(pkg.blanketter[0].uppgifter.find(u => u.fieldCode === '7400')?.value) > 0,
+      'Seed: NE R1 nettoomsättning > 0 i SRU'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // SAMMANFATTNING

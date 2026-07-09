@@ -4,7 +4,8 @@ import { exportSIE, importSIE, decodeSIEBuffer } from '../../lib/sie';
 import { exportBackup, importBackup } from '../../lib/backup';
 import { clearBokforingsfil } from '../../lib/bokforingsfil';
 import { clearIdentity, wipeBokforing } from '../../db';
-import { Download, Upload } from 'lucide-react';
+import { seedDatabase } from '../../seed';
+import { Download, Upload, FlaskConical } from 'lucide-react';
 
 interface Props {
   onReset: () => void;
@@ -13,7 +14,18 @@ interface Props {
 export function BackupTab({ onReset }: Props) {
   const [msg,            setMsg]            = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmReset,   setConfirmReset]   = useState(false);
+  const [confirmSeed,    setConfirmSeed]    = useState(false);
   const [pendingSieFile, setPendingSieFile] = useState<string | null>(null);
+
+  const handleSeed = async () => {
+    try {
+      const { vouchers } = await seedDatabase();
+      notify(true, `Testdata inläst — ${vouchers} exempelverifikationer för räkenskapsåret 2025.`);
+    } catch {
+      notify(false, 'Kunde inte läsa in testdatan.');
+    }
+    setConfirmSeed(false);
+  };
 
   const notify = (ok: boolean, text: string) => {
     setMsg({ ok, text });
@@ -170,6 +182,48 @@ export function BackupTab({ onReset }: Props) {
             <input type="file" accept=".se,.si,.sie,.SE,.SI,.SIE" className="hidden" onChange={handleSieImport} />
           </label>
         </div>
+      </div>
+
+      {/* Testdata */}
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <div className="mb-4">
+          <h3 className="flex items-center gap-2 font-semibold text-slate-900">
+            <FlaskConical className="h-4 w-4 text-slate-400" /> Testdata
+          </h3>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Fyller appen med en komplett exempelbokföring för räkenskapsåret 2025 (alla momssatser,
+            omvänd skattskyldighet, import, fakturor m.m.) — bra för att prova rapporter och
+            SRU-export mot Skatteverkets testtjänst. <strong>Ersätter nuvarande bokföring.</strong>
+          </p>
+        </div>
+        {!confirmSeed ? (
+          <button
+            onClick={() => setConfirmSeed(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <FlaskConical className="h-4 w-4" /> Fyll med testdata
+          </button>
+        ) : (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <p className="text-sm font-medium text-amber-800">
+              Nuvarande bokföring ersätts av exempeldatan. Detta går inte att ångra.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleSeed}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 transition-colors"
+              >
+                Ja, läs in testdata
+              </button>
+              <button
+                onClick={() => setConfirmSeed(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Avbryt
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Byt bokföring */}
