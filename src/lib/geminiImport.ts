@@ -38,31 +38,80 @@ export function parseGeminiJson(raw: string): unknown[] {
 
 const VALID_VAT = new Set([0, 6, 12, 25]);
 
+// Gemini svarar ofta på svenska trots engelsk prompt. Vi accepterar därför både
+// engelska och svenska fältnamn så att användaren slipper översätta JSON:en för
+// hand. Första nyckeln i listan som finns (och inte är tom) vinner.
+const FIELD_ALIASES: Record<keyof GeminiRow, string[]> = {
+  date:              ['date', 'datum'],
+  description:       ['description', 'beskrivning', 'text'],
+  amount:            ['amount', 'belopp', 'summa'],
+  vat_rate:          ['vat_rate', 'vatRate', 'moms', 'momssats'],
+  category:          ['category', 'kategori'],
+  suggested_account: ['suggested_account', 'suggestedAccount', 'konto', 'kontonummer', 'account'],
+  type:              ['type', 'typ'],
+};
+
+function pick(o: Record<string, unknown>, field: keyof GeminiRow): unknown {
+  for (const key of FIELD_ALIASES[field]) {
+    const v = o[key];
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return undefined;
+}
+
+// Tolerant taltolkning: Gemini skriver ibland belopp/moms som sträng med svensk
+// decimalkomma, tusentalsmellanslag eller enhetssuffix ("2 500,00 kr", "25 %").
+function toNumber(v: unknown): number {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const cleaned = v.replace(/[\s%]|kr|sek/gi, '').replace(',', '.');
+    if (cleaned === '') return NaN;
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  return NaN;
+}
+
+// Ord som betyder "intäkt" — allt annat tolkas som kostnad (default).
+const REVENUE_WORDS = new Set([
+  'revenue', 'income', 'intäkt', 'intakt', 'inkomst', 'inbetalning', 'försäljning', 'forsaljning',
+]);
+
 export function validateRows(rows: unknown[]): GeminiRow[] {
   return rows.map((r, i) => {
     const n = i + 1;
     if (typeof r !== 'object' || r === null) throw new Error(`Rad ${n}: inte ett objekt.`);
     const o = r as Record<string, unknown>;
 
-    if (typeof o.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(o.date))
-      throw new Error(`Rad ${n}: 'date' saknas eller har fel format (YYYY-MM-DD).`);
-    if (typeof o.description !== 'string' || !o.description.trim())
-      throw new Error(`Rad ${n}: 'description' saknas.`);
-    if (typeof o.amount !== 'number' || o.amount <= 0)
-      throw new Error(`Rad ${n}: 'amount' måste vara ett positivt tal.`);
+    const date = pick(o, 'date');
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+      throw new Error(`Rad ${n}: 'date'/'datum' saknas eller har fel format (YYYY-MM-DD).`);
 
-    const vat = Number(o.vat_rate ?? 0);
+    const description = pick(o, 'description');
+    if (typeof description !== 'string' || !description.trim())
+      throw new Error(`Rad ${n}: 'description'/'beskrivning' saknas.`);
+
+    const amount = toNumber(pick(o, 'amount'));
+    if (!Number.isFinite(amount) || amount <= 0)
+      throw new Error(`Rad ${n}: 'amount'/'belopp' måste vara ett positivt tal.`);
+
+    const vat = toNumber(pick(o, 'vat_rate') ?? 0);
     if (!VALID_VAT.has(vat))
-      throw new Error(`Rad ${n}: 'vat_rate' måste vara 0, 6, 12 eller 25.`);
+      throw new Error(`Rad ${n}: 'vat_rate'/'momssats' måste vara 0, 6, 12 eller 25.`);
+
+    const category = pick(o, 'category');
+    const account  = toNumber(pick(o, 'suggested_account'));
+    const typeRaw  = pick(o, 'type');
+    const isRevenue = typeof typeRaw === 'string' && REVENUE_WORDS.has(typeRaw.trim().toLowerCase());
 
     return {
-      date:              o.date as string,
-      description:       (o.description as string).trim(),
-      amount:            o.amount as number,
+      date,
+      description:       description.trim(),
+      amount,
       vat_rate:          vat as VatRate,
-      category:          typeof o.category === 'string' ? o.category.toLowerCase() : undefined,
-      suggested_account: typeof o.suggested_account === 'number' ? o.suggested_account : undefined,
-      type:              o.type === 'revenue' ? 'revenue' : 'expense',
+      category:          typeof category === 'string' ? category.toLowerCase() : undefined,
+      suggested_account: Number.isFinite(account) && account > 0 ? account : undefined,
+      type:              isRevenue ? 'revenue' : 'expense',
     };
   });
 }

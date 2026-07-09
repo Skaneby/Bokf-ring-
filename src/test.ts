@@ -997,6 +997,44 @@ async function runTests() {
   { const rows = validateRows([{ ...validRaw }]);
     assert(rows[0].type === 'expense', 'validateRows: type default = expense'); }
 
+  // ── validateRows: svenska fältnamn (Gemini svarar på svenska) ──────────
+
+  // Hela raden på svenska (exakt formen från skärmbilden) → tolkas korrekt
+  { const rows = validateRows([{
+      datum: '2026-03-03', beskrivning: 'Kamera (Elgiganten)',
+      belopp: 2500, momssats: 25, kategori: 'Utrustning', konto: '5410', typ: 'expense',
+    }]);
+    const r = rows[0];
+    assert(r.date === '2026-03-03', 'validateRows: svensk "datum" → date');
+    assert(r.description === 'Kamera (Elgiganten)', 'validateRows: svensk "beskrivning" → description');
+    assert(r.amount === 2500, 'validateRows: svensk "belopp" → amount');
+    assert(r.vat_rate === 25, 'validateRows: svensk "momssats" → vat_rate');
+    assert(r.category === 'utrustning', 'validateRows: svensk "kategori" → category');
+    assert(r.suggested_account === 5410, 'validateRows: svensk "konto" (sträng) → suggested_account (tal)');
+    assert(r.type === 'expense', 'validateRows: svensk "typ"=expense → expense'); }
+
+  // Svenska intäktsord → revenue
+  { const rows = validateRows([{ datum: '2026-01-01', beskrivning: 'Fakturabetalning', belopp: 1000, momssats: 25, typ: 'intäkt' }]);
+    assert(rows[0].type === 'revenue', 'validateRows: svensk typ="intäkt" → revenue'); }
+
+  // Blandade språk i samma objekt: engelska nycklar vinner om båda finns
+  { const rows = validateRows([{ ...validRaw, datum: '2099-12-31' }]);
+    assert(rows[0].date === '2026-05-15', 'validateRows: engelsk "date" vinner över svensk "datum"'); }
+
+  // Belopp som sträng med svensk decimalkomma, mellanslag och valutasuffix
+  { const rows = validateRows([{ datum: '2026-02-02', beskrivning: 'Resa', belopp: '2 500,50 kr', momssats: '25 %' }]);
+    assert(rows[0].amount === 2500.5, 'validateRows: "2 500,50 kr" → 2500.5');
+    assert(rows[0].vat_rate === 25, 'validateRows: "25 %" → 25'); }
+
+  // Tomt konto-fält ignoreras (blir undefined, inte 0)
+  { const rows = validateRows([{ datum: '2026-02-02', beskrivning: 'X', belopp: 100, momssats: 0, konto: '' }]);
+    assert(rows[0].suggested_account === undefined, 'validateRows: tomt "konto" → undefined'); }
+
+  // Saknat svenskt datum → fel (aliaset omfattas av valideringen)
+  { let threw = false;
+    try { validateRows([{ beskrivning: 'X', belopp: 100, momssats: 0 }]); } catch { threw = true; }
+    assert(threw, 'validateRows: kastar fel när både date/datum saknas'); }
+
   // ── lookupDict ────────────────────────────────────────────────────────
 
   { const acc = lookupDict({ ...validRaw, category: 'kontorsmaterial', description: 'papper' });

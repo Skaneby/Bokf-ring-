@@ -244,6 +244,7 @@ export function GeminiImport() {
           <p className="text-xs text-slate-400 mb-3">
             Accepterar ren JSON eller ett <code className="bg-slate-100 px-1 rounded">```json … ```</code>-block.
             Varje objekt behöver: <code className="bg-slate-100 px-1 rounded">date, description, amount, vat_rate</code>.
+            Svenska fältnamn (<code className="bg-slate-100 px-1 rounded">datum, beskrivning, belopp, momssats</code>) fungerar också.
           </p>
           <textarea
             ref={textRef}
