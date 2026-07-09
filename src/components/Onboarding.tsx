@@ -52,6 +52,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     tips: [
       'Fyll i företagsuppgifter under Fakturor → Inställningar innan första fakturan',
       'Skicka som utskrift/PDF, dela-funktion eller e-post',
+      'Fakturamallen kan anpassas (färg/text/typsnitt) under Inställningar — kopplingarna behålls automatiskt',
       'Makulera i stället för att radera — bokningen vänds automatiskt',
     ],
   },

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InvoiceMethod } from '../../db';
 import {
   CompanySettings, getCompanySettings, saveCompanySettings,
-  renderInvoiceHtml, TEMPLATE_TOKENS,
+  renderInvoiceHtml, DEFAULT_TEMPLATE, TEMPLATE_TOKENS,
+  validateTemplate,
 } from '../../lib/invoice';
-import { Upload, RotateCcw, Eye } from 'lucide-react';
+import { RotateCcw, Eye, AlertTriangle, Pencil } from 'lucide-react';
 
 const cls =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 ' +
@@ -27,7 +28,9 @@ export function InvoiceSettings() {
   const [s, setS] = useState<CompanySettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [tplMsg, setTplMsg] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  // Mallredigerare: draft laddas med grundmallen (eller användarens sparade)
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
 
   useEffect(() => { getCompanySettings().then(setS); }, []);
 
@@ -41,32 +44,41 @@ export function InvoiceSettings() {
     setTimeout(() => setSaved(false), 3000);
   };
 
-  const handleTemplateFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const html = await file.text();
-    if (!html.includes('{{')) {
-      setTplMsg('Filen innehåller inga {{tokens}} — kontrollera att det är en fakturamall.');
-    } else {
-      const next = { ...s, template: html };
-      setS(next);
-      await saveCompanySettings(next);
-      setTplMsg(`Egen mall importerad (${file.name}).`);
-    }
-    e.target.value = '';
+  const startEditing = () => {
+    setDraft(s.template?.trim() ? s.template : DEFAULT_TEMPLATE);
+    setTplMsg('');
+    setEditing(true);
+  };
+
+  const draftValidation = validateTemplate(draft);
+
+  const saveTemplate = async () => {
+    // Kritiska kopplingar saknas → knappen är avstängd, men dubbelvakt här
+    if (draftValidation.missingRequired.length > 0) return;
+    const next = { ...s, template: draft };
+    setS(next);
+    await saveCompanySettings(next);
+    setEditing(false);
+    setTplMsg(
+      draftValidation.missingRecommended.length > 0
+        ? 'warn-saved'
+        : 'saved',
+    );
   };
 
   const resetTemplate = async () => {
     const next = { ...s, template: undefined };
     setS(next);
     await saveCompanySettings(next);
-    setTplMsg('Standardmallen återställd.');
+    setEditing(false);
+    setTplMsg('reset');
   };
 
-  const previewTemplate = () => {
+  const previewTemplate = (html?: string) => {
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write(renderInvoiceHtml(SAMPLE_INVOICE, s));
+    // Förhandsgranska draften om vi redigerar, annars den sparade mallen
+    w.document.write(renderInvoiceHtml(SAMPLE_INVOICE, html ? { ...s, template: html } : s));
     w.document.close();
   };
 
@@ -177,38 +189,106 @@ export function InvoiceSettings() {
 
       {/* Fakturamall */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Fakturamall</p>
-        <p className="text-sm text-slate-500">
-          Aktiv mall: <span className="font-medium text-slate-900">{s.template ? 'Egen (importerad)' : 'Standard'}</span>.
-          Importera en egen HTML-fil med tokens som{' '}
-          {TEMPLATE_TOKENS.slice(0, 4).map(t => (
-            <code key={t} className="bg-slate-100 px-1 rounded text-xs mr-1">{'{{' + t + '}}'}</code>
-          ))}
-          m.fl.
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
-            <Upload className="h-4 w-4" /> Importera HTML-mall
-            <input ref={fileRef} type="file" accept=".html,.htm" className="hidden" onChange={handleTemplateFile} />
-          </label>
-          <button onClick={previewTemplate}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
-            <Eye className="h-4 w-4" /> Förhandsgranska
-          </button>
-          {s.template && (
-            <button onClick={resetTemplate}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
-              <RotateCcw className="h-4 w-4" /> Återställ standardmall
-            </button>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Fakturamall</p>
+          <span className="text-xs text-slate-500">
+            Aktiv: <span className="font-medium text-slate-900">{s.template ? 'Anpassad' : 'Grundmall'}</span>
+          </span>
         </div>
-        {tplMsg && <p className="text-sm text-slate-500">{tplMsg}</p>}
-        <details className="text-xs text-slate-400">
-          <summary className="cursor-pointer hover:text-slate-600">Alla tillgängliga tokens</summary>
-          <p className="mt-2 font-mono leading-6">
-            {TEMPLATE_TOKENS.map(t => '{{' + t + '}}').join('  ')}
-          </p>
-        </details>
+
+        {!editing ? (
+          <>
+            <p className="text-sm text-slate-500">
+              Fakturan bygger på en färdig grundmall med alla kopplingar till dina uppgifter.
+              Du kan ändra <strong>färg, text, typsnitt och layout</strong> direkt — kopplingarna
+              (<code className="bg-slate-100 px-1 rounded text-xs">{'{{fält}}'}</code>) måste finnas kvar
+              för att beloppen och uppgifterna ska hamna rätt.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button onClick={startEditing}
+                      className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700">
+                <Pencil className="h-4 w-4" /> Anpassa mallen
+              </button>
+              <button onClick={() => previewTemplate()}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+                <Eye className="h-4 w-4" /> Förhandsgranska
+              </button>
+              {s.template && (
+                <button onClick={resetTemplate}
+                        className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+                  <RotateCcw className="h-4 w-4" /> Återställ grundmall
+                </button>
+              )}
+            </div>
+            {tplMsg === 'saved' && <p className="text-sm text-emerald-600">Mallen sparad ✓</p>}
+            {tplMsg === 'warn-saved' && <p className="text-sm text-amber-600">Mallen sparad — men saknar rekommenderade fält (se nedan när du redigerar).</p>}
+            {tplMsg === 'reset' && <p className="text-sm text-slate-500">Grundmallen återställd.</p>}
+          </>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-500">
+              Redigera HTML/CSS fritt. Kopplingarna nedan måste vara kvar — annars hamnar
+              uppgifterna inte på fakturan.
+            </p>
+
+            {/* Kopplingskontroll — kritiska (blockerar) + rekommenderade (varnar) */}
+            {draftValidation.missingRequired.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  <strong>Nödvändiga kopplingar saknas — kan inte sparas:</strong>{' '}
+                  {draftValidation.missingRequired.map(m => `${m.label} ({{${m.token}}})`).join(', ')}.
+                </span>
+              </div>
+            )}
+            {draftValidation.missingRecommended.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  <strong>Rekommenderade fält saknas</strong> (krävs oftast på en svensk faktura):{' '}
+                  {draftValidation.missingRecommended.map(m => `${m.label} ({{${m.token}}})`).join(', ')}.
+                  Du kan spara ändå.
+                </span>
+              </div>
+            )}
+
+            <textarea
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              spellCheck={false}
+              rows={18}
+              aria-label="Fakturamallens HTML"
+              className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
+            />
+
+            <div className="flex flex-wrap gap-3">
+              <button onClick={saveTemplate}
+                      disabled={draftValidation.missingRequired.length > 0}
+                      className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700 disabled:opacity-40">
+                Spara mallen
+              </button>
+              <button onClick={() => previewTemplate(draft)}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+                <Eye className="h-4 w-4" /> Förhandsgranska ändringar
+              </button>
+              <button onClick={() => { setDraft(DEFAULT_TEMPLATE); }}
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50">
+                <RotateCcw className="h-4 w-4" /> Börja om från grundmallen
+              </button>
+              <button onClick={() => setEditing(false)}
+                      className="rounded-lg px-4 py-2 text-sm text-slate-500 hover:text-slate-700 transition-colors">
+                Avbryt
+              </button>
+            </div>
+
+            <details className="text-xs text-slate-400">
+              <summary className="cursor-pointer hover:text-slate-600">Alla tillgängliga kopplingar (klistra in där du vill ha uppgiften)</summary>
+              <p className="mt-2 font-mono leading-6">
+                {TEMPLATE_TOKENS.map(t => '{{' + t + '}}').join('  ')}
+              </p>
+            </details>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3">

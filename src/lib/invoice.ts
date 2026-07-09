@@ -218,7 +218,9 @@ const esc = (s: string) =>
 // Belopp i tabellen utan valutasymbol (design visar "12 500,00", totaler "… kr")
 const fmt2 = new Intl.NumberFormat('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Tokens som ersätts i mallen (egna mallar använder samma)
+// Tokens som ersätts i mallen. Kopplingarna mellan fakturans/bokföringens
+// data och mallen sker HÄR — därför redigerar användaren mallen i appen
+// (ingen HTML-import) så att alla {{tokens}} garanterat finns kvar.
 export const TEMPLATE_TOKENS = [
   'number', 'date', 'dueDate', 'statusBadge',
   'customerName', 'customerAddress', 'customerOrgnr', 'customerReference',
@@ -226,6 +228,44 @@ export const TEMPLATE_TOKENS = [
   'companyEmail', 'companyPhone', 'bankgiro', 'bankName', 'iban', 'fskatt',
   'rows', 'vatBreakdown', 'netTotal', 'vatTotal', 'grossTotal',
 ] as const;
+
+export type TemplateToken = typeof TEMPLATE_TOKENS[number];
+
+// Kritiska kopplingar — utan dessa är dokumentet inte en giltig faktura.
+// Att spara en mall utan dem BLOCKERAS.
+export const REQUIRED_TOKENS: { token: TemplateToken; label: string }[] = [
+  { token: 'number',     label: 'Fakturanummer' },
+  { token: 'date',       label: 'Fakturadatum' },
+  { token: 'customerName', label: 'Kundens namn' },
+  { token: 'rows',       label: 'Fakturarader' },
+  { token: 'grossTotal', label: 'Att betala (totalsumma)' },
+  { token: 'companyName', label: 'Företagsnamn' },
+];
+
+// Rekommenderade kopplingar — krävs på en korrekt svensk faktura men
+// blockerar inte (t.ex. ej momsregistrerad firma saknar momsnr). VARNAS.
+export const RECOMMENDED_TOKENS: { token: TemplateToken; label: string }[] = [
+  { token: 'dueDate',      label: 'Förfallodatum' },
+  { token: 'vatBreakdown', label: 'Momsspecifikation' },
+  { token: 'netTotal',     label: 'Nettobelopp' },
+  { token: 'companyOrgnr', label: 'Organisationsnummer' },
+  { token: 'companyMomsnr', label: 'Momsregistreringsnummer' },
+  { token: 'companyAddress', label: 'Företagets adress' },
+];
+
+export interface TemplateValidation {
+  missingRequired: { token: TemplateToken; label: string }[];
+  missingRecommended: { token: TemplateToken; label: string }[];
+  ok: boolean; // true om inga kritiska kopplingar saknas
+}
+
+// Kontrollerar att en (redigerad) mall behåller sina kopplingar.
+export function validateTemplate(html: string): TemplateValidation {
+  const has = (t: string) => new RegExp(`\\{\\{\\s*${t}\\s*\\}\\}`).test(html);
+  const missingRequired = REQUIRED_TOKENS.filter(r => !has(r.token));
+  const missingRecommended = RECOMMENDED_TOKENS.filter(r => !has(r.token));
+  return { missingRequired, missingRecommended, ok: missingRequired.length === 0 };
+}
 
 // Standardmall — självständig (inline CSS, inga externa beroenden) så att den
 // arkiverade fakturafilen renderas korrekt även offline långt senare.

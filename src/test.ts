@@ -20,6 +20,7 @@ import {
   createInvoice, registerPayment, cancelInvoice,
   getCompanySettings, saveCompanySettings, renderInvoiceHtml,
   getInvoiceHtml, invoiceFileName, DEFAULT_COMPANY,
+  DEFAULT_TEMPLATE, validateTemplate, REQUIRED_TOKENS,
 } from './lib/invoice';
 import { InvoiceRow } from './db';
 import {
@@ -1212,6 +1213,41 @@ async function runTests() {
       { ...inv1, customerName: '<script>alert(1)</script>', customerReference: '<img src=x onerror=1>' }, full);
     assert(!evil.includes('<script>alert') && !evil.includes('<img src=x'),
       'renderInvoiceHtml: fält HTML-escapas (kundnamn + referens)'); }
+
+  // ── Mallvalidering: kopplingar måste bevaras vid redigering ────────────
+  { // Grundmallen har alla kritiska OCH rekommenderade kopplingar
+    const base = validateTemplate(DEFAULT_TEMPLATE);
+    assert(base.ok && base.missingRequired.length === 0 && base.missingRecommended.length === 0,
+      'Mallvalidering: grundmallen har alla kopplingar');
+
+    // Alla kritiska tokens finns faktiskt i grundmallen
+    assert(REQUIRED_TOKENS.every(r => DEFAULT_TEMPLATE.includes(`{{${r.token}}}`)),
+      'Mallvalidering: varje kritisk token förekommer i grundmallen');
+
+    // Tar man bort en kritisk koppling → blockeras (ok=false)
+    const noTotal = DEFAULT_TEMPLATE.replace(/\{\{grossTotal\}\}/g, '0 kr');
+    const v1 = validateTemplate(noTotal);
+    assert(!v1.ok && v1.missingRequired.some(m => m.token === 'grossTotal'),
+      'Mallvalidering: borttagen totalsumma → kritiskt fel (blockeras)');
+
+    const noRows = DEFAULT_TEMPLATE.replace(/\{\{rows\}\}/g, '');
+    assert(!validateTemplate(noRows).ok, 'Mallvalidering: borttagna fakturarader → blockeras');
+
+    // Tar man bort momsnr (rekommenderat) → varning men ok=true
+    const noMoms = DEFAULT_TEMPLATE.replace(/\{\{companyMomsnr\}\}/g, '');
+    const v2 = validateTemplate(noMoms);
+    assert(v2.ok && v2.missingRecommended.some(m => m.token === 'companyMomsnr'),
+      'Mallvalidering: borttaget momsnr → varning men tillåts');
+
+    // Whitespace i token tolereras: {{ number }}
+    assert(validateTemplate('{{ number }}{{date}}{{customerName}}{{rows}}{{grossTotal}}{{companyName}}').ok,
+      'Mallvalidering: mellanslag i {{ token }} accepteras');
+
+    // Anpassad mall (annan färg/text) med bevarade kopplingar renderar rätt
+    const custom = DEFAULT_TEMPLATE.replace('FAKTURA', 'RÄKNING').replace('#0F172A', '#7c3aed');
+    const html = renderInvoiceHtml(inv1, { ...DEFAULT_COMPANY, name: 'Färg AB', orgnr: '165560000167', template: custom });
+    assert(html.includes('RÄKNING') && html.includes('#7c3aed') && !html.includes('{{'),
+      'Mallvalidering: anpassad mall renderar med användarens ändringar + alla kopplingar'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // 18. SRU-EXPORT (M0 — deklarationsmodulen)
