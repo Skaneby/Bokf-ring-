@@ -11,6 +11,7 @@ import {
 import { Welcome } from './components/Welcome';
 import { OpenBokforing } from './components/OpenBokforing';
 import { FilePrompt } from './components/FilePrompt';
+import { AiHelpProvider } from './components/AiHelp';
 import {
   LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw, Receipt,
   Sparkles, HelpCircle,
@@ -81,6 +82,9 @@ export default function App() {
   const [mobile, setMobile] = useState(false);
   const [copied, setCopied] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  // Kontextuell AI-hjälp: fråga som skickas till AI-chatten när en hjälpruta öppnas
+  const [aiSeed, setAiSeed] = useState<string | null>(null);
+  const openHelp = (seed: string) => { setAiSeed(seed); setTab('ai'); setMobile(false); };
   const [ready,   setReady]   = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [hasData, setHasData] = useState(false);
@@ -203,6 +207,7 @@ export default function App() {
   const go = (id: TabId) => { setTab(id); setMobile(false); };
 
   return (
+    <AiHelpProvider value={{ openHelp }}>
     <div className="min-h-screen bg-slate-50 flex">
 
       {/* ── Sidebar ───────────────────────────────────────────────── */}
@@ -360,7 +365,7 @@ export default function App() {
               {tab === 'accounts'  && <ChartOfAccounts />}
               {tab === 'reports'   && <Reports onEditVoucher={editVoucher} onReset={() => setHasData(false)} />}
               {tab === 'import'    && <GeminiImport />}
-              {tab === 'ai'        && <AiChat />}
+              {tab === 'ai'        && <AiChat seed={aiSeed} onSeedConsumed={() => setAiSeed(null)} />}
             </Suspense>
           </div>
         </main>
@@ -373,5 +378,6 @@ export default function App() {
         </Suspense>
       )}
     </div>
+    </AiHelpProvider>
   );
 }

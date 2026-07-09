@@ -13,6 +13,9 @@ interface Props {
 // SkattTab men beräknad på vald period (styrs av rapporternas periodväljare)
 export function MomsTab({ transactions, periodText }: Props) {
   const moms = calcMomsLines(transactions);
+  // Visa förvärvsrutorna bara när det faktiskt finns omvänd skattskyldighet
+  const hasForvarv = moms.box20 !== 0 || moms.box21 !== 0 || moms.box22 !== 0
+    || moms.box30 !== 0 || moms.box31 !== 0 || moms.box32 !== 0;
 
   const row = (box: string, label: string, value: number, bold = false) => (
     <div className={`flex items-center gap-3 px-5 py-2 ${bold ? 'border-t border-slate-100 bg-slate-50' : ''}`}>
@@ -37,10 +40,24 @@ export function MomsTab({ transactions, periodText }: Props) {
         {row('10', 'Utgående moms 25 % (konto 2610)', moms.box10)}
         {row('11', 'Utgående moms 12 % (konto 2620)', moms.box11)}
         {row('12', 'Utgående moms 6 % (konto 2630)', moms.box12)}
-        {row('48', 'Ingående moms att dra av (konto 2640)', moms.box48)}
+
+        {hasForvarv && (
+          <>
+            {row('20', 'Inköp varor från annat EU-land (4515–4518)', moms.box20)}
+            {row('21', 'Inköp tjänster från annat EU-land (4531–4533)', moms.box21)}
+            {row('22', 'Inköp tjänster från land utanför EU (4535–4537)', moms.box22)}
+            {row('30', 'Utgående moms 25 % på förvärv (2614/2615)', moms.box30)}
+            {row('31', 'Utgående moms 12 % på förvärv (2624/2625)', moms.box31)}
+            {row('32', 'Utgående moms 6 % på förvärv (2634/2635)', moms.box32)}
+          </>
+        )}
+
+        {row('48', `Ingående moms att dra av (konto 2640${hasForvarv ? ' + 2645' : ''})`, moms.box48)}
         {row('49', moms.box49 >= 0 ? 'Moms att betala' : 'Moms att återfå', moms.box49, true)}
         <p className="px-5 py-3 text-xs text-slate-400">
-          Ruta 20–24 (EU-förvärv och omvänd skattskyldighet) fylls i manuellt i e-tjänsten.
+          {hasForvarv
+            ? 'Rutorna 20–32 avser omvänd skattskyldighet (förvärvsmoms) — utgående och ingående moms tar ut varandra när förvärvet är fullt avdragsgillt. '
+            : 'Ruta 20–24 (EU-förvärv och omvänd skattskyldighet) visas automatiskt när du bokfört sådana köp. '}
           Beloppen bygger på verifikationsdatum inom perioden.
         </p>
       </Card>

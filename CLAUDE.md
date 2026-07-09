@@ -52,7 +52,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments); defaultAccounts (BAS-standardkontoplan) backfyllas i befintliga databaser vid uppstart
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 611 enhetstester (Node + fake-indexeddb)
+  test.ts              — 664 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -63,7 +63,8 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     ChartOfAccounts.tsx — kontoplan CRUD; radering blockeras om kontot har transaktioner
     Reports.tsx        — tunn flik-router (~70 rader); flikarna bor i reports/
     GeminiImport.tsx   — importera verifikationer från Gemini JSON-export
-    AiChat.tsx         — AI-chattbot (egen Gemini-nyckel, valideras); expert på skatt/juridik/appen
+    AiChat.tsx         — AI-chattbot (egen Gemini-nyckel, valideras); expert på skatt/juridik/appen; seed-prop auto-startar chatten fokuserad (kontextuell hjälp)
+    AiHelp.tsx         — AiHelpProvider/useAiHelp + HelpButton: hjälprutor som öppnar AI-chatten med en fråga som talar om var användaren är (App.openHelp byter flik + skickar seed)
     Onboarding.tsx     — 8-stegs pedagogisk guide; flagga i settings, "Visa guiden" i sidomenyn
     Invoices.tsx       — flik-router för fakturering
     invoices/
@@ -75,14 +76,14 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
       ResultatTab.tsx  — resultaträkning
       BalansTab.tsx    — balansräkning
       HuvudbokTab.tsx  — huvudbok: sök (matchesSearch i shared), paginering, redigera/radera
-      MomsTab.tsx      — momsrapport per period (rutorna 05-49 på periodens transaktioner)
+      MomsTab.tsx      — momsrapport per period (rutorna 05-49; 20-32 för omvänd skattskyldighet visas när sådana förvärv finns)
       SkattTab.tsx     — NE-bilaga (översikt), egenavgifter, momsdeklaration, årsavslut
       DeklarationTab.tsx — blankettvy NE/INK2 per beskattningsår: justera rader, skriv ut, status, SRU-export
       BackupTab.tsx    — JSON-backup, SIE4 import/export, "Byt bokföring"
   lib/
     backup.ts          — buildBackupData()/applyBackupData() v3: ALLA tabeller + settings (ej ai/handle); exportBackup()
     sie.ts             — exportSIE() / importSIE(content, 'merge'|'replace') / decodeSIEBuffer (CP437)
-    vat.ts             — splitVat() / vatRows() / VAT_OUT / VAT_IN — testbar logik
+    vat.ts             — splitVat() / vatRows() / VAT_OUT / VAT_IN + reverseChargeRows() (omvänd skattskyldighet: 4531-4537/4515-4518, ut 2614/2624/2634 & 2615/2625/2635, in 2645) — testbar logik
     ocr.ts             — scanReceipt(file) via Gemini Vision
     tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
     geminiImport.ts    — parseGeminiJson() / validateRows() / resolveAccount() / bookDraftRows()
@@ -135,6 +136,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
 - **Mallkonton måste vara korrekta BAS-konton** — F-skatt = 2510 Skatteskulder (inte 2013 Egna uttag); slå upp kontot innan en mall skapas
 - **Bilagor lagras som ArrayBuffer, inte Blob** — ArrayBuffer strukturklonas säkert i alla miljöer (inkl. fake-indexeddb i testerna); Blob skapas först vid visning. Bilagor måste rensas i ALLA raderingsflöden: verifikatradering, byt bokföring, backup-återställning, SIE-replace
 - **8999 är reserverat för årsavslutet** — exkluderas ur resultaträkning/Översikt (RESULT_EXCLUDED_ACCOUNTS) men INGÅR i balansens beräknade resultat; NE/INK2/moms exkluderar det via sina intervall
+- **Omvänd skattskyldighet (förvärvsmoms)** — vid utländska inköp fakturerar säljaren utan moms; köparen bokför själv beräknad utgående (2614/2624/2634 tjänst, 2615/2625/2635 EU-varor) OCH ingående moms (2645) → nettoeffekt noll. Beloppet som anges är NETTO (moms = netto × sats), till skillnad från vanlig momshjälp där beloppet är brutto. calcMomsLines summerar rutor 20/21/22 (inköpskonton 4515-18/4531-33/4535-37) + 30/31/32 (26xx) och lägger 2645 i ruta 48. Inköpskontona ligger i 4000-4899 → hamnar på NE R10 (varukostnad) även för tjänster; skattemässigt neutralt men en presentationsdetalj. Icke avdragsgill förvärvsmoms hanteras inte automatiskt (ovanligt för småföretag) — justera manuellt vid behov
 
 ---
 
@@ -186,7 +188,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 611 enhetstester
+npm run test         # kör 664 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)

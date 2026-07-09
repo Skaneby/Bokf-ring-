@@ -4,11 +4,32 @@ import { db } from '../db';
 import { Plus, Trash2, ScanLine, Paperclip, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { scanReceipt } from '../lib/ocr';
-import { VAT_OUT, VAT_IN, splitVat } from '../lib/vat';
+import {
+  VAT_OUT, VAT_IN, splitVat,
+  reverseChargeRows, reverseVat, ReverseKind, REVERSE_LABELS,
+} from '../lib/vat';
 import { uttaqTemplates, TEMPLATE_LABELS } from '../lib/tax';
 import { addAttachment, validateAttachmentFile, AttachmentError } from '../lib/attachments';
+import { HelpButton } from './AiHelp';
 
 type Row = { accountId: number | string; debit: string; credit: string };
+
+// Momshjälpens lägen: vanlig ut-/ingående moms + omvänd skattskyldighet (utland)
+type VatMode = 'out' | 'in' | ReverseKind;
+const REVERSE_KINDS: ReverseKind[] = ['eu-service', 'non-eu-service', 'eu-goods'];
+const isReverseMode = (m: VatMode): m is ReverseKind => (REVERSE_KINDS as string[]).includes(m);
+
+// Pedagogiska förklaringar per förvärvstyp + fråga som startar AI-hjälpen fokuserad
+const REVERSE_INFO: Record<ReverseKind, { origin: string; box: string }> = {
+  'eu-service':     { origin: 'ett annat EU-land',     box: 'ruta 21' },
+  'non-eu-service': { origin: 'ett land utanför EU',   box: 'ruta 22' },
+  'eu-goods':       { origin: 'ett annat EU-land',     box: 'ruta 20' },
+};
+const REVERSE_HELP_SEED: Record<ReverseKind, string> = {
+  'eu-service':     'Jag är i Bokför-fliken och ska bokföra omvänd moms (förvärvsmoms) på en tjänst köpt från ett annat EU-land, t.ex. en prenumeration. Förklara pedagogiskt steg för steg hur omvänd skattskyldighet fungerar, vilka konton och momsrutor som berörs och hur jag gör i appens momshjälp.',
+  'non-eu-service': 'Jag är i Bokför-fliken och ska bokföra omvänd moms (förvärvsmoms) på en tjänst köpt från ett land utanför EU. Förklara pedagogiskt hur omvänd skattskyldighet fungerar, vilka konton och momsrutor som berörs och hur jag gör i appen.',
+  'eu-goods':       'Jag är i Bokför-fliken och ska bokföra omvänd moms på varor köpta från ett annat EU-land (unionsinternt förvärv). Förklara pedagogiskt hur förvärvsmoms fungerar, vilka konton och momsrutor som berörs och hur jag gör i appen.',
+};
 
 const cls =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 ' +
@@ -103,14 +124,31 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
 
   // VAT helper
   const [vatRate, setVatRate] = useState<0 | 6 | 12 | 25>(0);
-  const [vatDir,  setVatDir]  = useState<'out' | 'in'>('in');
+  const [vatDir,  setVatDir]  = useState<VatMode>('in');
   const [vatGross, setVatGross] = useState('');
 
   const grossNum = parseFloat(vatGross) || 0;
-  const { net, vat } = vatRate > 0 ? splitVat(grossNum, vatRate) : { net: grossNum, vat: 0 };
+  const reverse  = isReverseMode(vatDir);
+  // Vid omvänd moms är det angivna beloppet NETTO (fakturan är momsfri) och
+  // momsen beräknas ovanpå; annars är beloppet inkl. moms och delas upp.
+  const { net, vat } =
+    vatRate === 0        ? { net: grossNum, vat: 0 } :
+    reverse              ? { net: grossNum, vat: reverseVat(grossNum, vatRate) } :
+                           splitVat(grossNum, vatRate);
 
   const applyVat = () => {
     if (!vatRate || !grossNum) return;
+    if (reverse) {
+      // Omvänd skattskyldighet: 4 färdigkonterade rader (alla konton förvalda)
+      const rows = reverseChargeRows(grossNum, vatRate as 6 | 12 | 25, vatDir as ReverseKind);
+      setRows(rows.map(r => ({
+        accountId: r.accountId,
+        debit:  r.debit  > 0 ? String(r.debit)  : '',
+        credit: r.credit > 0 ? String(r.credit) : '',
+      })));
+      setVatGross('');
+      return;
+    }
     const vatAcc = vatDir === 'out' ? VAT_OUT[vatRate] : VAT_IN;
     setRows(
       vatDir === 'out'
@@ -351,20 +389,28 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
                 {/* Direction */}
                 <div>
                   <label className="mb-1 block text-xs text-slate-500">Typ</label>
-                  <select value={vatDir} onChange={e => setVatDir(e.target.value as 'out' | 'in')} className={cls + ' w-48'}>
+                  <select value={vatDir} onChange={e => setVatDir(e.target.value as VatMode)} className={cls + ' w-64'}>
                     <option value="out">Utgående (försäljning)</option>
                     <option value="in">Ingående (inköp)</option>
+                    <optgroup label="Omvänd skattskyldighet (utland)">
+                      <option value="eu-service">{REVERSE_LABELS['eu-service']}</option>
+                      <option value="non-eu-service">{REVERSE_LABELS['non-eu-service']}</option>
+                      <option value="eu-goods">{REVERSE_LABELS['eu-goods']}</option>
+                    </optgroup>
                   </select>
                 </div>
 
                 {/* Gross amount */}
                 <div>
-                  <label className="mb-1 block text-xs text-slate-500">Belopp inkl. moms</label>
+                  <label className="mb-1 block text-xs text-slate-500">
+                    {reverse ? 'Fakturabelopp (utan moms)' : 'Belopp inkl. moms'}
+                  </label>
                   <input
                     type="number" step="0.01" min="0" inputMode="decimal"
                     value={vatGross}
                     onChange={e => setVatGross(e.target.value)}
                     placeholder="0.00"
+                    aria-label={reverse ? 'Fakturabelopp utan moms' : 'Belopp inklusive moms'}
                     className={cls + ' w-36'}
                   />
                 </div>
@@ -373,7 +419,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
                 {grossNum > 0 && (
                   <div className="text-sm text-slate-500 self-end pb-2">
                     Netto <span className="font-semibold text-slate-900">{net.toFixed(2)} kr</span>
-                    {' + '}moms <span className="font-semibold text-slate-900">{vat.toFixed(2)} kr</span>
+                    {' + '}{reverse ? 'beräknad moms' : 'moms'} <span className="font-semibold text-slate-900">{vat.toFixed(2)} kr</span>
                   </div>
                 )}
 
@@ -390,9 +436,26 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
             )}
           </div>
 
+          {/* Pedagogisk hjälpruta för omvänd skattskyldighet + kontextuell AI-hjälp */}
+          {reverse && (
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-4 py-3 space-y-2">
+              <p className="text-sm font-medium text-indigo-900">Omvänd skattskyldighet (förvärvsmoms)</p>
+              <p className="text-[13px] leading-relaxed text-indigo-800/90">
+                Säljaren i {REVERSE_INFO[vatDir as ReverseKind].origin} fakturerar <strong>utan moms</strong>.
+                Du redovisar själv svensk moms: appen bokför <strong>beräknad utgående</strong> och{' '}
+                <strong>ingående moms</strong> (konto <strong>2645</strong>) som tar ut varandra —
+                nettoeffekten blir noll när köpet är avdragsgillt. Ange fakturabeloppet <em>utan moms</em> ovan.
+                Redovisas i momsdeklarationens {REVERSE_INFO[vatDir as ReverseKind].box} samt ruta 30/31/32 och 48.
+              </p>
+              <HelpButton seed={REVERSE_HELP_SEED[vatDir as ReverseKind]} label="Förklara omvänd moms för mig" />
+            </div>
+          )}
+
           {vatRate > 0 && grossNum > 0 && (
             <p className="text-xs text-slate-400">
-              Klicka "Fyll i rader" — välj sedan konto för {vatDir === 'out' ? 'intäkt' : 'kostnad'} i tabellen nedan.
+              {reverse
+                ? 'Beräknad utgående och ingående moms bokförs automatiskt. Klicka "Fyll i rader" — kontona är redan förvalda.'
+                : `Klicka "Fyll i rader" — välj sedan konto för ${vatDir === 'out' ? 'intäkt' : 'kostnad'} i tabellen nedan.`}
             </p>
           )}
         </div>

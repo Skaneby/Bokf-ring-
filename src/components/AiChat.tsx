@@ -16,7 +16,7 @@ const SUGGESTIONS = [
   'Hur exporterar jag min deklaration som SRU-filer?',
 ];
 
-export function AiChat() {
+export function AiChat({ seed, onSeedConsumed }: { seed?: string | null; onSeedConsumed?: () => void } = {}) {
   const accounts = useLiveQuery(() => db.accounts.orderBy('id').toArray()) ?? [];
   const voucherCount = useLiveQuery(() => db.vouchers.count()) ?? 0;
   const invoiceCount = useLiveQuery(() => db.invoices.count()) ?? 0;
@@ -32,6 +32,10 @@ export function AiChat() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // send() definieras efter den tidiga returen; en ref låter auto-start-effekten
+  // (som måste ligga före returen enligt hooks-reglerna) anropa den senaste versionen.
+  const sendRef = useRef<(t: string) => void>(() => {});
+  const seedHandled = useRef(false);
 
   useEffect(() => {
     getAiSettings().then(s => {
@@ -44,6 +48,16 @@ export function AiChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length, sending]);
+
+  // Kontextuell hjälp: när en hjälpruta öppnat chatten med en fråga skickas den
+  // automatiskt så att AI:n direkt svarar fokuserat på användarens område.
+  useEffect(() => {
+    if (seed && settings && !seedHandled.current) {
+      seedHandled.current = true;
+      sendRef.current(seed);
+      onSeedConsumed?.();
+    }
+  }, [seed, settings, onSeedConsumed]);
 
   if (!settings) return <div className="text-sm text-slate-400">Laddar…</div>;
 
@@ -104,6 +118,7 @@ export function AiChat() {
       setSending(false);
     }
   };
+  sendRef.current = send;
 
   return (
     <div className="flex h-full flex-col space-y-4">

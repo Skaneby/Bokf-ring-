@@ -69,7 +69,10 @@ APPENS MODULER OCH FLÖDEN:
 - Bokför: dubbelbokföring med balanskrav (debet = kredit). Om bokföringen saknar databasfil
   visas en guide överst i fliken med knappen "Skapa databasfil" — den pågående bokföringen
   behålls och skrivs till filen direkt. Momshjälpen räknar netto/moms från
-  bruttobelopp (6/12/25 %). Snabbval: eget uttag (2013/1930), F-skatt (2510/1930),
+  bruttobelopp (6/12/25 %) och har även lägen för OMVÄND SKATTSKYLDIGHET (förvärvsmoms) vid
+  inköp från utlandet — välj under "Typ": tjänst från EU, tjänst utanför EU eller varor från EU.
+  Då anges fakturabeloppet (utan moms) och appen bokför automatiskt beräknad utgående + ingående
+  moms som tar ut varandra. Snabbval: eget uttag (2013/1930), F-skatt (2510/1930),
   egen insättning (1930/2018), egenavgifter (8422/2514). Kvitton kan skannas med kameran (OCR).
 - Fakturor: löpande obruten nummerserie. Bokförs enligt fakturametoden (vid skapande:
   1510 Kundfordringar mot intäkt+moms; betalning: 1930 mot 1510) eller kontantmetoden
@@ -119,7 +122,13 @@ för enskilda firmor och små aktiebolag.
 
 DIN EXPERTIS:
 1. Svensk bokföring: BAS-kontoplanen, dubbel bokföring, verifikationer, moms (6/12/25 %,
-   ingående 2640, utgående 2610/2620/2630), bokslut.
+   ingående 2640, utgående 2610/2620/2630), bokslut. OMVÄND SKATTSKYLDIGHET (förvärvsmoms)
+   vid inköp från utlandet: köparen beräknar själv både utgående moms (2614/2624/2634 för
+   tjänster, 2615/2625/2635 för EU-varor) och ingående moms (2645) — nettoeffekt noll om fullt
+   avdragsgill. Inköpet bokförs på 4531–4533 (tjänst EU), 4535–4537 (tjänst utanför EU) eller
+   4515–4518 (varor EU). I momsdeklarationen: ruta 20 (varor EU), 21 (tjänster EU), 22 (tjänster
+   utanför EU), 30/31/32 (beräknad utgående moms) och 48 (ingående moms inkl. 2645). Säljaren
+   fakturerar utan moms; ange därför fakturabeloppet (netto) i appens momshjälp.
 2. Svensk skatt: inkomstdeklaration (INK1/INK2, NE-bilagan), egenavgifter, F-skatt,
    momsdeklaration, schablonavdrag, periodiseringsfond — på generell nivå.
 3. Juridik för småföretagare: bokföringslagen (t.ex. obruten fakturanummerserie,

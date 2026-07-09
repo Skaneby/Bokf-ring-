@@ -9,7 +9,7 @@ import {
 } from './db';
 import { exportSIE, importSIE, decodeSIEBuffer } from './lib/sie';
 import { buildBackupData, applyBackupData } from './lib/backup';
-import { splitVat, vatRows, VAT_OUT, VAT_IN } from './lib/vat';
+import { splitVat, vatRows, VAT_OUT, VAT_IN, reverseChargeRows, reverseVat, REVERSE_COST } from './lib/vat';
 import { calculateEgenavgifter, calcNELines, calcMomsLines, EGENAVGIFTER_RATE } from './lib/tax';
 import {
   parseGeminiJson, validateRows, lookupDict, buildVoucherLines,
@@ -128,7 +128,7 @@ async function runTests() {
 
   await resetDb();
   const accountCount = await db.accounts.count();
-  assert(accountCount === 53, `Exakt 53 standardkonton (fick ${accountCount})`);
+  assert(accountCount === 70, `Exakt 70 standardkonton (fick ${accountCount})`);
 
   // Kontoplanen får inte innehålla dubbletter (bulkAdd kastar annars BulkError)
   { const ids = defaultAccounts.map(a => a.id);
@@ -145,6 +145,13 @@ async function runTests() {
       [6992, 'expense', 'Övriga ej avdragsgilla'],
       [6310, 'expense', 'Företagsförsäkringar'],
       [8410, 'expense', 'Räntekostnader'],
+      // Omvänd skattskyldighet / förvärvsmoms
+      [4531, 'expense',   'Inköp tjänster EU 25%'],
+      [4535, 'expense',   'Inköp tjänster utanför EU 25%'],
+      [4515, 'expense',   'Inköp varor EU 25%'],
+      [2614, 'liability', 'Utgående moms omvänd skattskyldighet 25%'],
+      [2615, 'liability', 'Utgående moms varuförvärv EU 25%'],
+      [2645, 'asset',     'Beräknad ingående moms förvärv'],
     ];
     for (const [id, type, label] of expect)
       assert(byId.get(id)?.type === type, `Kontoplan: ${id} ${label} finns som ${type}`); }
@@ -926,6 +933,52 @@ async function runTests() {
   const emptyTxs = await db.transactions.toArray();
   const emptyMoms = calcMomsLines(emptyTxs);
   assert(emptyMoms.box49 === 0, 'Moms ruta 49 = 0 kr vid ingen bokföring');
+
+  // ── Omvänd skattskyldighet / förvärvsmoms ────────────────────────────
+
+  // reverseVat: moms beräknas på netto (fakturan är momsfri)
+  assert(near(reverseVat(1000, 25), 250), 'reverseVat: 1000 × 25% = 250');
+  assert(near(reverseVat(1000, 6), 60),   'reverseVat: 1000 × 6% = 60');
+
+  // reverseChargeRows: rätt konton och alltid balanserad (debet = kredit)
+  for (const kind of ['eu-service', 'non-eu-service', 'eu-goods'] as const) {
+    for (const rate of [6, 12, 25] as const) {
+      const rows = reverseChargeRows(1000, rate, kind);
+      const totD = rows.reduce((s, r) => s + r.debit, 0);
+      const totC = rows.reduce((s, r) => s + r.credit, 0);
+      assert(near(totD, totC), `Omvänd moms ${kind} ${rate}%: balanserad (D ${totD} = K ${totC})`);
+      assert(near(totD, 1000 + reverseVat(1000, rate)), `Omvänd moms ${kind} ${rate}%: summa = netto + moms`);
+      // Inköpskonto debiteras netto, 2645 debiteras moms
+      assert(rows.some(r => r.accountId === REVERSE_COST[kind][rate] && near(r.debit, 1000)),
+        `Omvänd moms ${kind} ${rate}%: inköpskonto ${REVERSE_COST[kind][rate]} debiteras netto`);
+      assert(rows.some(r => r.accountId === 2645 && near(r.debit, reverseVat(1000, rate))),
+        `Omvänd moms ${kind} ${rate}%: 2645 debiteras beräknad ingående moms`);
+    }
+  }
+
+  // Förvärvsmoms i momsdeklarationen: bokför en EU-tjänst 1000 kr @ 25%
+  await resetDb();
+  { const rows = reverseChargeRows(1000, 25, 'eu-service');
+    await addVoucher('2026-03-01', 'Prenumeration EU (omvänd moms)',
+      rows.map(r => ({ accountId: r.accountId, amount: r.debit > 0 ? r.debit : -r.credit }))); }
+  const rev = calcMomsLines(await db.transactions.toArray());
+  assert(near(rev.box21, 1000), `Förvärvsmoms: ruta 21 (tjänst EU) = 1000 (fick ${rev.box21})`);
+  assert(near(rev.box22, 0),    'Förvärvsmoms: ruta 22 = 0 (ej utanför EU)');
+  assert(near(rev.box30, 250),  `Förvärvsmoms: ruta 30 (utgående 25%) = 250 (fick ${rev.box30})`);
+  assert(near(rev.box48, 250),  `Förvärvsmoms: ruta 48 (ingående inkl. 2645) = 250 (fick ${rev.box48})`);
+  assert(near(rev.box49, 0),    `Förvärvsmoms: ruta 49 = 0 — ut- och ingående moms tar ut varandra (fick ${rev.box49})`);
+
+  // EU-varor → ruta 20, tjänst utanför EU → ruta 22
+  await resetDb();
+  { const g = reverseChargeRows(2000, 25, 'eu-goods');
+    await addVoucher('2026-03-02', 'Varor EU', g.map(r => ({ accountId: r.accountId, amount: r.debit > 0 ? r.debit : -r.credit })));
+    const s = reverseChargeRows(500, 25, 'non-eu-service');
+    await addVoucher('2026-03-03', 'Tjänst utanför EU', s.map(r => ({ accountId: r.accountId, amount: r.debit > 0 ? r.debit : -r.credit }))); }
+  const rev2 = calcMomsLines(await db.transactions.toArray());
+  assert(near(rev2.box20, 2000), `Förvärvsmoms: ruta 20 (varor EU) = 2000 (fick ${rev2.box20})`);
+  assert(near(rev2.box22, 500),  `Förvärvsmoms: ruta 22 (tjänst utanför EU) = 500 (fick ${rev2.box22})`);
+  assert(near(rev2.box30, 625),  `Förvärvsmoms: ruta 30 = 625 (250+375 på varor+tjänst) (fick ${rev2.box30})`);
+  assert(near(rev2.box49, 0),    'Förvärvsmoms: ruta 49 = 0 (nettoeffekt noll)');
 
   // ── Egna uttag påverkar inte NE-bilagan ──────────────────────────────
 

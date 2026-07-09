@@ -81,8 +81,16 @@ export interface MomsLines {
   box10: number;  // Utgående moms 25 % — account 2610
   box11: number;  // Utgående moms 12 % — account 2620
   box12: number;  // Utgående moms 6 %  — account 2630
-  box48: number;  // Ingående moms      — account 2640
-  box49: number;  // Att betala (+) / återfå (−) = box10+11+12 − box48
+  // Omvänd skattskyldighet / förvärv från utlandet (netto)
+  box20: number;  // Inköp av varor från annat EU-land        — accounts 4515–4518
+  box21: number;  // Inköp av tjänster från annat EU-land      — accounts 4531–4533
+  box22: number;  // Inköp av tjänster från land utanför EU    — accounts 4535–4537
+  // Beräknad utgående moms på förvärven ovan (rutorna 20–24)
+  box30: number;  // 25 % — accounts 2614 + 2615
+  box31: number;  // 12 % — accounts 2624 + 2625
+  box32: number;  // 6 %  — accounts 2634 + 2635
+  box48: number;  // Ingående moms att dra av — accounts 2640 + 2645 (förvärvsmoms)
+  box49: number;  // Att betala (+) / återfå (−) = alla utgående − box48
 }
 
 export function calcMomsLines(transactions: Transaction[]): MomsLines {
@@ -93,10 +101,23 @@ export function calcMomsLines(transactions: Transaction[]): MomsLines {
   const box10 = -(bal.get(2610) ?? 0);
   const box11 = -(bal.get(2620) ?? 0);
   const box12 = -(bal.get(2630) ?? 0);
-  const box48 =   bal.get(2640) ?? 0;
-  const box49 = box10 + box11 + box12 - box48;
 
-  return { box05, box10, box11, box12, box48, box49 };
+  // Förvärv från utlandet — inköpskontona bär debetsaldo (positivt)
+  const box20 = sumRange(bal, 4515, 4518);
+  const box21 = sumRange(bal, 4531, 4533);
+  const box22 = sumRange(bal, 4535, 4537);
+
+  // Beräknad utgående moms bär kreditsaldo (negativt) → negera
+  const box30 = -((bal.get(2614) ?? 0) + (bal.get(2615) ?? 0));
+  const box31 = -((bal.get(2624) ?? 0) + (bal.get(2625) ?? 0));
+  const box32 = -((bal.get(2634) ?? 0) + (bal.get(2635) ?? 0));
+
+  // Ingående moms = vanlig (2640) + beräknad förvärvsmoms (2645)
+  const box48 = (bal.get(2640) ?? 0) + (bal.get(2645) ?? 0);
+
+  const box49 = box10 + box11 + box12 + box30 + box31 + box32 - box48;
+
+  return { box05, box10, box11, box12, box20, box21, box22, box30, box31, box32, box48, box49 };
 }
 
 // ── Uttags-mallar ─────────────────────────────────────────────────────────────

@@ -8,8 +8,9 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 
 - **Bokföringsdatabas som fil** — namnge din bokföring och välj var `.bokforing.json` sparas; appen minns filen, auto-sparar varje ändring och öppnar den med ett klick vid nästa besök (Chrome/Edge; annars webbläsarlagring med namn)
 - **Dubbelbokföring** med automatisk balansvalidering (debet = kredit, alltid)
-- **BAS-kontoplan** med 53 standardkonton, fullt redigerbar
+- **BAS-kontoplan** med 70 standardkonton, fullt redigerbar
 - **Momshjälp** — ange bruttobelopp och momssats (6/12/25 %), raderna fylls i automatiskt
+- **Omvänd skattskyldighet (förvärvsmoms)** — bokför inköp från utlandet (tjänst från EU/utanför EU, varor från EU) med ett klick; appen beräknar utgående och ingående moms och fyller momsdeklarationens rutor 20–32 automatiskt
 - **OCR-skanning** — fota ett kvitto, Gemini Vision läser datum, belopp, moms och leverantör; bilden sparas automatiskt som bilaga
 - **Kvittobilagor** — bifoga bilder/PDF:er till verifikat, öppna dem från huvudboken; följer med i backupen
 - **Gemini-import** — klistra in JSON från en Gemini Gem och bokför flera verifikationer i ett svep, med kontoförslag från AI, ordbok och bokföringshistorik
@@ -19,7 +20,7 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 - **Skatt & deklaration** — NE-bilagan (SKV 2161) sammanställs automatiskt, egenavgifter beräknas per åldersgrupp, momsdeklarationens rutor summeras, årsavslut med ett klick
 - **SIE4** — import och export för utbyte med Fortnox, Visma och redovisningsbyråer
 - **JSON-backup** — ladda ned och återställ hela bokföringen som en fil
-- **AI-hjälp** — inbyggd chattbot som kan svensk skatt, juridik och bokföring och känner din kontoplan; kräver din egen (gratis) Gemini-nyckel som valideras och lagras lokalt
+- **AI-hjälp** — inbyggd chattbot som kan svensk skatt, juridik och bokföring och känner din kontoplan; kräver din egen (gratis) Gemini-nyckel som valideras och lagras lokalt. Kontextuella hjälprutor (t.ex. vid omvänd moms) startar chatten fokuserad på det du håller på med
 - **Onboarding** — pedagogisk 8-stegsguide vid första start, alltid tillgänglig via "Visa guiden"
 - **PWA** — installeras på hemskärmen, uppdateras automatiskt
 - **Deklaration via fil** *(beta)* — NE-bilagan (enskild firma) och INK2R/INK2S (aktiebolag) exporteras som SRU-filer (INFO.SRU + BLANKETTER.SRU) med inlämningsguide; fältkoder för NE och INK2R verifierade mot BAS kopplingstabeller
@@ -38,7 +39,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test          # 611 enhetstester (tsx + fake-indexeddb)
+npm run test          # 664 enhetstester (tsx + fake-indexeddb)
 npm run test:e2e      # E2E i webbläsare: desktop 1280px + mobil 375px (Playwright)
 npm run lint          # typkontroll (tsc --noEmit)
 npm run build         # produktionsbygge till dist/

@@ -170,6 +170,18 @@ export const defaultAccounts: Account[] = [
   { id: 2640, name: 'Ingående moms', type: 'asset', vatCode: '48' },
   { id: 2650, name: 'Redovisningskonto för moms', type: 'liability' },
 
+  // ── Omvänd skattskyldighet / förvärvsmoms (2xxx) ───────────────────
+  // Beräknad utgående moms på tjänsteförvärv från utlandet (EU + utanför EU)
+  { id: 2614, name: 'Utgående moms omvänd skattskyldighet, 25%', type: 'liability', vatCode: '30' },
+  { id: 2624, name: 'Utgående moms omvänd skattskyldighet, 12%', type: 'liability', vatCode: '31' },
+  { id: 2634, name: 'Utgående moms omvänd skattskyldighet, 6%', type: 'liability', vatCode: '32' },
+  // Beräknad utgående moms på varuförvärv från annat EU-land
+  { id: 2615, name: 'Utgående moms varuförvärv EU, 25%', type: 'liability', vatCode: '30' },
+  { id: 2625, name: 'Utgående moms varuförvärv EU, 12%', type: 'liability', vatCode: '31' },
+  { id: 2635, name: 'Utgående moms varuförvärv EU, 6%', type: 'liability', vatCode: '32' },
+  // Beräknad ingående moms på förvärv från utlandet (avdragsgill → ruta 48)
+  { id: 2645, name: 'Beräknad ingående moms på förvärv från utlandet', type: 'asset', vatCode: '48' },
+
   // ── Intäkter (3xxx) ────────────────────────────────────────────────
   { id: 3000, name: 'Försäljning (25% moms)', type: 'revenue', vatCode: '05' },
   { id: 3001, name: 'Försäljning (12% moms)', type: 'revenue', vatCode: '06' },
@@ -180,6 +192,21 @@ export const defaultAccounts: Account[] = [
 
   // ── Varor & material (4xxx) ────────────────────────────────────────
   { id: 4000, name: 'Inköp av varor och material', type: 'expense' },
+
+  // ── Förvärv från utlandet — omvänd skattskyldighet (4xxx) ──────────
+  // Varuinköp från annat EU-land (unionsinternt förvärv) → momsruta 20
+  { id: 4515, name: 'Inköp av varor från annat EU-land, 25%', type: 'expense', vatCode: '20' },
+  { id: 4516, name: 'Inköp av varor från annat EU-land, 12%', type: 'expense', vatCode: '20' },
+  { id: 4517, name: 'Inköp av varor från annat EU-land, 6%',  type: 'expense', vatCode: '20' },
+  { id: 4518, name: 'Inköp av varor från annat EU-land, momsfri', type: 'expense', vatCode: '20' },
+  // Tjänsteinköp från annat EU-land → momsruta 21
+  { id: 4531, name: 'Inköp av tjänster från annat EU-land, 25%', type: 'expense', vatCode: '21' },
+  { id: 4532, name: 'Inköp av tjänster från annat EU-land, 12%', type: 'expense', vatCode: '21' },
+  { id: 4533, name: 'Inköp av tjänster från annat EU-land, 6%',  type: 'expense', vatCode: '21' },
+  // Tjänsteinköp från land utanför EU → momsruta 22
+  { id: 4535, name: 'Inköp av tjänster från land utanför EU, 25%', type: 'expense', vatCode: '22' },
+  { id: 4536, name: 'Inköp av tjänster från land utanför EU, 12%', type: 'expense', vatCode: '22' },
+  { id: 4537, name: 'Inköp av tjänster från land utanför EU, 6%',  type: 'expense', vatCode: '22' },
 
   // ── Lokalkostnader (5xxx) ──────────────────────────────────────────
   { id: 5010, name: 'Lokalhyra', type: 'expense' },
