@@ -12,20 +12,22 @@ export function splitVat(gross: number, rate: number) {
 // och redovisar förvärvet i särskilda rutor. Beloppet som anges är NETTO
 // (fakturabeloppet), inte inkl. moms — därav egen beräkning här.
 
-export type ReverseKind = 'eu-service' | 'non-eu-service' | 'eu-goods';
+export type ReverseKind = 'eu-service' | 'non-eu-service' | 'eu-goods' | 'non-eu-goods';
 
-// Inköpskonto (kostnad) per förvärvstyp och momssats → styr momsruta 20/21/22
+// Inköpskonto (kostnad) per förvärvstyp och momssats → styr momsruta 20/21/22/50
 export const REVERSE_COST: Record<ReverseKind, Record<number, number>> = {
   'eu-service':     { 25: 4531, 12: 4532, 6: 4533 },
   'non-eu-service': { 25: 4535, 12: 4536, 6: 4537 },
   'eu-goods':       { 25: 4515, 12: 4516, 6: 4517 },
+  'non-eu-goods':   { 25: 4545, 12: 4546, 6: 4547 },  // import av varor
 };
 
-// Beräknad UTGÅENDE moms per förvärvstyp och sats → momsruta 30/31/32
+// Beräknad UTGÅENDE moms per förvärvstyp och sats → momsruta 30/31/32 (förvärv) eller 60/61/62 (import)
 export const REVERSE_OUT_VAT: Record<ReverseKind, Record<number, number>> = {
   'eu-service':     { 25: 2614, 12: 2624, 6: 2634 },
   'non-eu-service': { 25: 2614, 12: 2624, 6: 2634 },
   'eu-goods':       { 25: 2615, 12: 2625, 6: 2635 },
+  'non-eu-goods':   { 25: 2616, 12: 2626, 6: 2636 },  // varuimport
 };
 
 // Beräknad INGÅENDE moms (avdragsgill) → momsruta 48
@@ -35,6 +37,7 @@ export const REVERSE_LABELS: Record<ReverseKind, string> = {
   'eu-service':     'Omvänd moms – tjänst från EU',
   'non-eu-service': 'Omvänd moms – tjänst utanför EU',
   'eu-goods':       'Omvänd moms – varor från EU',
+  'non-eu-goods':   'Import – varor utanför EU',
 };
 
 // Moms på förvärv = netto × sats (fakturan är momsfri, beloppet är alltså netto)

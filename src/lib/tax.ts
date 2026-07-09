@@ -89,7 +89,12 @@ export interface MomsLines {
   box30: number;  // 25 % — accounts 2614 + 2615
   box31: number;  // 12 % — accounts 2624 + 2625
   box32: number;  // 6 %  — accounts 2634 + 2635
-  box48: number;  // Ingående moms att dra av — accounts 2640 + 2645 (förvärvsmoms)
+  // Import av varor från land utanför EU
+  box50: number;  // Beskattningsunderlag vid import — accounts 4545–4547
+  box60: number;  // Utgående moms 25 % på import — account 2616
+  box61: number;  // Utgående moms 12 % på import — account 2626
+  box62: number;  // Utgående moms 6 %  på import — account 2636
+  box48: number;  // Ingående moms att dra av — accounts 2640 + 2645 (förvärvs-/importmoms)
   box49: number;  // Att betala (+) / återfå (−) = alla utgående − box48
 }
 
@@ -112,12 +117,18 @@ export function calcMomsLines(transactions: Transaction[]): MomsLines {
   const box31 = -((bal.get(2624) ?? 0) + (bal.get(2625) ?? 0));
   const box32 = -((bal.get(2634) ?? 0) + (bal.get(2635) ?? 0));
 
-  // Ingående moms = vanlig (2640) + beräknad förvärvsmoms (2645)
+  // Import av varor: beskattningsunderlag (4545–4547) + utgående importmoms
+  const box50 = sumRange(bal, 4545, 4547);
+  const box60 = -(bal.get(2616) ?? 0);
+  const box61 = -(bal.get(2626) ?? 0);
+  const box62 = -(bal.get(2636) ?? 0);
+
+  // Ingående moms = vanlig (2640) + beräknad förvärvs-/importmoms (2645)
   const box48 = (bal.get(2640) ?? 0) + (bal.get(2645) ?? 0);
 
-  const box49 = box10 + box11 + box12 + box30 + box31 + box32 - box48;
+  const box49 = box10 + box11 + box12 + box30 + box31 + box32 + box60 + box61 + box62 - box48;
 
-  return { box05, box10, box11, box12, box20, box21, box22, box30, box31, box32, box48, box49 };
+  return { box05, box10, box11, box12, box20, box21, box22, box30, box31, box32, box50, box60, box61, box62, box48, box49 };
 }
 
 // ── Uttags-mallar ─────────────────────────────────────────────────────────────

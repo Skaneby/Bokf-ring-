@@ -179,6 +179,10 @@ export const defaultAccounts: Account[] = [
   { id: 2615, name: 'Utgående moms varuförvärv EU, 25%', type: 'liability', vatCode: '30' },
   { id: 2625, name: 'Utgående moms varuförvärv EU, 12%', type: 'liability', vatCode: '31' },
   { id: 2635, name: 'Utgående moms varuförvärv EU, 6%', type: 'liability', vatCode: '32' },
+  // Beräknad utgående moms på varuimport från land utanför EU → ruta 60/61/62
+  { id: 2616, name: 'Utgående moms varuimport, 25%', type: 'liability', vatCode: '60' },
+  { id: 2626, name: 'Utgående moms varuimport, 12%', type: 'liability', vatCode: '61' },
+  { id: 2636, name: 'Utgående moms varuimport, 6%', type: 'liability', vatCode: '62' },
   // Beräknad ingående moms på förvärv från utlandet (avdragsgill → ruta 48)
   { id: 2645, name: 'Beräknad ingående moms på förvärv från utlandet', type: 'asset', vatCode: '48' },
 
@@ -207,6 +211,10 @@ export const defaultAccounts: Account[] = [
   { id: 4535, name: 'Inköp av tjänster från land utanför EU, 25%', type: 'expense', vatCode: '22' },
   { id: 4536, name: 'Inköp av tjänster från land utanför EU, 12%', type: 'expense', vatCode: '22' },
   { id: 4537, name: 'Inköp av tjänster från land utanför EU, 6%',  type: 'expense', vatCode: '22' },
+  // Import av varor från land utanför EU → momsruta 50 (beskattningsunderlag = tullvärde + tull)
+  { id: 4545, name: 'Import av varor, 25% moms', type: 'expense', vatCode: '50' },
+  { id: 4546, name: 'Import av varor, 12% moms', type: 'expense', vatCode: '50' },
+  { id: 4547, name: 'Import av varor, 6% moms',  type: 'expense', vatCode: '50' },
 
   // ── Lokalkostnader (5xxx) ──────────────────────────────────────────
   { id: 5010, name: 'Lokalhyra', type: 'expense' },

@@ -14,21 +14,25 @@ import { HelpButton } from './AiHelp';
 
 type Row = { accountId: number | string; debit: string; credit: string };
 
-// Momshjälpens lägen: vanlig ut-/ingående moms + omvänd skattskyldighet (utland)
+// Momshjälpens lägen: vanlig ut-/ingående moms + omvänd skattskyldighet (utland).
+// REVERSE_KINDS härleds ur REVERSE_LABELS (enda källan) så att ett nytt läge aldrig
+// kan glömmas här.
 type VatMode = 'out' | 'in' | ReverseKind;
-const REVERSE_KINDS: ReverseKind[] = ['eu-service', 'non-eu-service', 'eu-goods'];
+const REVERSE_KINDS = Object.keys(REVERSE_LABELS) as ReverseKind[];
 const isReverseMode = (m: VatMode): m is ReverseKind => (REVERSE_KINDS as string[]).includes(m);
 
 // Pedagogiska förklaringar per förvärvstyp + fråga som startar AI-hjälpen fokuserad
-const REVERSE_INFO: Record<ReverseKind, { origin: string; box: string }> = {
+const REVERSE_INFO: Record<ReverseKind, { origin: string; box: string; import?: boolean }> = {
   'eu-service':     { origin: 'ett annat EU-land',     box: 'ruta 21' },
   'non-eu-service': { origin: 'ett land utanför EU',   box: 'ruta 22' },
   'eu-goods':       { origin: 'ett annat EU-land',     box: 'ruta 20' },
+  'non-eu-goods':   { origin: 'ett land utanför EU',   box: 'ruta 50', import: true },
 };
 const REVERSE_HELP_SEED: Record<ReverseKind, string> = {
   'eu-service':     'Jag är i Bokför-fliken och ska bokföra omvänd moms (förvärvsmoms) på en tjänst köpt från ett annat EU-land, t.ex. en prenumeration. Förklara pedagogiskt steg för steg hur omvänd skattskyldighet fungerar, vilka konton och momsrutor som berörs och hur jag gör i appens momshjälp.',
   'non-eu-service': 'Jag är i Bokför-fliken och ska bokföra omvänd moms (förvärvsmoms) på en tjänst köpt från ett land utanför EU. Förklara pedagogiskt hur omvänd skattskyldighet fungerar, vilka konton och momsrutor som berörs och hur jag gör i appen.',
   'eu-goods':       'Jag är i Bokför-fliken och ska bokföra omvänd moms på varor köpta från ett annat EU-land (unionsinternt förvärv). Förklara pedagogiskt hur förvärvsmoms fungerar, vilka konton och momsrutor som berörs och hur jag gör i appen.',
+  'non-eu-goods':   'Jag är i Bokför-fliken och ska bokföra import av varor från ett land utanför EU. Förklara pedagogiskt hur importmoms fungerar: vad beskattningsunderlaget (tullvärde + tull från Tullverkets tullräkning) är, vilka konton (4545/2616/2645) och momsrutor (50, 60, 48) som berörs, och hur jag gör i appen.',
 };
 
 const cls =
@@ -129,6 +133,10 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
 
   const grossNum = parseFloat(vatGross) || 0;
   const reverse  = isReverseMode(vatDir);
+  const isImport = vatDir === 'non-eu-goods';
+  const amountLabel = isImport
+    ? 'Beskattningsunderlag (tullräkning)'
+    : reverse ? 'Fakturabelopp (utan moms)' : 'Belopp inkl. moms';
   // Vid omvänd moms är det angivna beloppet NETTO (fakturan är momsfri) och
   // momsen beräknas ovanpå; annars är beloppet inkl. moms och delas upp.
   const { net, vat } =
@@ -396,6 +404,7 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
                       <option value="eu-service">{REVERSE_LABELS['eu-service']}</option>
                       <option value="non-eu-service">{REVERSE_LABELS['non-eu-service']}</option>
                       <option value="eu-goods">{REVERSE_LABELS['eu-goods']}</option>
+                      <option value="non-eu-goods">{REVERSE_LABELS['non-eu-goods']}</option>
                     </optgroup>
                   </select>
                 </div>
@@ -403,14 +412,14 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
                 {/* Gross amount */}
                 <div>
                   <label className="mb-1 block text-xs text-slate-500">
-                    {reverse ? 'Fakturabelopp (utan moms)' : 'Belopp inkl. moms'}
+                    {amountLabel}
                   </label>
                   <input
                     type="number" step="0.01" min="0" inputMode="decimal"
                     value={vatGross}
                     onChange={e => setVatGross(e.target.value)}
                     placeholder="0.00"
-                    aria-label={reverse ? 'Fakturabelopp utan moms' : 'Belopp inklusive moms'}
+                    aria-label={amountLabel}
                     className={cls + ' w-36'}
                   />
                 </div>
@@ -439,15 +448,31 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
           {/* Pedagogisk hjälpruta för omvänd skattskyldighet + kontextuell AI-hjälp */}
           {reverse && (
             <div className="rounded-lg border border-indigo-200 bg-indigo-50/60 px-4 py-3 space-y-2">
-              <p className="text-sm font-medium text-indigo-900">Omvänd skattskyldighet (förvärvsmoms)</p>
-              <p className="text-[13px] leading-relaxed text-indigo-800/90">
-                Säljaren i {REVERSE_INFO[vatDir as ReverseKind].origin} fakturerar <strong>utan moms</strong>.
-                Du redovisar själv svensk moms: appen bokför <strong>beräknad utgående</strong> och{' '}
-                <strong>ingående moms</strong> (konto <strong>2645</strong>) som tar ut varandra —
-                nettoeffekten blir noll när köpet är avdragsgillt. Ange fakturabeloppet <em>utan moms</em> ovan.
-                Redovisas i momsdeklarationens {REVERSE_INFO[vatDir as ReverseKind].box} samt ruta 30/31/32 och 48.
+              <p className="text-sm font-medium text-indigo-900">
+                {isImport ? 'Import av varor (importmoms)' : 'Omvänd skattskyldighet (förvärvsmoms)'}
               </p>
-              <HelpButton seed={REVERSE_HELP_SEED[vatDir as ReverseKind]} label="Förklara omvänd moms för mig" />
+              {isImport ? (
+                <p className="text-[13px] leading-relaxed text-indigo-800/90">
+                  Vid import beräknas momsen på <strong>beskattningsunderlaget</strong> (tullvärde + tull och
+                  frakt) som står på <strong>Tullverkets tullräkning</strong> — inte på säljarens faktura.
+                  Ange det beloppet ovan. Appen bokför <strong>beräknad utgående</strong> och{' '}
+                  <strong>ingående moms</strong> (konto <strong>2645</strong>) som tar ut varandra. Redovisas i
+                  momsdeklarationens <strong>ruta 50</strong> (underlag) och <strong>60</strong> samt ruta 48.
+                  Varukostnad och tullavgift bokförs separat.
+                </p>
+              ) : (
+                <p className="text-[13px] leading-relaxed text-indigo-800/90">
+                  Säljaren i {REVERSE_INFO[vatDir as ReverseKind].origin} fakturerar <strong>utan moms</strong>.
+                  Du redovisar själv svensk moms: appen bokför <strong>beräknad utgående</strong> och{' '}
+                  <strong>ingående moms</strong> (konto <strong>2645</strong>) som tar ut varandra —
+                  nettoeffekten blir noll när köpet är avdragsgillt. Ange fakturabeloppet <em>utan moms</em> ovan.
+                  Redovisas i momsdeklarationens {REVERSE_INFO[vatDir as ReverseKind].box} samt ruta 30/31/32 och 48.
+                </p>
+              )}
+              <HelpButton
+                seed={REVERSE_HELP_SEED[vatDir as ReverseKind]}
+                label={isImport ? 'Förklara importmoms för mig' : 'Förklara omvänd moms för mig'}
+              />
             </div>
           )}
 

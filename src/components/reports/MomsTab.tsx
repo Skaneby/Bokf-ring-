@@ -16,6 +16,8 @@ export function MomsTab({ transactions, periodText }: Props) {
   // Visa förvärvsrutorna bara när det faktiskt finns omvänd skattskyldighet
   const hasForvarv = moms.box20 !== 0 || moms.box21 !== 0 || moms.box22 !== 0
     || moms.box30 !== 0 || moms.box31 !== 0 || moms.box32 !== 0;
+  // Import av varor visas separat (rutorna 50/60)
+  const hasImport = moms.box50 !== 0 || moms.box60 !== 0 || moms.box61 !== 0 || moms.box62 !== 0;
 
   const row = (box: string, label: string, value: number, bold = false) => (
     <div className={`flex items-center gap-3 px-5 py-2 ${bold ? 'border-t border-slate-100 bg-slate-50' : ''}`}>
@@ -52,12 +54,21 @@ export function MomsTab({ transactions, periodText }: Props) {
           </>
         )}
 
-        {row('48', `Ingående moms att dra av (konto 2640${hasForvarv ? ' + 2645' : ''})`, moms.box48)}
+        {hasImport && (
+          <>
+            {row('50', 'Beskattningsunderlag vid import (4545–4547)', moms.box50)}
+            {row('60', 'Utgående moms 25 % på import (2616)', moms.box60)}
+            {row('61', 'Utgående moms 12 % på import (2626)', moms.box61)}
+            {row('62', 'Utgående moms 6 % på import (2636)', moms.box62)}
+          </>
+        )}
+
+        {row('48', `Ingående moms att dra av (konto 2640${hasForvarv || hasImport ? ' + 2645' : ''})`, moms.box48)}
         {row('49', moms.box49 >= 0 ? 'Moms att betala' : 'Moms att återfå', moms.box49, true)}
         <p className="px-5 py-3 text-xs text-slate-400">
-          {hasForvarv
-            ? 'Rutorna 20–32 avser omvänd skattskyldighet (förvärvsmoms) — utgående och ingående moms tar ut varandra när förvärvet är fullt avdragsgillt. '
-            : 'Ruta 20–24 (EU-förvärv och omvänd skattskyldighet) visas automatiskt när du bokfört sådana köp. '}
+          {hasForvarv || hasImport
+            ? 'Rutorna 20–32 (förvärv) och 50–62 (varuimport) avser omvänd skattskyldighet — utgående och ingående moms tar ut varandra när förvärvet är fullt avdragsgillt. Vid import är beloppet i ruta 50 beskattningsunderlaget (tullvärde + tull) från Tullverkets tullräkning. '
+            : 'Rutorna 20–24 (EU-förvärv) och 50 (varuimport) visas automatiskt när du bokfört sådana köp. '}
           Beloppen bygger på verifikationsdatum inom perioden.
         </p>
       </Card>

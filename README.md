@@ -8,9 +8,9 @@ Ett komplett bokföringsprogram för svenska enskilda firmor — helt i webbläs
 
 - **Bokföringsdatabas som fil** — namnge din bokföring och välj var `.bokforing.json` sparas; appen minns filen, auto-sparar varje ändring och öppnar den med ett klick vid nästa besök (Chrome/Edge; annars webbläsarlagring med namn)
 - **Dubbelbokföring** med automatisk balansvalidering (debet = kredit, alltid)
-- **BAS-kontoplan** med 70 standardkonton, fullt redigerbar
+- **BAS-kontoplan** med 76 standardkonton, fullt redigerbar
 - **Momshjälp** — ange bruttobelopp och momssats (6/12/25 %), raderna fylls i automatiskt
-- **Omvänd skattskyldighet (förvärvsmoms)** — bokför inköp från utlandet (tjänst från EU/utanför EU, varor från EU) med ett klick; appen beräknar utgående och ingående moms och fyller momsdeklarationens rutor 20–32 automatiskt
+- **Omvänd skattskyldighet & import** — bokför inköp från utlandet (tjänst från EU/utanför EU, varor från EU samt import av varor från land utanför EU) med ett klick; appen beräknar utgående och ingående moms och fyller momsdeklarationens rutor 20–32 samt 50–62 automatiskt
 - **OCR-skanning** — fota ett kvitto, Gemini Vision läser datum, belopp, moms och leverantör; bilden sparas automatiskt som bilaga
 - **Kvittobilagor** — bifoga bilder/PDF:er till verifikat, öppna dem från huvudboken; följer med i backupen
 - **Gemini-import** — klistra in JSON från en Gemini Gem och bokför flera verifikationer i ett svep, med kontoförslag från AI, ordbok och bokföringshistorik
@@ -39,7 +39,7 @@ För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på h
 ## Utveckling
 
 ```bash
-npm run test          # 664 enhetstester (tsx + fake-indexeddb)
+npm run test          # 687 enhetstester (tsx + fake-indexeddb)
 npm run test:e2e      # E2E i webbläsare: desktop 1280px + mobil 375px (Playwright)
 npm run lint          # typkontroll (tsc --noEmit)
 npm run build         # produktionsbygge till dist/

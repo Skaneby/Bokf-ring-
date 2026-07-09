@@ -9,7 +9,7 @@ import {
 } from './db';
 import { exportSIE, importSIE, decodeSIEBuffer } from './lib/sie';
 import { buildBackupData, applyBackupData } from './lib/backup';
-import { splitVat, vatRows, VAT_OUT, VAT_IN, reverseChargeRows, reverseVat, REVERSE_COST } from './lib/vat';
+import { splitVat, vatRows, VAT_OUT, VAT_IN, reverseChargeRows, reverseVat, REVERSE_COST, REVERSE_OUT_VAT, REVERSE_LABELS } from './lib/vat';
 import { calculateEgenavgifter, calcNELines, calcMomsLines, EGENAVGIFTER_RATE } from './lib/tax';
 import {
   parseGeminiJson, validateRows, lookupDict, buildVoucherLines,
@@ -128,7 +128,7 @@ async function runTests() {
 
   await resetDb();
   const accountCount = await db.accounts.count();
-  assert(accountCount === 70, `Exakt 70 standardkonton (fick ${accountCount})`);
+  assert(accountCount === 76, `Exakt 76 standardkonton (fick ${accountCount})`);
 
   // Kontoplanen får inte innehålla dubbletter (bulkAdd kastar annars BulkError)
   { const ids = defaultAccounts.map(a => a.id);
@@ -152,6 +152,8 @@ async function runTests() {
       [2614, 'liability', 'Utgående moms omvänd skattskyldighet 25%'],
       [2615, 'liability', 'Utgående moms varuförvärv EU 25%'],
       [2645, 'asset',     'Beräknad ingående moms förvärv'],
+      [4545, 'expense',   'Import av varor 25%'],
+      [2616, 'liability', 'Utgående moms varuimport 25%'],
     ];
     for (const [id, type, label] of expect)
       assert(byId.get(id)?.type === type, `Kontoplan: ${id} ${label} finns som ${type}`); }
@@ -940,8 +942,17 @@ async function runTests() {
   assert(near(reverseVat(1000, 25), 250), 'reverseVat: 1000 × 25% = 250');
   assert(near(reverseVat(1000, 6), 60),   'reverseVat: 1000 × 6% = 60');
 
-  // reverseChargeRows: rätt konton och alltid balanserad (debet = kredit)
-  for (const kind of ['eu-service', 'non-eu-service', 'eu-goods'] as const) {
+  // Alla förvärvstyper måste vara definierade i BÅDE labels, kostnads- och
+  // momskonton (annars faller ett läge tyst tillbaka på fel kontering)
+  { const kinds = Object.keys(REVERSE_LABELS).sort();
+    assert(JSON.stringify(Object.keys(REVERSE_COST).sort()) === JSON.stringify(kinds),
+      'Omvänd moms: REVERSE_COST täcker exakt samma lägen som REVERSE_LABELS');
+    assert(JSON.stringify(Object.keys(REVERSE_OUT_VAT).sort()) === JSON.stringify(kinds),
+      'Omvänd moms: REVERSE_OUT_VAT täcker exakt samma lägen som REVERSE_LABELS'); }
+
+  // reverseChargeRows: rätt konton och alltid balanserad — källdrivet av REVERSE_LABELS
+  // så att ett nytt förvärvsläge automatiskt täcks av testet
+  for (const kind of Object.keys(REVERSE_LABELS) as (keyof typeof REVERSE_LABELS)[]) {
     for (const rate of [6, 12, 25] as const) {
       const rows = reverseChargeRows(1000, rate, kind);
       const totD = rows.reduce((s, r) => s + r.debit, 0);
@@ -979,6 +990,22 @@ async function runTests() {
   assert(near(rev2.box22, 500),  `Förvärvsmoms: ruta 22 (tjänst utanför EU) = 500 (fick ${rev2.box22})`);
   assert(near(rev2.box30, 625),  `Förvärvsmoms: ruta 30 = 625 (250+375 på varor+tjänst) (fick ${rev2.box30})`);
   assert(near(rev2.box49, 0),    'Förvärvsmoms: ruta 49 = 0 (nettoeffekt noll)');
+
+  // Import av varor från land utanför EU: beskattningsunderlag 5000 @ 25%
+  await resetDb();
+  { const imp = reverseChargeRows(5000, 25, 'non-eu-goods');
+    await addVoucher('2026-04-01', 'Import av varor (Tullräkning)',
+      imp.map(r => ({ accountId: r.accountId, amount: r.debit > 0 ? r.debit : -r.credit }))); }
+  const impMoms = calcMomsLines(await db.transactions.toArray());
+  assert(near(impMoms.box50, 5000), `Import: ruta 50 (beskattningsunderlag) = 5000 (fick ${impMoms.box50})`);
+  assert(near(impMoms.box60, 1250), `Import: ruta 60 (utgående importmoms 25%) = 1250 (fick ${impMoms.box60})`);
+  assert(near(impMoms.box48, 1250), `Import: ruta 48 (ingående inkl. 2645) = 1250 (fick ${impMoms.box48})`);
+  assert(near(impMoms.box49, 0),    `Import: ruta 49 = 0 — importmomsen tar ut sig själv (fick ${impMoms.box49})`);
+  assert(near(impMoms.box20, 0) && near(impMoms.box30, 0), 'Import: hamnar inte i EU-förvärvsrutorna 20/30');
+  // Rätt konton: 4545 (import) debiteras underlaget, 2616 (utgående import) krediteras momsen
+  { const imp = reverseChargeRows(5000, 25, 'non-eu-goods');
+    assert(imp.some(r => r.accountId === 4545 && near(r.debit, 5000)), 'Import: 4545 debiteras beskattningsunderlaget');
+    assert(imp.some(r => r.accountId === 2616 && near(r.credit, 1250)), 'Import: 2616 krediteras beräknad utgående importmoms'); }
 
   // ── Egna uttag påverkar inte NE-bilagan ──────────────────────────────
 

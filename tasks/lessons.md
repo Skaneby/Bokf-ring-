@@ -87,3 +87,7 @@
 ## Gemini-import
 
 - **Gemini svarar på svenska trots engelsk prompt**: JSON kom in med `datum/beskrivning/belopp/momssats` i stället för `date/description/amount/vat_rate` → importen kraschade. `validateRows` accepterar nu båda språken (FIELD_ALIASES) + tal som strängar med svensk decimalkomma/valutasuffix. Bygg tolerant mot lokaliserade fältnamn i allt som konsumerar LLM-utdata.
+
+## Parallella listor & verifiering
+
+- **Härled listan, duplicera den aldrig**: När ett nytt läge (`non-eu-goods`) lades till i typen + alla maps men INTE i den handskrivna `REVERSE_KINDS`-arrayen, föll läget tyst tillbaka på fel kontering (vanlig ingående moms i stället för importmoms). Enhetstester på `reverseChargeRows` missade det — de testade funktionen direkt, inte komponentens lägesdetektering. Fix: härled `REVERSE_KINDS` ur `REVERSE_LABELS` (enda källan) + ett konsistens­test att alla maps täcker samma nycklar + källdrivet testloop (`Object.keys(REVERSE_LABELS)`). Lärdom: en hårdkodad delmängd av en union-typ är en buggmagnet — härled den, och kör alltid det RIKTIGA UI-flödet (E2E) för lägesval, inte bara logikfunktionen.

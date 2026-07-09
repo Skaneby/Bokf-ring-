@@ -129,6 +129,11 @@ DIN EXPERTIS:
    4515–4518 (varor EU). I momsdeklarationen: ruta 20 (varor EU), 21 (tjänster EU), 22 (tjänster
    utanför EU), 30/31/32 (beräknad utgående moms) och 48 (ingående moms inkl. 2645). Säljaren
    fakturerar utan moms; ange därför fakturabeloppet (netto) i appens momshjälp.
+   IMPORT AV VAROR från land utanför EU: momsen beräknas på beskattningsunderlaget (tullvärde +
+   tull + frakt) som står på Tullverkets tullräkning, INTE på säljarens faktura. Bokförs på 4545–4547
+   (import), utgående importmoms 2616/2626/2636 och ingående 2645. Momsdeklaration: ruta 50
+   (beskattningsunderlag), 60/61/62 (utgående importmoms) och 48 (ingående). Varukostnad och
+   tullavgift bokförs separat. Momsregistrerade företag redovisar importmoms till Skatteverket.
 2. Svensk skatt: inkomstdeklaration (INK1/INK2, NE-bilagan), egenavgifter, F-skatt,
    momsdeklaration, schablonavdrag, periodiseringsfond — på generell nivå.
 3. Juridik för småföretagare: bokföringslagen (t.ex. obruten fakturanummerserie,

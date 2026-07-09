@@ -52,7 +52,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments); defaultAccounts (BAS-standardkontoplan) backfyllas i befintliga databaser vid uppstart
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 664 enhetstester (Node + fake-indexeddb)
+  test.ts              — 687 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -76,14 +76,14 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
       ResultatTab.tsx  — resultaträkning
       BalansTab.tsx    — balansräkning
       HuvudbokTab.tsx  — huvudbok: sök (matchesSearch i shared), paginering, redigera/radera
-      MomsTab.tsx      — momsrapport per period (rutorna 05-49; 20-32 för omvänd skattskyldighet visas när sådana förvärv finns)
+      MomsTab.tsx      — momsrapport per period (rutorna 05-49; 20-32 omvänd skattskyldighet + 50-62 varuimport visas när sådana köp finns)
       SkattTab.tsx     — NE-bilaga (översikt), egenavgifter, momsdeklaration, årsavslut
       DeklarationTab.tsx — blankettvy NE/INK2 per beskattningsår: justera rader, skriv ut, status, SRU-export
       BackupTab.tsx    — JSON-backup, SIE4 import/export, "Byt bokföring"
   lib/
     backup.ts          — buildBackupData()/applyBackupData() v3: ALLA tabeller + settings (ej ai/handle); exportBackup()
     sie.ts             — exportSIE() / importSIE(content, 'merge'|'replace') / decodeSIEBuffer (CP437)
-    vat.ts             — splitVat() / vatRows() / VAT_OUT / VAT_IN + reverseChargeRows() (omvänd skattskyldighet: 4531-4537/4515-4518, ut 2614/2624/2634 & 2615/2625/2635, in 2645) — testbar logik
+    vat.ts             — splitVat() / vatRows() / VAT_OUT / VAT_IN + reverseChargeRows() (omvänd skattskyldighet: tjänst 4531-4537, EU-varor 4515-4518, import 4545-4547; ut 2614/2624/2634, 2615/2625/2635, 2616/2626/2636; in 2645) — REVERSE_LABELS är enda källan till lägeslistan; testbar logik
     ocr.ts             — scanReceipt(file) via Gemini Vision
     tax.ts             — calcNELines() / calcMomsLines() / uttaqTemplates() / calculateEgenavgifter()
     geminiImport.ts    — parseGeminiJson() / validateRows() / resolveAccount() / bookDraftRows()
@@ -137,6 +137,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
 - **Bilagor lagras som ArrayBuffer, inte Blob** — ArrayBuffer strukturklonas säkert i alla miljöer (inkl. fake-indexeddb i testerna); Blob skapas först vid visning. Bilagor måste rensas i ALLA raderingsflöden: verifikatradering, byt bokföring, backup-återställning, SIE-replace
 - **8999 är reserverat för årsavslutet** — exkluderas ur resultaträkning/Översikt (RESULT_EXCLUDED_ACCOUNTS) men INGÅR i balansens beräknade resultat; NE/INK2/moms exkluderar det via sina intervall
 - **Omvänd skattskyldighet (förvärvsmoms)** — vid utländska inköp fakturerar säljaren utan moms; köparen bokför själv beräknad utgående (2614/2624/2634 tjänst, 2615/2625/2635 EU-varor) OCH ingående moms (2645) → nettoeffekt noll. Beloppet som anges är NETTO (moms = netto × sats), till skillnad från vanlig momshjälp där beloppet är brutto. calcMomsLines summerar rutor 20/21/22 (inköpskonton 4515-18/4531-33/4535-37) + 30/31/32 (26xx) och lägger 2645 i ruta 48. Inköpskontona ligger i 4000-4899 → hamnar på NE R10 (varukostnad) även för tjänster; skattemässigt neutralt men en presentationsdetalj. Icke avdragsgill förvärvsmoms hanteras inte automatiskt (ovanligt för småföretag) — justera manuellt vid behov
+- **Import av varor (utanför EU)** — momsen beräknas på BESKATTNINGSUNDERLAGET (tullvärde + tull + frakt) från Tullverkets tullräkning, INTE säljarfakturan. Bokförs 4545-47 (ruta 50), utgående 2616/2626/2636 (ruta 60/61/62), ingående 2645 (ruta 48). Beloppet användaren anger i momshjälpen är beskattningsunderlaget; varukostnad/tull bokförs separat. reverseChargeRows hanterar alla fyra lägena (eu-service/non-eu-service/eu-goods/non-eu-goods) — VoucherEntry.isReverseMode måste känna igen varje läge (härleds ur REVERSE_LABELS så inget läge kan glömmas)
 
 ---
 
@@ -188,7 +189,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 664 enhetstester
+npm run test         # kör 687 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)
