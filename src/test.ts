@@ -13,8 +13,9 @@ import { splitVat, vatRows, VAT_OUT, VAT_IN } from './lib/vat';
 import { calculateEgenavgifter, calcNELines, calcMomsLines, EGENAVGIFTER_RATE } from './lib/tax';
 import {
   parseGeminiJson, validateRows, lookupDict, buildVoucherLines,
-  GeminiRow,
+  GeminiRow, CATEGORY_MAP,
 } from './lib/geminiImport';
+import { defaultAccounts } from './db';
 import {
   invoiceTotals, invoiceCreationLines, invoicePaymentLines,
   createInvoice, registerPayment, cancelInvoice,
@@ -127,7 +128,38 @@ async function runTests() {
 
   await resetDb();
   const accountCount = await db.accounts.count();
-  assert(accountCount === 27, `Exakt 27 standardkonton (fick ${accountCount})`);
+  assert(accountCount === 53, `Exakt 53 standardkonton (fick ${accountCount})`);
+
+  // Kontoplanen får inte innehålla dubbletter (bulkAdd kastar annars BulkError)
+  { const ids = defaultAccounts.map(a => a.id);
+    assert(new Set(ids).size === ids.length, 'Kontoplan: inga dubblett-id:n'); }
+
+  // Standardkonton som användaren efterfrågade ska finnas med rätt kontoart
+  { const byId = new Map(defaultAccounts.map(a => [a.id, a]));
+    const expect: [number, string, string][] = [
+      [5800, 'expense', 'Resekostnader'],
+      [5831, 'expense', 'Hotell och logi'],
+      [6071, 'expense', 'Representation avdragsgill'],
+      [6072, 'expense', 'Representation ej avdragsgill'],
+      [6991, 'expense', 'Övriga avdragsgilla'],
+      [6992, 'expense', 'Övriga ej avdragsgilla'],
+      [6310, 'expense', 'Företagsförsäkringar'],
+      [8410, 'expense', 'Räntekostnader'],
+    ];
+    for (const [id, type, label] of expect)
+      assert(byId.get(id)?.type === type, `Kontoplan: ${id} ${label} finns som ${type}`); }
+
+  // INVARIANT: varje konto som importens ordbok pekar på MÅSTE finnas i
+  // kontoplanen — annars bokförs verifikationer tyst mot ett konto som saknas
+  { const ids = new Set(defaultAccounts.map(a => a.id));
+    const missing = [...new Set(Object.values(CATEGORY_MAP))].filter(acc => !ids.has(acc));
+    assert(missing.length === 0, `CATEGORY_MAP: alla målkonton finns i kontoplanen (saknas: ${missing.join(', ')})`); }
+
+  // Backfyll: en äldre databas som saknar ett nytt standardkonto får det vid start
+  { await db.accounts.delete(5800);
+    assert(!(await db.accounts.get(5800)), 'Backfyll: 5800 borttaget före init');
+    await initializeDb();
+    assert(!!(await db.accounts.get(5800)), 'Backfyll: initializeDb återskapar saknat standardkonto 5800'); }
 
   const accs = await db.accounts.toArray();
   assert(accs.some(a => a.id === 1930 && a.type === 'asset'),     'Konto 1930 är tillgång');
@@ -1044,7 +1076,13 @@ async function runTests() {
     assert(acc === 5420, `lookupDict: 'programvara' → konto 5420 (fick ${acc})`); }
 
   { const acc = lookupDict({ ...validRaw, category: 'lunch', description: 'restaurang' });
-    assert(acc === 5990, `lookupDict: 'lunch' → konto 5990 (fick ${acc})`); }
+    assert(acc === 6071, `lookupDict: 'lunch' → konto 6071 representation (fick ${acc})`); }
+
+  { const acc = lookupDict({ ...validRaw, category: 'taxi', description: 'resa till kund' });
+    assert(acc === 5800, `lookupDict: 'taxi' → konto 5800 resekostnader (fick ${acc})`); }
+
+  { const acc = lookupDict({ ...validRaw, category: 'hotell', description: 'övernattning Göteborg' });
+    assert(acc === 5831, `lookupDict: 'hotell' → konto 5831 hotell och logi (fick ${acc})`); }
 
   { const acc = lookupDict({ ...validRaw, category: undefined, description: 'okänd kostnad xyz' });
     assert(acc === null, 'lookupDict: okänd beskrivning → null'); }

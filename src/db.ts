@@ -145,15 +145,23 @@ export class AccountingDB extends Dexie {
 
 export const db = new AccountingDB();
 
-// Basic BAS 2026 setup
+// Standardkontoplan (BAS) för enskild firma. Ett väl avvägt urval av de
+// vanligaste kontona — tillräckligt för att bokföra de flesta affärshändelser
+// utan att kontoplanen blir oöverskådlig. Användaren kan lägga till egna konton
+// i Kontoplan-fliken. Kontonummer och kontoarter följer BAS-kontoplanen.
 export const defaultAccounts: Account[] = [
+  // ── Tillgångar (1xxx) ──────────────────────────────────────────────
   { id: 1510, name: 'Kundfordringar', type: 'asset' },
   { id: 1910, name: 'Kassa', type: 'asset' },
   { id: 1930, name: 'Företagskonto / Bank', type: 'asset' },
+
+  // ── Eget kapital (2xxx) ────────────────────────────────────────────
   { id: 2010, name: 'Eget kapital', type: 'equity' },
   { id: 2013, name: 'Egna uttag', type: 'equity' },
   { id: 2018, name: 'Egna insättningar', type: 'equity' },
   { id: 2019, name: 'Årets resultat', type: 'equity' },
+
+  // ── Skulder & moms (2xxx) ──────────────────────────────────────────
   { id: 2510, name: 'Skatteskulder (F-skatt)', type: 'liability' },
   { id: 2514, name: 'Beräknade egenavgifter', type: 'liability' },
   { id: 2610, name: 'Utgående moms, 25%', type: 'liability', vatCode: '10' },
@@ -161,32 +169,68 @@ export const defaultAccounts: Account[] = [
   { id: 2630, name: 'Utgående moms, 6%', type: 'liability', vatCode: '12' },
   { id: 2640, name: 'Ingående moms', type: 'asset', vatCode: '48' },
   { id: 2650, name: 'Redovisningskonto för moms', type: 'liability' },
+
+  // ── Intäkter (3xxx) ────────────────────────────────────────────────
   { id: 3000, name: 'Försäljning (25% moms)', type: 'revenue', vatCode: '05' },
   { id: 3001, name: 'Försäljning (12% moms)', type: 'revenue', vatCode: '06' },
   { id: 3002, name: 'Försäljning (6% moms)', type: 'revenue', vatCode: '07' },
   { id: 3040, name: 'Försäljning (momsfri)', type: 'revenue' },
-  { id: 4000, name: 'Inköp av varor', type: 'expense' },
+  { id: 3540, name: 'Fakturerade resekostnader', type: 'revenue' },
+  { id: 3990, name: 'Övriga rörelseintäkter', type: 'revenue' },
+
+  // ── Varor & material (4xxx) ────────────────────────────────────────
+  { id: 4000, name: 'Inköp av varor och material', type: 'expense' },
+
+  // ── Lokalkostnader (5xxx) ──────────────────────────────────────────
   { id: 5010, name: 'Lokalhyra', type: 'expense' },
+  { id: 5020, name: 'El för belysning', type: 'expense' },
+  { id: 5060, name: 'Städning och renhållning', type: 'expense' },
+  { id: 5090, name: 'Övriga lokalkostnader', type: 'expense' },
+
+  // ── Förbrukningsinventarier & material (5xxx) ──────────────────────
   { id: 5410, name: 'Förbrukningsinventarier', type: 'expense' },
   { id: 5420, name: 'Programvaror', type: 'expense' },
+  { id: 5460, name: 'Förbrukningsmaterial', type: 'expense' },
+
+  // ── Frakt & transport (5xxx) ───────────────────────────────────────
+  { id: 5710, name: 'Frakter och transporter', type: 'expense' },
+
+  // ── Resekostnader (58xx) ───────────────────────────────────────────
+  { id: 5800, name: 'Resekostnader', type: 'expense' },
+  { id: 5810, name: 'Biljetter (tåg, flyg, buss)', type: 'expense' },
+  { id: 5831, name: 'Hotell och logi', type: 'expense' },
+
+  // ── Reklam & PR (59xx) ─────────────────────────────────────────────
+  { id: 5910, name: 'Annonsering', type: 'expense' },
+
+  // ── Representation (60xx) ──────────────────────────────────────────
+  { id: 6071, name: 'Representation, avdragsgill', type: 'expense' },
+  { id: 6072, name: 'Representation, ej avdragsgill', type: 'expense' },
+
+  // ── Kontor, tele, försäkring & förvaltning (6xxx) ──────────────────
   { id: 6110, name: 'Kontorsmateriel', type: 'expense' },
+  { id: 6211, name: 'Fast telefoni', type: 'expense' },
+  { id: 6212, name: 'Mobiltelefon', type: 'expense' },
+  { id: 6230, name: 'Datakommunikation (internet)', type: 'expense' },
+  { id: 6250, name: 'Porto', type: 'expense' },
+  { id: 6310, name: 'Företagsförsäkringar', type: 'expense' },
   { id: 6530, name: 'Redovisningstjänster', type: 'expense' },
+  { id: 6540, name: 'IT-tjänster', type: 'expense' },
+  { id: 6550, name: 'Konsultarvoden', type: 'expense' },
   { id: 6570, name: 'Bankkostnader', type: 'expense' },
+  { id: 6970, name: 'Tidningar, tidskrifter och facklitteratur', type: 'expense' },
+  { id: 6981, name: 'Föreningsavgifter, avdragsgilla', type: 'expense' },
+  { id: 6991, name: 'Övriga externa kostnader, avdragsgilla', type: 'expense' },
+  { id: 6992, name: 'Övriga externa kostnader, ej avdragsgilla', type: 'expense' },
+
+  // ── Finansiella poster (8xxx) ──────────────────────────────────────
+  { id: 8310, name: 'Ränteintäkter', type: 'revenue' },
+  { id: 8410, name: 'Räntekostnader', type: 'expense' },
+
+  // ── Skatt & årsavslut (8xxx) ───────────────────────────────────────
   { id: 8422, name: 'Egenavgifter', type: 'expense' },
   // 8999 används enbart av årsavslutet (resultatdisposition) och exkluderas
   // ur resultaträkningen — se lib/yearEnd.ts
-  { id: 8999, name: 'Årets resultat (avslut)', type: 'expense' },
-];
-
-// Accounts added after initial release — patched into existing databases on startup
-const PATCH_ACCOUNTS: Account[] = [
-  { id: 1510, name: 'Kundfordringar', type: 'asset' },
-  { id: 2013, name: 'Egna uttag', type: 'equity' },
-  { id: 2018, name: 'Egna insättningar', type: 'equity' },
-  { id: 2019, name: 'Årets resultat', type: 'equity' },
-  { id: 2510, name: 'Skatteskulder (F-skatt)', type: 'liability' },
-  { id: 2514, name: 'Beräknade egenavgifter', type: 'liability' },
-  { id: 8422, name: 'Egenavgifter', type: 'expense' },
   { id: 8999, name: 'Årets resultat (avslut)', type: 'expense' },
 ];
 
@@ -196,10 +240,15 @@ export async function initializeDb(): Promise<{ hasData: boolean }> {
   if (accountCount === 0) {
     await db.accounts.bulkAdd(defaultAccounts);
   } else {
-    // Silently add any accounts introduced after the user's initial setup
-    for (const acc of PATCH_ACCOUNTS) {
-      if (!(await db.accounts.get(acc.id))) await db.accounts.put(acc);
-    }
+    // Backfyll standardkonton som saknas i en äldre databas (konton tillagda i
+    // en senare version). ENDAST konton som inte redan finns läggs till — egna
+    // konton och namnändringar på befintliga konton rörs aldrig. Detta ersätter
+    // den tidigare handpatchade PATCH_ACCOUNTS-listan: defaultAccounts är nu
+    // enda källan till standardkontoplanen, så nya konton når alltid befintliga
+    // användare utan att man glömmer uppdatera en parallell lista.
+    const existing = new Set((await db.accounts.toArray()).map(a => a.id));
+    const missing  = defaultAccounts.filter(a => !existing.has(a.id));
+    if (missing.length) await db.accounts.bulkAdd(missing);
   }
 
   // Varje bokföringsdatabas har en identitet (id + revision) — krävs för

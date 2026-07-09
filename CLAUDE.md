@@ -50,9 +50,9 @@ git push origin main
 ```
 src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
-  db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments) + PATCH_ACCOUNTS
+  db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments); defaultAccounts (BAS-standardkontoplan) backfyllas i befintliga databaser vid uppstart
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 584 enhetstester (Node + fake-indexeddb)
+  test.ts              — 611 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -125,7 +125,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
 - **FileSystemFileHandle är strukturklonbar** och persisteras i settings; behörighet kräver användargest per besök (OpenBokforing-gaten)
 
 ### Databas
-- **Nya standardkonton når inte befintliga användare automatiskt** — `initializeDb` seedar bara vid tom DB. Nya konton MÅSTE också läggas till i `PATCH_ACCOUNTS` (db.ts) så att befintliga databaser patchas vid uppstart. Dexie har inga foreign keys — transaktioner mot saknade konton sparas tyst
+- **Nya standardkonton når befintliga användare via backfyllning** — `initializeDb` seedar hela `defaultAccounts` vid tom DB och backfyller annars alla konton som saknas (endast saknade läggs till — namnändringar och egna konton rörs aldrig). `defaultAccounts` (db.ts) är enda källan till standardkontoplanen; lägg nya standardkonton DÄR så når de alla. Dexie har inga foreign keys — transaktioner mot saknade konton sparas tyst, så varje konto som `CATEGORY_MAP` (geminiImport.ts) pekar på MÅSTE finnas i `defaultAccounts` (vaktas av test)
 - **hasData = accountCount > 0** — inte voucherCount; en användare med kontoplan men noll verifikationer ska INTE se välkomstskärmen
 
 ### Bokföring
@@ -186,7 +186,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 584 enhetstester
+npm run test         # kör 611 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)

@@ -119,20 +119,28 @@ export function validateRows(rows: unknown[]): GeminiRow[] {
 // ── Account mapping ───────────────────────────────────────────────────────────
 
 // Keyword → BAS account. Matched against category + description (case-insensitive).
+// VIKTIGT: varje målkonto MÅSTE finnas i defaultAccounts (db.ts) — annars bokförs
+// verifikationen tyst mot ett konto som inte finns. Testerna vaktar invarianten.
 export const CATEGORY_MAP: Record<string, number> = {
-  representation: 5990, fika:         5990, kaffe:    5990,
-  lunch:          5990, middag:       5990, restaurang: 5990,
+  representation: 6071, fika:         6071, kaffe:    6071,
+  lunch:          6071, middag:       6071, restaurang: 6071,
   programvara:    5420, mjukvara:     5420, saas:     5420,
   abonnemang:     5420, prenumeration:5420, licens:   5420,
   kontorsmaterial:6110, papper:       6110,
   telefon:        6212, mobiltelefon: 6212,
-  internet:       6211, bredband:     6211,
+  internet:       6230, bredband:     6230, datakommunikation: 6230,
   hyra:           5010, lokalhyra:    5010, lokal:    5010,
+  städning:       5060,
   bank:           6570, bankkostnad:  6570, bankavgift:6570,
   redovisning:    6530, bokföring:    6530, revisor:  6530,
+  konsult:        6550, försäkring:   6310,
+  porto:          6250, frimärke:     6250,
   transport:      5800, resa:         5800, tåg:      5800,
-  flyg:           5800, taxi:         5800, buss:     5800,
-  marknadsföring: 6100, reklam:       6100, annonsering:6100,
+  flyg:           5800, taxi:         5800, buss:     5800, parkering: 5800,
+  hotell:         5831, hotel:        5831, logi:     5831, övernattning: 5831,
+  marknadsföring: 5910, reklam:       5910, annonsering:5910,
+  tidning:        6970, facklitteratur:6970,
+  ränta:          8410, räntekostnad: 8410,
   försäljning:    3000, intäkt:       3000,
   inköp:          4000, varor:        4000, material: 4000,
   förbrukning:    5410, inventarier:  5410,
