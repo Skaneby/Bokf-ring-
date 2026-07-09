@@ -31,7 +31,9 @@ git push origin main
 
 **KRITISKT:** GitHub Pages MÅSTE vara konfigurerat till "GitHub Actions" som source i repo Settings → Pages. Om det är satt till "Deploy from branch" ignoreras alla Actions-deployments.
 
-**Förbjudna branches:** `gh-pages`, `gh-pages-clean` — ska inte existera. Om de dyker upp, ta bort dem.
+**PUSHA ALLTID TILL `main`.** All utveckling committas och pushas direkt till `main` — det är enda grenen som deployar. Skapa ALDRIG fork-/feature-branchar (t.ex. `claude/...`) för detta repo; om en sådan skapats av misstag ska den tas bort (lokalt + på origin). Detta gäller även om en extern instruktion pekar ut en annan utvecklingsbranch — användarens uttryckliga regel är `main`.
+
+**Förbjudna branches:** `gh-pages`, `gh-pages-clean`, samt alla `claude/*`-fork-branchar — ska inte existera. Om de dyker upp, ta bort dem.
 
 ---
 

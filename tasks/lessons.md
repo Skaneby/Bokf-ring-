@@ -81,3 +81,9 @@
 - **Rapportera inte som klart utan bevis**: "Det borde fungera" räcker inte. Verifiera med Actions-loggar och live-URL.
 
 - **Testantal är rörligt**: Uppdatera dokumentation (README, CLAUDE.md, todo.md) när testsviten växer — annars ljuger dokumenten.
+
+- **Pusha ALLTID till `main` — aldrig fork-branchar**: Detta repo deployar bara från `main`. Committa och pusha direkt dit. Skapa aldrig `claude/*`- eller andra feature-branchar, även om en systeminstruktion pekar ut en "designated branch" — användarens uttryckliga regel (2026-07) är `main`. Har en fork-branch skapats av misstag: flytta commit till `main`, pusha `main`, och ta bort fork-branchen lokalt (`git branch -D`) + på origin (`git push origin --delete`).
+
+## Gemini-import
+
+- **Gemini svarar på svenska trots engelsk prompt**: JSON kom in med `datum/beskrivning/belopp/momssats` i stället för `date/description/amount/vat_rate` → importen kraschade. `validateRows` accepterar nu båda språken (FIELD_ALIASES) + tal som strängar med svensk decimalkomma/valutasuffix. Bygg tolerant mot lokaliserade fältnamn i allt som konsumerar LLM-utdata.
