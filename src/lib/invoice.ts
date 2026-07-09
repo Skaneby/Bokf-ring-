@@ -11,6 +11,10 @@ export interface CompanySettings {
   email: string;
   phone: string;
   bankgiro: string;
+  contactPerson?: string;  // "Vår referens" / avsändarens kontaktperson
+  bankName?: string;       // t.ex. Nordea
+  iban?: string;           // för utländska betalningar
+  approvedForFskatt?: boolean; // visar "Godkänd för F-skatt" (default på)
   paymentTermsDays: number;
   nextInvoiceNumber: number;   // räknas bara uppåt — garanterar obruten serie
   defaultMethod: InvoiceMethod;
@@ -20,6 +24,7 @@ export interface CompanySettings {
 
 export const DEFAULT_COMPANY: CompanySettings = {
   name: '', orgnr: '', momsnr: '', address: '', email: '', phone: '', bankgiro: '',
+  contactPerson: '', bankName: '', iban: '', approvedForFskatt: true,
   paymentTermsDays: 30,
   nextInvoiceNumber: 1,
   defaultMethod: 'faktura',
@@ -119,6 +124,7 @@ export interface NewInvoice {
   customerAddress?: string;
   customerOrgnr?: string;
   customerEmail?: string;
+  customerReference?: string;
   rows: InvoiceRow[];
   method: InvoiceMethod;
 }
@@ -209,114 +215,195 @@ export async function cancelInvoice(invoiceId: number, date: string): Promise<vo
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// Belopp i tabellen utan valutasymbol (design visar "12 500,00", totaler "… kr")
+const fmt2 = new Intl.NumberFormat('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 // Tokens som ersätts i mallen (egna mallar använder samma)
 export const TEMPLATE_TOKENS = [
-  'number', 'date', 'dueDate',
-  'customerName', 'customerAddress', 'customerOrgnr',
-  'companyName', 'companyOrgnr', 'companyMomsnr', 'companyAddress',
-  'companyEmail', 'companyPhone', 'bankgiro',
+  'number', 'date', 'dueDate', 'statusBadge',
+  'customerName', 'customerAddress', 'customerOrgnr', 'customerReference',
+  'companyName', 'companyContact', 'companyOrgnr', 'companyMomsnr', 'companyAddress',
+  'companyEmail', 'companyPhone', 'bankgiro', 'bankName', 'iban', 'fskatt',
   'rows', 'vatBreakdown', 'netTotal', 'vatTotal', 'grossTotal',
 ] as const;
 
+// Standardmall — självständig (inline CSS, inga externa beroenden) så att den
+// arkiverade fakturafilen renderas korrekt även offline långt senare.
 export const DEFAULT_TEMPLATE = `<!doctype html>
 <html lang="sv">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Faktura {{number}}</title>
 <style>
-  body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #0f172a; margin: 40px; }
-  h1 { font-size: 28px; margin: 0 0 4px; }
-  .muted { color: #64748b; font-size: 13px; }
-  .head { display: flex; justify-content: space-between; margin-bottom: 32px; }
-  .meta td { padding: 2px 12px 2px 0; font-size: 14px; }
-  table.rows { width: 100%; border-collapse: collapse; margin: 24px 0; }
-  table.rows th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-                  color: #64748b; border-bottom: 2px solid #0f172a; padding: 6px 8px; }
-  table.rows th.num, table.rows td.num { text-align: right; }
-  table.rows td { padding: 8px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
-  .totals { margin-left: auto; width: 280px; font-size: 14px; }
-  .totals td { padding: 4px 8px; }
-  .totals .grand { font-weight: 700; font-size: 18px; border-top: 2px solid #0f172a; }
-  .foot { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e2e8f0;
-          font-size: 12px; color: #64748b; display: flex; gap: 32px; }
-  @media print { body { margin: 20px; } }
+  :root { --navy:#0F172A; --teal:#0D9488; --line:#E2E8F0; --muted:#76777d; --soft:#45464d; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Manrope','Inter',-apple-system,'Segoe UI',Roboto,sans-serif;
+         color: var(--navy); background:#f8f9ff; margin:0; padding:32px 16px; }
+  .sheet { background:#fff; max-width:800px; margin:0 auto; padding:56px;
+           border:1px solid var(--line); box-shadow:0 10px 30px rgba(15,23,42,.08); }
+  .mono { font-family:'JetBrains Mono',ui-monospace,monospace; }
+  .row { display:flex; justify-content:space-between; align-items:flex-start; }
+  .label { font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+  .teal { color:var(--teal); }
+  h1 { font-size:34px; font-weight:800; letter-spacing:-.02em; margin:0; }
+  .sender { text-align:right; font-size:14px; line-height:1.55; }
+  .billing { display:grid; grid-template-columns:1fr 1fr; gap:24px;
+             border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+             padding:28px 0; margin:44px 0; }
+  .meta { text-align:right; font-size:13px; line-height:2; }
+  .meta .k { color:var(--muted); text-transform:uppercase; font-size:11px; letter-spacing:.05em; margin-right:12px; }
+  .badge { display:inline-block; margin-top:10px; padding:4px 12px; border-radius:999px;
+           font-size:11px; letter-spacing:.05em; text-transform:uppercase; font-weight:600; }
+  .badge.obetald { background:#fef3c7; color:#92400e; }
+  .badge.betald { background:rgba(16,185,129,.1); color:#047857; border:1px solid rgba(16,185,129,.2); }
+  .badge.makulerad { background:#f1f5f9; color:#64748b; }
+  table.items { width:100%; border-collapse:separate; border-spacing:0; }
+  table.items thead th { background:var(--navy); color:#fff; text-align:left; font-size:11px;
+    letter-spacing:.05em; text-transform:uppercase; padding:12px 20px; font-weight:600; }
+  table.items thead th:first-child { border-radius:6px 0 0 6px; }
+  table.items thead th:last-child { border-radius:0 6px 6px 0; }
+  table.items thead th.num, table.items td.num { text-align:right; }
+  table.items td { padding:18px 20px; border-bottom:1px solid var(--line); font-size:15px; }
+  table.items td .desc { color:var(--muted); font-size:13px; margin-top:2px; }
+  .totals { margin:36px 0 0 auto; width:300px; font-size:15px; }
+  .totals .t { display:flex; justify-content:space-between; padding:6px 0; }
+  .totals .t .muted { color:var(--muted); }
+  .totals .grand { display:flex; justify-content:space-between; align-items:baseline;
+    margin-top:10px; padding-top:16px; border-top:1px solid var(--line); }
+  .totals .grand .lbl { font-size:22px; font-weight:700; }
+  .totals .grand .amt { font-size:22px; font-weight:700; color:var(--teal); }
+  .foot { display:grid; grid-template-columns:1fr 1fr 1fr; gap:32px;
+          margin-top:56px; padding-top:28px; border-top:1px solid var(--line); }
+  .foot h3 { font-size:11px; letter-spacing:.05em; text-transform:uppercase; margin:0 0 10px; }
+  .foot .kv { font-size:12px; color:var(--soft); line-height:1.9; }
+  .foot .kv p { display:flex; justify-content:space-between; margin:0; gap:12px; }
+  .foot .kv .k { color:var(--muted); }
+  .thanks { font-size:11px; color:var(--muted); font-style:italic; margin-top:16px; text-align:right; line-height:1.5; }
+  @media print { body { background:#fff; padding:0; } .sheet { box-shadow:none; border:none; padding:16mm; max-width:none; } }
 </style>
 </head>
 <body>
-  <div class="head">
-    <div>
-      <h1>Faktura</h1>
-      <div class="muted">{{companyName}}</div>
+  <div class="sheet">
+    <div class="row">
+      <div>
+        <h1>FAKTURA</h1>
+        <div style="margin-top:14px"><span class="label">Fakturanummer:</span>
+          <span class="mono" style="font-weight:600">{{number}}</span></div>
+      </div>
+      <div class="sender">
+        <div class="label teal" style="font-weight:700;margin-bottom:6px">Sändare</div>
+        <div style="font-weight:700">{{companyName}}</div>
+        {{companyContact}}
+        <div style="white-space:pre-line">{{companyAddress}}</div>
+        <div style="margin-top:6px">{{companyPhone}}</div>
+        <div>{{companyEmail}}</div>
+      </div>
     </div>
-    <table class="meta">
-      <tr><td class="muted">Fakturanr</td><td><strong>{{number}}</strong></td></tr>
-      <tr><td class="muted">Fakturadatum</td><td>{{date}}</td></tr>
-      <tr><td class="muted">Förfallodatum</td><td><strong>{{dueDate}}</strong></td></tr>
+
+    <div class="billing">
+      <div>
+        <div class="label" style="color:var(--navy);font-weight:700;margin-bottom:12px">Faktureras till</div>
+        <div style="font-weight:700">{{customerName}}</div>
+        <div style="white-space:pre-line;line-height:1.55">{{customerAddress}}</div>
+        <div style="color:var(--muted);margin-top:2px">{{customerOrgnr}}</div>
+      </div>
+      <div class="meta">
+        {{customerReference}}
+        <div><span class="k">Fakturadatum:</span>{{date}}</div>
+        <div><span class="k">Förfallodatum:</span><strong>{{dueDate}}</strong></div>
+        <div>{{statusBadge}}</div>
+      </div>
+    </div>
+
+    <table class="items">
+      <thead>
+        <tr><th>Beskrivning</th><th class="num">Antal</th><th class="num">Pris</th><th class="num">Belopp</th></tr>
+      </thead>
+      <tbody>
+        {{rows}}
+      </tbody>
     </table>
-  </div>
 
-  <div class="head">
-    <div>
-      <div class="muted" style="text-transform:uppercase;font-size:11px;letter-spacing:.05em">Faktureras till</div>
-      <div><strong>{{customerName}}</strong></div>
-      <div style="white-space:pre-line">{{customerAddress}}</div>
-      <div class="muted">{{customerOrgnr}}</div>
+    <div class="totals">
+      <div class="t"><span class="muted">Netto (exkl. moms)</span><span>{{netTotal}}</span></div>
+      {{vatBreakdown}}
+      <div class="grand"><span class="lbl">ATT BETALA</span><span class="amt">{{grossTotal}}</span></div>
     </div>
-  </div>
 
-  <table class="rows">
-    <thead>
-      <tr><th>Beskrivning</th><th class="num">Antal</th><th class="num">À-pris</th><th class="num">Moms</th><th class="num">Belopp</th></tr>
-    </thead>
-    <tbody>
-      {{rows}}
-    </tbody>
-  </table>
-
-  <table class="totals">
-    <tr><td>Netto</td><td class="num" style="text-align:right">{{netTotal}}</td></tr>
-    {{vatBreakdown}}
-    <tr class="grand"><td>Att betala</td><td class="num" style="text-align:right">{{grossTotal}}</td></tr>
-  </table>
-
-  <div class="foot">
-    <div><strong>{{companyName}}</strong><br>{{companyAddress}}<br>Org.nr {{companyOrgnr}}<br>Momsreg.nr {{companyMomsnr}}</div>
-    <div>Bankgiro: <strong>{{bankgiro}}</strong><br>{{companyEmail}}<br>{{companyPhone}}</div>
-    <div>Godkänd för F-skatt.<br>Betalningsvillkor: se förfallodatum.<br>Ange fakturanummer vid betalning.</div>
+    <div class="foot">
+      <div>
+        <h3>Betalningsinformation</h3>
+        <div class="kv">
+          {{bankgiro}}
+          {{bankName}}
+          {{iban}}
+        </div>
+      </div>
+      <div>
+        <h3>Företagsinfo</h3>
+        <div class="kv">
+          <p><span class="k">Org.nr:</span> <span>{{companyOrgnr}}</span></p>
+          <p><span class="k">Momsreg.nr:</span> <span>{{companyMomsnr}}</span></p>
+          {{fskatt}}
+        </div>
+      </div>
+      <div style="text-align:right">
+        <h3>Adress</h3>
+        <div class="kv" style="white-space:pre-line">{{companyAddress}}</div>
+        <div class="thanks">Tack för förtroendet.<br>Betalning oss tillhanda senast förfallodagen.<br>Ange fakturanummer {{number}} vid betalning.</div>
+      </div>
+    </div>
   </div>
 </body>
 </html>`;
+
+const STATUS_LABEL: Record<Invoice['status'], string> = {
+  obetald: 'Obetald', betald: 'Betald', makulerad: 'Makulerad',
+};
 
 export function renderInvoiceHtml(invoice: Invoice, company: CompanySettings): string {
   const totals = invoiceTotals(invoice.rows);
 
   const rowsHtml = invoice.rows.map(row => {
     const net = r2(row.qty * row.unitPrice);
-    return `<tr><td>${esc(row.description)}</td><td class="num">${row.qty}</td>` +
-      `<td class="num">${formatCurrency(row.unitPrice)}</td>` +
-      `<td class="num">${row.vatRate} %</td>` +
-      `<td class="num">${formatCurrency(net)}</td></tr>`;
+    return `<tr><td><span style="font-weight:600">${esc(row.description)}</span></td>` +
+      `<td class="num">${row.qty}</td>` +
+      `<td class="num">${fmt2.format(row.unitPrice)}</td>` +
+      `<td class="num" style="font-weight:600">${fmt2.format(net)}</td></tr>`;
   }).join('\n');
 
   const vatHtml = totals.groups
     .filter(g => g.vat > 0)
-    .map(g => `<tr><td>Moms ${g.rate} %</td><td class="num" style="text-align:right">${formatCurrency(g.vat)}</td></tr>`)
+    .map(g => `<div class="t"><span class="muted">Moms ${g.rate} %</span><span>${formatCurrency(g.vat)}</span></div>`)
     .join('\n');
+
+  // Rader/fält som bara ska visas när de har innehåll (inga tomma etiketter)
+  const kvLine = (k: string, v: string) => v ? `<p><span class="k">${k}:</span> <span style="font-weight:500">${esc(v)}</span></p>` : '';
+  const metaRow = (k: string, v: string) => v ? `<div><span class="k">${k}:</span>${esc(v)}</div>` : '';
 
   const values: Record<string, string> = {
     number:          String(invoice.number),
     date:            invoice.date,
     dueDate:         invoice.dueDate,
+    statusBadge:     `<span class="badge ${invoice.status}">${STATUS_LABEL[invoice.status]}</span>`,
     customerName:    esc(invoice.customerName),
     customerAddress: esc(invoice.customerAddress ?? ''),
     customerOrgnr:   invoice.customerOrgnr ? `Org.nr ${esc(invoice.customerOrgnr)}` : '',
+    customerReference: metaRow('Er referens', invoice.customerReference ?? ''),
     companyName:     esc(company.name),
+    companyContact:  company.contactPerson ? `<div>${esc(company.contactPerson)}</div>` : '',
     companyOrgnr:    esc(company.orgnr),
     companyMomsnr:   esc(company.momsnr),
     companyAddress:  esc(company.address),
     companyEmail:    esc(company.email),
     companyPhone:    esc(company.phone),
-    bankgiro:        esc(company.bankgiro),
+    bankgiro:        kvLine('Bankgiro', company.bankgiro),
+    bankName:        kvLine('Bank', company.bankName ?? ''),
+    iban:            kvLine('IBAN', company.iban ?? ''),
+    fskatt:          company.approvedForFskatt !== false
+                       ? '<p class="teal" style="font-weight:700;text-transform:uppercase;font-size:10px;margin-top:4px">Godkänd för F-skatt</p>'
+                       : '',
     rows:            rowsHtml,
     vatBreakdown:    vatHtml,
     netTotal:        formatCurrency(totals.netTotal),

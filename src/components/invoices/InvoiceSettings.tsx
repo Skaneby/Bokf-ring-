@@ -15,10 +15,10 @@ const cls =
 const SAMPLE_INVOICE = {
   number: 1001, date: '2026-07-08', dueDate: '2026-08-07',
   customerName: 'Exempelkund AB', customerAddress: 'Storgatan 1\n111 22 Stockholm',
-  customerOrgnr: '556000-0000',
+  customerOrgnr: '556000-0000', customerReference: 'Marknadschef',
   rows: [
-    { description: 'Konsultarbete, 10 tim', qty: 10, unitPrice: 950, vatRate: 25 as const },
-    { description: 'Reskostnad', qty: 1, unitPrice: 450, vatRate: 6 as const },
+    { description: 'Strategisk digital rådgivning', qty: 10, unitPrice: 1250, vatRate: 25 as const },
+    { description: 'UX Design Sprint', qty: 1, unitPrice: 18000, vatRate: 25 as const },
   ],
   method: 'faktura' as const, status: 'obetald' as const, created_at: 0,
 };
@@ -93,6 +93,18 @@ export function InvoiceSettings() {
             <input type="text" value={s.bankgiro} onChange={e => set({ bankgiro: e.target.value })}
                    placeholder="123-4567" className={cls} />
           </Field>
+          <Field label="Kontaktperson (Vår referens)">
+            <input type="text" value={s.contactPerson ?? ''} onChange={e => set({ contactPerson: e.target.value })}
+                   placeholder="Namn på fakturan" className={cls} />
+          </Field>
+          <Field label="Bank">
+            <input type="text" value={s.bankName ?? ''} onChange={e => set({ bankName: e.target.value })}
+                   placeholder="T.ex. Nordea" className={cls} />
+          </Field>
+          <Field label="IBAN">
+            <input type="text" value={s.iban ?? ''} onChange={e => set({ iban: e.target.value })}
+                   placeholder="SE00 0000 0000 0000 0000 0000" className={cls} />
+          </Field>
           <Field label="Adress">
             <textarea value={s.address} onChange={e => set({ address: e.target.value })}
                       rows={2} className={cls + ' resize-none'} />
@@ -106,6 +118,14 @@ export function InvoiceSettings() {
             </Field>
           </div>
         </div>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={s.approvedForFskatt !== false}
+            onChange={e => set({ approvedForFskatt: e.target.checked })}
+          />
+          Visa "Godkänd för F-skatt" på fakturan
+        </label>
       </div>
 
       {/* Fakturainställningar */}

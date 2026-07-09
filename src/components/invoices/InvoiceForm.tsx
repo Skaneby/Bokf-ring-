@@ -22,6 +22,7 @@ export function InvoiceForm({ onCreated }: { onCreated: (inv: Invoice) => void }
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerOrgnr, setCustomerOrgnr]     = useState('');
   const [customerEmail, setCustomerEmail]     = useState('');
+  const [customerReference, setCustomerReference] = useState('');
   const [rows, setRows]   = useState<InvoiceRow[]>([emptyRow()]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -55,6 +56,7 @@ export function InvoiceForm({ onCreated }: { onCreated: (inv: Invoice) => void }
         customerAddress: customerAddress.trim() || undefined,
         customerOrgnr: customerOrgnr.trim() || undefined,
         customerEmail: customerEmail.trim() || undefined,
+        customerReference: customerReference.trim() || undefined,
         rows: validRows,
       });
       // Spara fakturafilen lokalt på datorn (inställning, på som standard)
@@ -95,6 +97,11 @@ export function InvoiceForm({ onCreated }: { onCreated: (inv: Invoice) => void }
             <label className="mb-1.5 block text-xs text-slate-500">E-post</label>
             <input type="email" value={customerEmail} onChange={e => setCustomerEmail(e.target.value)}
                    placeholder="faktura@kund.se" className={cls} />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-slate-500">Er referens</label>
+            <input type="text" value={customerReference} onChange={e => setCustomerReference(e.target.value)}
+                   placeholder="Kundens kontaktperson" className={cls} />
           </div>
         </div>
       </div>

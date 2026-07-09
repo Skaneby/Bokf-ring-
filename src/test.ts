@@ -1175,18 +1175,43 @@ async function runTests() {
     const inv100 = await mkInvoice('kontant');
     assert(inv100.number === 100, 'Startnummer från inställningar respekteras'); }
 
-  // ── renderInvoiceHtml ──────────────────────────────────────────────────
+  // ── renderInvoiceHtml (ny designmall) ──────────────────────────────────
   { const s = await getCompanySettings();
-    const html = renderInvoiceHtml(inv1, { ...s, name: 'Mitt Företag AB', bankgiro: '123-4567' });
-    assert(html.includes('Faktura'), 'renderInvoiceHtml: innehåller rubrik');
+    const full = {
+      ...s, name: 'Mitt Företag AB', bankgiro: '123-4567',
+      contactPerson: 'Johan Skaneby', bankName: 'Nordea', iban: 'SE62 3000',
+      approvedForFskatt: true,
+    };
+    const rich = { ...inv1, customerReference: 'Marknadschef' };
+    const html = renderInvoiceHtml(rich, full);
+    assert(html.includes('FAKTURA'), 'renderInvoiceHtml: rubrik FAKTURA');
     assert(html.includes('Testkund AB'), 'renderInvoiceHtml: kundnamn med');
     assert(html.includes('Mitt Företag AB'), 'renderInvoiceHtml: företagsnamn med');
     assert(html.includes('123-4567'), 'renderInvoiceHtml: bankgiro med');
+    assert(html.includes('Johan Skaneby'), 'renderInvoiceHtml: kontaktperson (Vår referens) med');
+    assert(html.includes('Nordea') && html.includes('SE62 3000'), 'renderInvoiceHtml: bank + IBAN med');
+    assert(html.includes('Marknadschef'), 'renderInvoiceHtml: Er referens (kundreferens) med');
+    assert(html.includes('Godkänd för F-skatt'), 'renderInvoiceHtml: F-skatt visas när på');
     assert(!html.includes('{{'), 'renderInvoiceHtml: alla tokens ersatta');
-    // HTML-injektion i kundnamn ska escapas
-    const evil = { ...inv1, customerName: '<script>alert(1)</script>' };
-    const html2 = renderInvoiceHtml(evil, s);
-    assert(!html2.includes('<script>alert'), 'renderInvoiceHtml: kundnamn HTML-escapas'); }
+    // Självständig fil: inga externa beroenden (CDN/fonter) i den arkiverade filen
+    assert(!/https?:\/\//.test(html.replace(/lang="sv"/, '')), 'renderInvoiceHtml: inga externa URL:er (renderas offline)');
+    assert(!html.includes('cdn.tailwindcss'), 'renderInvoiceHtml: ingen Tailwind-CDN');
+
+    // Statusbadge speglar fakturans status
+    assert(html.includes('badge obetald') && html.includes('Obetald'), 'renderInvoiceHtml: statusbadge Obetald');
+
+    // Tomma valfria fält ger inga tomma etiketter
+    const bare = renderInvoiceHtml({ ...inv1, customerReference: undefined },
+      { ...DEFAULT_COMPANY, name: 'Bara AB', orgnr: '165560000167', approvedForFskatt: false });
+    assert(!bare.includes('IBAN:') && !bare.includes('Bank:') && !bare.includes('Er referens'),
+      'renderInvoiceHtml: tomma valfria fält döljs (inga dinglande etiketter)');
+    assert(!bare.includes('Godkänd för F-skatt'), 'renderInvoiceHtml: F-skatt döljs när av');
+
+    // HTML-injektion i kundnamn OCH kundreferens ska escapas
+    const evil = renderInvoiceHtml(
+      { ...inv1, customerName: '<script>alert(1)</script>', customerReference: '<img src=x onerror=1>' }, full);
+    assert(!evil.includes('<script>alert') && !evil.includes('<img src=x'),
+      'renderInvoiceHtml: fält HTML-escapas (kundnamn + referens)'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // 18. SRU-EXPORT (M0 — deklarationsmodulen)

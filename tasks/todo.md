@@ -46,7 +46,7 @@
 - [x] Huvudbok paginerad (25 verifikationer/sida)
 - [x] Skyddad kontoradering — konton med transaktioner kan inte raderas
 - [x] Auto-navigering tillbaka till Rapporter efter verifikationsredigering
-- [x] 538 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
+- [x] 547 enhetstester — bokföringsscenarier, SIE, skatt, Gemini-import, fakturering, SRU, deklaration, smoke tests
 
 **Bokför-guiden: databasfil först (juli 2026)**
 - [x] Guide överst i Bokför-fliken när bokföringen saknar databasfil: förklarar risken pedagogiskt
@@ -70,6 +70,12 @@
 - [x] Bokföringens namn visas i sidomenyn; "utan fil"-läge med backup-varning för Firefox/Safari
 - [x] Skydd: "Byt bokföring" kopplar från filen FÖRST — en tömd databas skrivs aldrig till filen
 - [x] Öppna befintlig bokföringsfil från startskärmen (flytta mellan datorer)
+
+**Ny fakturamall (juli 2026)**
+- [x] Professionell designmall som standard (navy/teal), självständig inline-CSS — arkivfilen renderas offline långt senare (ingen CDN)
+- [x] Nya fält: kontaktperson (Vår referens), bank, IBAN, F-skatt-flagga; per faktura: Er referens (kundreferens)
+- [x] Statusbadge på fakturan speglar obetald/betald/makulerad; tomma valfria fält döljs
+- [x] Förhandsgranskning i Inställningar uppdaterad; fältvärden HTML-escapas
 
 **Fakturaarkiv & utskick (juli 2026)**
 - [x] Fakturafilen arkiveras i databasen exakt som den skapades — senare ändringar av uppgifter/mall påverkar aldrig arkivet

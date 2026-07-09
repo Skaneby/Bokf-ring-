@@ -41,6 +41,7 @@ export interface Invoice {
   customerAddress?: string;
   customerOrgnr?: string;
   customerEmail?: string;
+  customerReference?: string; // "Er referens" — kundens kontaktperson
   rows: InvoiceRow[];
   method: InvoiceMethod;
   status: InvoiceStatus;
