@@ -209,6 +209,25 @@ export async function initializeDb(): Promise<{ hasData: boolean }> {
   return { hasData: accountCount > 0 };
 }
 
+// Tömmer HELA bokföringen inför "Byt bokföring" / återställning: alla
+// datatabeller + företagsinställningarna (mall, nummerserie, uppgifter).
+// AI-nyckel och onboarding-flagga behålls (hör till användaren, inte bokföringen).
+// Filhandtag och identitet hanteras av anroparen (clearBokforingsfil/clearIdentity).
+export async function wipeBokforing(): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.accounts, db.vouchers, db.transactions, db.attachments,
+     db.invoices, db.declarations, db.settings],
+    async () => {
+      await Promise.all([
+        db.transactions.clear(), db.vouchers.clear(), db.accounts.clear(),
+        db.attachments.clear(), db.invoices.clear(), db.declarations.clear(),
+      ]);
+      await db.settings.delete('company'); // uppgifter/mall/nummerserie nollställs
+    },
+  );
+}
+
 // ── Databasidentitet ──────────────────────────────────────────────────────────
 // Unikt ID skapas när bokföringen skapas och följer den för alltid.
 // Revisionen räknas upp vid varje sparning till fil — gör det möjligt att

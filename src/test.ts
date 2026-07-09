@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import {
   db, initializeDb, getIdentity, setIdentity, newIdentity, clearIdentity,
-  bumpIdentity, compareDb,
+  bumpIdentity, compareDb, wipeBokforing,
 } from './db';
 import { exportSIE, importSIE, decodeSIEBuffer } from './lib/sie';
 import { buildBackupData, applyBackupData } from './lib/backup';
@@ -475,7 +475,7 @@ async function runTests() {
   const tBkp = await db.transactions.count();
 
   const backup = await buildBackupData();
-  assert(backup.version === 2, 'Backup: version = 2 (med bilagor)');
+  assert(backup.version === 3, 'Backup: version = 3 (full round-trip)');
   assert(Array.isArray(backup.accounts)     && backup.accounts.length > 0,     'Backup: konton inkluderade');
   assert(Array.isArray(backup.vouchers)     && backup.vouchers.length === vBkp, 'Backup: alla verifikationer inkluderade');
   assert(Array.isArray(backup.transactions) && backup.transactions.length === tBkp, 'Backup: alla transaktioner inkluderade');
@@ -2076,7 +2076,7 @@ async function runTests() {
 
   // ── Backup v2: bilagor följer med ──────────────────────────────────────
   { const backup = await buildBackupData();
-    assert(backup.version === 2, 'Backup v2: versionsstämpel');
+    assert(backup.version === 3, 'Backup v3: versionsstämpel');
     assert(backup.attachments?.length === 1 && backup.attachments[0].name === 'kvitto2.pdf',
       'Backup v2: bilagan ingår som base64');
     // Återställ och verifiera binärdata
@@ -2141,6 +2141,84 @@ async function runTests() {
   // ── Arkivet följer med i backupen (ligger på invoice-posten) ───────────
   { const stored = (await db.invoices.get(archInv.id!))!;
     assert(stored.documentHtml!.length > 500, 'Arkiv: HTML persisterad i invoices-tabellen (ingår i Dexie-datat)'); }
+
+  // ── Full round-trip: mall, företagsuppgifter, fakturor, deklarationer ──
+  // Detta är kärnan i "filen ÄR databasen": allt måste överleva backup/fil.
+  await resetDb();
+  { // Anpassad fakturamall + fullständiga företagsuppgifter + nästa nummer
+    const customTemplate = DEFAULT_TEMPLATE.replace('FAKTURA', 'RÄKNING');
+    await saveCompanySettings({
+      ...DEFAULT_COMPANY, name: 'Round AB', orgnr: '165560000167', bankgiro: '111-2222',
+      iban: 'SE99', template: customTemplate, nextInvoiceNumber: 42,
+    });
+    // AI-nyckel (hemlighet) ska INTE följa med i backupen
+    await saveAiSettings({ apiKey: 'HEMLIG-NYCKEL', validatedAt: '2026-07-08' });
+    // En faktura + en deklarationsjustering
+    await createInvoice({
+      date: '2026-07-01', dueDate: '2026-07-31', customerName: 'Kund',
+      rows: [{ description: 'Tjänst', qty: 1, unitPrice: 1000, vatRate: 25 }], method: 'faktura',
+    });
+    await addVoucher('2026-05-01', 'Intäkt', [
+      { accountId: 1930, amount: 5000 }, { accountId: 3040, amount: -5000 },
+    ]);
+    await saveAdjustment(2026, 'R13', { value: 777, note: 'test' }, 'NE');
+
+    const backup = await buildBackupData();
+    // Bokföringen finns med i backupen
+    assert(backup.invoices?.length === 1, 'Round-trip: fakturor ingår i backupen');
+    assert(backup.declarations?.length === 1, 'Round-trip: deklarationer ingår i backupen');
+    const companyRow = backup.settings?.find(r => r.key === 'company');
+    assert(companyRow !== undefined, 'Round-trip: företagsinställningar ingår');
+    assert((companyRow!.value as { template?: string }).template?.includes('RÄKNING'),
+      'Round-trip: anpassad FAKTURAMALL ingår i backupen');
+    assert((companyRow!.value as { nextInvoiceNumber?: number }).nextInvoiceNumber === 43,
+      'Round-trip: nästa fakturanummer bevaras (obruten serie över datorer)');
+    // Hemligheter ingår INTE
+    assert(!backup.settings?.some(r => r.key === 'ai'),
+      'Round-trip: AI-nyckeln ingår INTE i backupen (hemlighet stannar lokalt)');
+
+    // Simulera "öppna filen på annan dator": töm allt och återställ
+    await db.settings.clear();
+    await applyBackupData(JSON.parse(JSON.stringify(backup)));
+    const s2 = await getCompanySettings();
+    assert(s2.name === 'Round AB' && s2.bankgiro === '111-2222',
+      'Round-trip: företagsuppgifter återställda');
+    assert(s2.template?.includes('RÄKNING'), 'Round-trip: fakturamallen återställd');
+    assert(s2.nextInvoiceNumber === 43, 'Round-trip: nummerserien fortsätter (ingen dubblett/lucka)');
+    assert((await db.invoices.count()) === 1, 'Round-trip: fakturan återställd');
+    const dec = await getDeclaration(2026, 'NE');
+    assert(dec?.fields.R13?.value === 777, 'Round-trip: deklarationsjustering återställd'); }
+
+  // Skydd: en (manipulerad) backup som försöker skriva AI-nyckel ignoreras
+  { await resetDb();
+    await applyBackupData({
+      version: 3, exported_at: '', accounts: [], vouchers: [], transactions: [],
+      settings: [{ key: 'ai', value: { apiKey: 'INJICERAD', validatedAt: '2026-01-01' } }],
+    } as never);
+    const ai = await getAiSettings();
+    assert(ai.apiKey !== 'INJICERAD', 'Skydd: backup kan inte injicera/skriva över AI-nyckeln'); }
+
+  // ── wipeBokforing (Byt bokföring): rensar ALLT utom AI-nyckel/onboarding ─
+  { await resetDb();
+    await saveCompanySettings({ ...DEFAULT_COMPANY, name: 'Gammal AB', nextInvoiceNumber: 99 });
+    await saveAiSettings({ apiKey: 'MIN-NYCKEL', validatedAt: '2026-07-08' });
+    await markOnboardingDone();
+    await createInvoice({ date: '2026-07-01', dueDate: '2026-07-31', customerName: 'K',
+      rows: [{ description: 'T', qty: 1, unitPrice: 100, vatRate: 25 }], method: 'faktura' });
+    await saveAdjustment(2026, 'R13', { value: 5 }, 'NE');
+
+    await wipeBokforing();
+
+    assert((await db.invoices.count()) === 0, 'Byt bokföring: fakturor rensas (ärvs inte)');
+    assert((await db.declarations.count()) === 0, 'Byt bokföring: deklarationer rensas');
+    assert((await db.accounts.count()) === 0, 'Byt bokföring: kontoplan rensas');
+    // Företagsuppgifter (namn, nummerserie, mall) nollställs
+    const c = await getCompanySettings();
+    assert(c.name === '' && c.nextInvoiceNumber === 1,
+      'Byt bokföring: företagsuppgifter & nummerserie nollställs (ingen ärvd nummer­serie)');
+    // Men AI-nyckel och onboarding-flagga behålls (hör till användaren)
+    assert((await getAiSettings()).apiKey === 'MIN-NYCKEL', 'Byt bokföring: AI-nyckeln behålls');
+    assert((await isOnboardingDone()) === true, 'Byt bokföring: onboarding-flaggan behålls'); }
 
   // ═══════════════════════════════════════════════════════════════════════
   // 28. MARKDOWN-RENDERING & AI-PEDAGOGIK

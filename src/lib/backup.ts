@@ -1,4 +1,7 @@
-import { db, Account, Voucher, Transaction, getIdentity, setIdentity, newIdentity } from '../db';
+import {
+  db, Account, Voucher, Transaction, Invoice, Declaration, Setting,
+  getIdentity, setIdentity, newIdentity,
+} from '../db';
 import { bufferToBase64, base64ToBuffer } from './attachments';
 
 // v2: kvittobilagor följer med som base64. v1-backuper (utan attachments)
@@ -10,6 +13,12 @@ export interface BackupAttachment {
   created_at: number;
   dataBase64: string;
 }
+
+// Inställningsnycklar som INTE hör till bokföringen och därför INTE sparas i
+// filen/backupen: filhandtaget (maskinspecifikt, ej serialiserbart),
+// databasidentiteten (sparas separat på toppnivå) och AI-nyckeln (hemlighet
+// som inte ska följa med en delad bokföringsfil).
+const SETTINGS_NOT_IN_BACKUP = new Set(['bokforingsfil', 'dbIdentity', 'ai']);
 
 export interface BackupData {
   version: number;
@@ -23,20 +32,30 @@ export interface BackupData {
   vouchers: Voucher[];
   transactions: Transaction[];
   attachments?: BackupAttachment[];
+  invoices?: Invoice[];         // fakturor (inkl. arkiverad HTML, nummerserie)
+  declarations?: Declaration[]; // NE/INK2-justeringar + inlämningssteg
+  settings?: Setting[];         // företagsuppgifter + FAKTURAMALL + nästa nummer
 }
 
 export async function buildBackupData(): Promise<BackupData> {
-  const [accounts, vouchers, transactions, attachments, identity, filMeta] = await Promise.all([
-    db.accounts.toArray(),
-    db.vouchers.toArray(),
-    db.transactions.toArray(),
-    db.attachments.toArray(),
-    getIdentity(),
-    db.settings.get('bokforingsfil'),
-  ]);
-  const name = (filMeta?.value as { name?: string } | undefined)?.name;
+  const [accounts, vouchers, transactions, attachments, invoices, declarations, settings, identity] =
+    await Promise.all([
+      db.accounts.toArray(),
+      db.vouchers.toArray(),
+      db.transactions.toArray(),
+      db.attachments.toArray(),
+      db.invoices.toArray(),
+      db.declarations.toArray(),
+      db.settings.toArray(),
+      getIdentity(),
+    ]);
+
+  const backupSettings = settings.filter(row => !SETTINGS_NOT_IN_BACKUP.has(row.key));
+  const name = (backupSettings.find(r => r.key === 'company')?.value as { name?: string } | undefined)?.name
+    ?? (settings.find(r => r.key === 'bokforingsfil')?.value as { name?: string } | undefined)?.name;
+
   return {
-    version: 2,
+    version: 3,
     exported_at: new Date().toISOString(),
     dbId: identity?.id,
     revision: identity?.revision,
@@ -50,6 +69,9 @@ export async function buildBackupData(): Promise<BackupData> {
       created_at: a.created_at,
       dataBase64: bufferToBase64(a.data),
     })),
+    invoices,
+    declarations,
+    settings: backupSettings,
   };
 }
 
@@ -61,25 +83,40 @@ export async function applyBackupData(data: BackupData): Promise<{ vouchers: num
   ) {
     throw new Error('Ogiltig backup-fil – saknar accounts, vouchers eller transactions.');
   }
-  await db.transaction('rw', db.accounts, db.vouchers, db.transactions, db.attachments, async () => {
-    await Promise.all([
-      db.transactions.clear(), db.vouchers.clear(), db.accounts.clear(), db.attachments.clear(),
-    ]);
-    await Promise.all([
-      db.accounts.bulkAdd(data.accounts),
-      db.vouchers.bulkAdd(data.vouchers),
-      db.transactions.bulkAdd(data.transactions),
-    ]);
-    if (Array.isArray(data.attachments)) {
-      await db.attachments.bulkAdd(data.attachments.map(a => {
-        const buf = base64ToBuffer(a.dataBase64);
-        return {
-          voucherId: a.voucherId, name: a.name, type: a.type,
-          size: buf.byteLength, data: buf, created_at: a.created_at,
-        };
-      }));
-    }
-  });
+  await db.transaction(
+    'rw',
+    [db.accounts, db.vouchers, db.transactions, db.attachments,
+     db.invoices, db.declarations, db.settings],
+    async () => {
+      await Promise.all([
+        db.transactions.clear(), db.vouchers.clear(), db.accounts.clear(),
+        db.attachments.clear(), db.invoices.clear(), db.declarations.clear(),
+      ]);
+      await Promise.all([
+        db.accounts.bulkAdd(data.accounts),
+        db.vouchers.bulkAdd(data.vouchers),
+        db.transactions.bulkAdd(data.transactions),
+      ]);
+      if (Array.isArray(data.attachments)) {
+        await db.attachments.bulkAdd(data.attachments.map(a => {
+          const buf = base64ToBuffer(a.dataBase64);
+          return {
+            voucherId: a.voucherId, name: a.name, type: a.type,
+            size: buf.byteLength, data: buf, created_at: a.created_at,
+          };
+        }));
+      }
+      if (Array.isArray(data.invoices)) await db.invoices.bulkAdd(data.invoices);
+      if (Array.isArray(data.declarations)) await db.declarations.bulkAdd(data.declarations);
+      // Företagsuppgifter + fakturamall återställs; lokala nycklar (AI-nyckel,
+      // filhandtag, identitet) lämnas orörda genom att bara skriva de sparade.
+      if (Array.isArray(data.settings)) {
+        for (const row of data.settings) {
+          if (!SETTINGS_NOT_IN_BACKUP.has(row.key)) await db.settings.put(row);
+        }
+      }
+    },
+  );
   // Adoptera databasens identitet från filen — annars ny (äldre filer utan ID)
   if (data.dbId) {
     await setIdentity({

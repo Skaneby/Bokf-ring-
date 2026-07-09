@@ -50,7 +50,7 @@ src/
   App.tsx              — routing, editId-state, välkomstskärm-logik, hasData-check
   db.ts                — Dexie-schema v4 (accounts, vouchers, transactions, invoices, settings, declarations, attachments) + PATCH_ACCOUNTS
   main.tsx             — React-root mount, ErrorBoundary, ?reset=1-flöde, SW-uppdatering
-  test.ts              — 554 enhetstester (Node + fake-indexeddb)
+  test.ts              — 572 enhetstester (Node + fake-indexeddb)
 e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och uträknade belopp
   components/
     ErrorBoundary.tsx  — fångar renderfel; visar felmeddelande + "Ladda om" istället för vit skärm
@@ -78,7 +78,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
       DeklarationTab.tsx — blankettvy NE/INK2 per beskattningsår: justera rader, skriv ut, status, SRU-export
       BackupTab.tsx    — JSON-backup, SIE4 import/export, "Byt bokföring"
   lib/
-    backup.ts          — buildBackupData() / applyBackupData() / exportBackup()
+    backup.ts          — buildBackupData()/applyBackupData() v3: ALLA tabeller + settings (ej ai/handle); exportBackup()
     sie.ts             — exportSIE() / importSIE(content, 'merge'|'replace') / decodeSIEBuffer (CP437)
     vat.ts             — splitVat() / vatRows() / VAT_OUT / VAT_IN — testbar logik
     ocr.ts             — scanReceipt(file) via Gemini Vision
@@ -113,6 +113,9 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
 - **PWA service worker** — använd `registerType: 'autoUpdate'` + `skipWaiting: true` + `clientsClaim: true` — annars fastnar gamla SW och servar stale cache på användarens enhet
 
 ### Bokföringsfil
+- **Backupformat v3 = hela databasen** — buildBackupData sparar accounts/vouchers/transactions/attachments/invoices/declarations + settings (företagsuppgifter, FAKTURAMALL, nextInvoiceNumber). EXKLUDERADE settings: 'ai' (hemlig nyckel), 'bokforingsfil' (maskinspecifikt handtag), 'dbIdentity' (toppnivå). Utan detta tappas mall/nummerserie/fakturor vid filöppning på annan dator
+- **wipeBokforing() vid "Byt bokföring"/reset** — rensar alla datatabeller + 'company'-settingen; behåller 'ai' + 'onboardingDone'. Callers rensar dessutom filhandtag (clearBokforingsfil) + identitet (clearIdentity)
+- **Dexie-transaktion med 7 tabeller kräver array-formen** `db.transaction('rw', [t1..t7], cb)` — variadiska överlagringar kapar vid ~5
 - **Databasidentitet:** dbId (UUID) + revision + modifiedAt i settings ('dbIdentity') och i filen; bumpIdentity() vid varje writeToFile; compareDb() avgör öppningsflödet (same/local-newer/different/no-local/legacy-file) — konfliktvyer i OpenBokforing
 - **Identitetsnycklarna ('dbIdentity','bokforingsfil') är exkluderade från auto-sparningens hooks** — annars evig sparloop
 - **IndexedDB är arbetskopian, filen är databasen** — auto-sparning (debounced 2,5 s) skriver hela backupen till handlen vid varje tabelländring (Dexie-hooks via watchDatabase)
@@ -181,7 +184,7 @@ Alla rapporter läser `transactions`-tabellen. Det finns ingen separat rapportda
 ## Utvecklingsflöde
 ```bash
 npm run dev          # lokal dev (http://localhost:5173/)
-npm run test         # kör 554 enhetstester
+npm run test         # kör 572 enhetstester
 npm run test:e2e     # E2E i webbläsare (desktop + mobil) — kräver Chromium
 npm run build        # produktionsbygge — verifiera alltid innan push
 git push origin main # triggar deploy automatiskt (~40 sek)

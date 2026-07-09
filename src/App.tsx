@@ -1,7 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { VoucherEntry } from './components/VoucherEntry';
-import { initializeDb, clearIdentity, db, DbIdentity } from './db';
+import { initializeDb, clearIdentity, wipeBokforing, db, DbIdentity } from './db';
 import { exportBackup } from './lib/backup';
 import { isOnboardingDone, markOnboardingDone } from './lib/ai';
 import {
@@ -143,12 +143,7 @@ export default function App() {
     await clearIdentity(); // nästa bokföring är en ANNAN databas → nytt ID
     setFilMeta(null);
     setFilOpened(false);
-    await db.transaction('rw', db.transactions, db.vouchers, db.accounts, db.attachments, async () => {
-      await db.transactions.clear();
-      await db.vouchers.clear();
-      await db.accounts.clear();
-      await db.attachments.clear();
-    });
+    await wipeBokforing(); // rensar även fakturor, deklarationer och företagsuppgifter/mall
     setConfirmSwitch(false);
     setMobile(false);
     setHasData(false);

@@ -3,7 +3,7 @@ import { db } from '../../db';
 import { exportSIE, importSIE, decodeSIEBuffer } from '../../lib/sie';
 import { exportBackup, importBackup } from '../../lib/backup';
 import { clearBokforingsfil } from '../../lib/bokforingsfil';
-import { clearIdentity } from '../../db';
+import { clearIdentity, wipeBokforing } from '../../db';
 import { Download, Upload } from 'lucide-react';
 
 interface Props {
@@ -24,12 +24,7 @@ export function BackupTab({ onReset }: Props) {
     // Koppla från bokföringsfilen FÖRST — annars auto-sparas tömningen dit
     await clearBokforingsfil();
     await clearIdentity(); // nästa bokföring är en annan databas → nytt ID
-    await db.transaction('rw', db.transactions, db.vouchers, db.accounts, db.attachments, async () => {
-      await db.transactions.clear();
-      await db.vouchers.clear();
-      await db.accounts.clear();
-      await db.attachments.clear();
-    });
+    await wipeBokforing(); // rensar även fakturor, deklarationer och företagsuppgifter/mall
     onReset();
   };
 
