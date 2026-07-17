@@ -133,13 +133,16 @@ test('@desktop fakturaflöde: inställningar → skapa → bokförd → betald �
   await expect(page.getByText(/Obetalda \(1\)/)).toBeVisible(); // statusfilter räknar
   await expect(page.getByText('skapad och bokförd')).toBeVisible();
 
-  // "Visa" öppnar den ARKIVERADE fakturafilen i ny flik
-  const popup = page.waitForEvent('popup');
+  // "Visa" öppnar den ARKIVERADE fakturafilen i en inbäddad visare MED tillbaka-knapp
+  // (inte i ny flik — där saknas väg tillbaka, särskilt i PWA-läge på iPad)
   await page.getByRole('button', { name: 'Visa', exact: true }).click();
-  const invoiceView = await popup;
-  await expect(invoiceView.locator('body')).toContainText('Kund E2E AB');
-  await expect(invoiceView.locator('body')).toContainText('Faktura');
-  await invoiceView.close();
+  const viewer = page.getByTestId('invoice-viewer');
+  await expect(viewer.getByRole('button', { name: 'Tillbaka' })).toBeVisible();
+  const invoiceFrame = viewer.frameLocator('iframe[title="Förhandsvisning av faktura"]');
+  await expect(invoiceFrame.locator('body')).toContainText('Kund E2E AB');
+  await expect(invoiceFrame.locator('body')).toContainText('Faktura');
+  await viewer.getByRole('button', { name: 'Tillbaka' }).click();
+  await expect(viewer).toHaveCount(0);
 
   // E-post: laddar ned filen och öppnar mailto (mailto kan inte bifoga — filen följer separat)
   const mailDl = page.waitForEvent('download');

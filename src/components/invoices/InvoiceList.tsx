@@ -6,7 +6,8 @@ import {
   invoiceTotals, registerPayment, cancelInvoice, getCompanySettings,
   getInvoiceHtml, invoiceFileName, downloadInvoiceFile,
 } from '../../lib/invoice';
-import { Printer, Download, Share2, Mail, Ban, CheckCircle, Eye } from 'lucide-react';
+import { Printer, Download, Share2, Mail, Ban, CheckCircle, Eye, ArrowLeft } from 'lucide-react';
+import { InvoicePreview } from './InvoicePreview';
 
 const STATUS_BADGE: Record<Invoice['status'], { label: string; cls: string }> = {
   obetald:   { label: 'Obetald',   cls: 'bg-amber-100 text-amber-700'     },
@@ -15,13 +16,6 @@ const STATUS_BADGE: Record<Invoice['status'], { label: string; cls: string }> = 
 };
 
 // Alla åtgärder använder den ARKIVERADE fakturafilen (som den skapades)
-
-// Visa fakturan i ny flik
-async function viewInvoice(inv: Invoice) {
-  const url = URL.createObjectURL(new Blob([await getInvoiceHtml(inv)], { type: 'text/html' }));
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
 
 async function printInvoice(inv: Invoice) {
   const w = window.open('', '_blank');
@@ -69,6 +63,18 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [error,        setError]        = useState('');
   const [filter,       setFilter]       = useState<'alla' | 'obetald' | 'betald'>('alla');
+  // Fakturavisaren visas i appen (overlay) med en tillbaka-knapp — inte i ny flik,
+  // som saknar väg tillbaka (särskilt i PWA-läge på iPad)
+  const [viewing, setViewing] = useState<{ inv: Invoice; html: string } | null>(null);
+
+  const openViewer = async (inv: Invoice) => {
+    setError('');
+    try {
+      setViewing({ inv, html: await getInvoiceHtml(inv) });
+    } catch {
+      setError('Kunde inte öppna fakturan.');
+    }
+  };
 
   const visible = filter === 'alla' ? invoices : invoices.filter(i => i.status === filter);
   const unpaidCount = invoices.filter(i => i.status === 'obetald').length;
@@ -99,6 +105,34 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
 
   return (
     <div className="space-y-3">
+      {/* Fakturavisare — helskärmsoverlay MED tillbaka-knapp (issue: ingen väg tillbaka) */}
+      {viewing && (
+        <div data-testid="invoice-viewer" className="fixed inset-0 z-50 flex flex-col bg-slate-100">
+          <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+            <button
+              onClick={() => setViewing(null)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" /> Tillbaka
+            </button>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
+              Faktura {viewing.inv.number} · {viewing.inv.customerName}
+            </span>
+            <button onClick={() => printInvoice(viewing.inv)} aria-label="Skriv ut / PDF"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+              <Printer className="h-4 w-4" /> <span className="hidden sm:inline">Skriv ut</span>
+            </button>
+            <button onClick={() => downloadInvoice(viewing.inv)} aria-label="Ladda ned"
+                    className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors">
+              <Download className="h-4 w-4" /> <span className="hidden sm:inline">Ladda ned</span>
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <InvoicePreview html={viewing.html} className="mx-auto w-full max-w-3xl" />
+          </div>
+        </div>
+      )}
+
       {/* Statusfilter — obetalda fakturor är de som ska bokföras som betalda */}
       <div className="flex flex-wrap gap-2">
         {([['alla', 'Alla'], ['obetald', `Obetalda (${unpaidCount})`], ['betald', 'Betalda']] as const).map(([id, label]) => (
@@ -150,7 +184,7 @@ export function InvoiceList({ invoices }: { invoices: Invoice[] }) {
 
             {/* Åtgärder */}
             <div className="flex flex-wrap items-center gap-1 border-t border-slate-100 bg-slate-50 px-3 py-2">
-              <IconBtn onClick={() => viewInvoice(inv)}     icon={Eye}      label="Visa" />
+              <IconBtn onClick={() => openViewer(inv)}      icon={Eye}      label="Visa" />
               <IconBtn onClick={() => printInvoice(inv)}    icon={Printer}  label="Skriv ut / PDF" />
               <IconBtn onClick={() => downloadInvoice(inv)} icon={Download} label="Ladda ned" />
               <IconBtn onClick={() => shareInvoice(inv)}    icon={Share2}   label="Dela" />

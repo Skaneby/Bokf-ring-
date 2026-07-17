@@ -70,7 +70,8 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     Invoices.tsx       — flik-router för fakturering
     invoices/
       InvoiceForm.tsx  — skapa faktura; metod väljs per faktura (faktura/kontant)
-      InvoiceList.tsx  — statusfilter, visa/skriv ut/dela/e-posta ARKIVERAD fil, registrera betalning, makulera
+      InvoiceList.tsx  — statusfilter, visa (inbäddad visare med Tillbaka-knapp)/skriv ut/dela/e-posta ARKIVERAD fil, registrera betalning, makulera
+      InvoicePreview.tsx — skalad iframe-förhandsvisning av fakturan (transform: scale till containerbredd) — används i visaren + InvoiceSettings; ger korrekt A4-vy även på iPad/mobil
       InvoiceSettings.tsx — företagsuppgifter, nummerserie, WYSIWYG-temaredigerare + avancerat HTML-läge
     reports/
       shared.tsx       — Card / Row / TotalRow / buildBalMap

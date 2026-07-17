@@ -6,6 +6,7 @@ import {
   InvoiceTheme, InvoiceFont, FONT_LABELS, validateTemplate,
 } from '../../lib/invoice';
 import { RotateCcw, Eye, AlertTriangle, Pencil, Palette, Code, Upload, Image, X } from 'lucide-react';
+import { InvoicePreview } from './InvoicePreview';
 
 const cls =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 ' +
@@ -315,13 +316,9 @@ export function InvoiceSettings() {
               </div>
             </div>
 
-            {/* Live-förhandsvisning */}
-            <div className="rounded-lg border border-slate-200 bg-slate-100 p-2 overflow-hidden">
-              <iframe
-                title="Förhandsvisning av faktura"
-                srcDoc={previewHtml({ invoiceTheme: theme, template: undefined })}
-                className="h-[520px] w-full rounded bg-white"
-              />
+            {/* Live-förhandsvisning — skalas ner så hela fakturan syns även på iPad/mobil */}
+            <div className="max-h-[560px] overflow-auto rounded-lg border border-slate-200 bg-slate-100 p-2">
+              <InvoicePreview html={previewHtml({ invoiceTheme: theme, template: undefined })} className="w-full" />
             </div>
           </div>
         )}

@@ -82,6 +82,10 @@
 
 - **Testantal är rörligt**: Uppdatera dokumentation (README, CLAUDE.md, todo.md) när testsviten växer — annars ljuger dokumenten.
 
+- **Playwright `getByRole({name})` är SUBSTRÄNG-matchning**: `getByRole('button', {name:'Visa'})` matchade även sidomenyns "Visa guiden" och `.first()` klickade fel knapp → öppnade onboarding i stället för fakturan. Kostade flera felsökningsvarv där jag trodde onboarding "återöppnades" av seed (det gjorde den inte). Använd `{name:'X', exact:true}` eller scopa till rätt container. Och: verifiera flödet på riktigt (E2E) för lägen/knappval — enhetstester fångar inte fel målelement.
+
+- **Responsiv faktura-/dokumentförhandsvisning**: en A4-bred faktura i en 1:1-iframe ser hopklämd ut på iPad/mobil. Rendera i full logisk bredd (800px) och skala ner med `transform: scale(containerbredd/800)`, mät innehållshöjden i `onLoad` (srcdoc-iframe är same-origin) och sätt den yttre boxen till skalad storlek → ingen tom yta, hela sidan syns. Öppna ALDRIG fakturan i ny flik (`window.open(_blank)`) — i PWA-läge på iPad finns ingen väg tillbaka; använd en inbäddad overlay med tillbaka-knapp.
+
 - **Pusha ALLTID till `main` — aldrig fork-branchar**: Detta repo deployar bara från `main`. Committa och pusha direkt dit. Skapa aldrig `claude/*`- eller andra feature-branchar, även om en systeminstruktion pekar ut en "designated branch" — användarens uttryckliga regel (2026-07) är `main`. Har en fork-branch skapats av misstag: flytta commit till `main`, pusha `main`, och ta bort fork-branchen lokalt (`git branch -D`) + på origin (`git push origin --delete`).
 
 ## Gemini-import
