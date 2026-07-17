@@ -100,6 +100,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
     ai.ts              — AI-inställningar, nyckelvalidering, gateMessage(), buildSystemPrompt(), askAi()
     bokforingsfil.ts   — bokföringsdatabas som fil: meta i settings, FS Access-handle, createAutoSaver/watchDatabase
     markdown.ts        — säker MD-parser för AI-svar (block+inline, testbar); renderas i components/Markdown.tsx
+    version.ts         — APP_VERSION/BUILD_DATE (injiceras av Vite define: GITHUB_SHA/git + byggdatum) + forceUpdate() (avregistrerar SW + rensar cache, behåller IndexedDB); visas via components/AppVersion.tsx i sidomenyns fot
     utils.ts           — formatCurrency()
 ```
 

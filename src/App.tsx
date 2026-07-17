@@ -12,6 +12,7 @@ import { Welcome } from './components/Welcome';
 import { OpenBokforing } from './components/OpenBokforing';
 import { FilePrompt } from './components/FilePrompt';
 import { AiHelpProvider } from './components/AiHelp';
+import { AppVersion } from './components/AppVersion';
 import {
   LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw, Receipt,
   Sparkles, HelpCircle,
@@ -266,7 +267,7 @@ export default function App() {
         </nav>
 
         {/* Quick backup */}
-        <div className="px-3 py-4 border-t border-slate-800 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="px-3 py-4 border-t border-slate-800">
           <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.15em] text-slate-500 uppercase">
             Säkerhet
           </p>
@@ -323,6 +324,9 @@ export default function App() {
             </button>
           )}
         </div>
+
+        {/* Version + tvinga uppdatering */}
+        <AppVersion />
       </aside>
 
       {/* Mobile overlay */}

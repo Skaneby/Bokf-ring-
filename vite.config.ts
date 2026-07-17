@@ -1,8 +1,20 @@
+import { execSync } from 'node:child_process';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// Byggmetadata som visas i UI:t (version + byggdatum). I GitHub Actions finns
+// GITHUB_SHA; lokalt läses kort commit-SHA via git. Faller tillbaka på 'dev'.
+function buildSha(): string {
+  const envSha = process.env.GITHUB_SHA;
+  if (envSha) return envSha.slice(0, 7);
+  try { return execSync('git rev-parse --short HEAD').toString().trim(); }
+  catch { return 'dev'; }
+}
+const BUILD_SHA = buildSha();
+const BUILD_DATE = new Date().toISOString();
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
@@ -50,6 +62,8 @@ export default defineConfig(({mode}) => {
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY ?? env.GEMINI_API_KEY),
+      __APP_VERSION__: JSON.stringify(BUILD_SHA),
+      __BUILD_DATE__: JSON.stringify(BUILD_DATE),
     },
     resolve: {
       alias: {
