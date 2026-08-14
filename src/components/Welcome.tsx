@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { FolderOpen, Plus, FileCode, FolderInput, LucideIcon, Loader2 } from 'lucide-react';
+import { FolderOpen, Plus, FileCode, FolderInput, Cloud, LucideIcon, Loader2 } from 'lucide-react';
 import { applyBackupData } from '../lib/backup';
 import { importSIE, decodeSIEBuffer } from '../lib/sie';
 import { initializeDb } from '../db';
@@ -7,6 +7,7 @@ import {
   supportsFileSystem, pickNewFile, pickExistingFile, verifyPermission,
   writeToFile, readFromFile, setBokforingsfil,
 } from '../lib/bokforingsfil';
+import * as GDrive from '../lib/gdrive';
 
 interface Props {
   onLoaded: () => void;
@@ -124,6 +125,21 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
     e.target.value = '';
   };
 
+  const handleDrivePull = async () => {
+    setError('');
+    setBusy('drive');
+    try {
+      const data = await GDrive.signInAndPull();
+      await applyBackupData(data);
+      await setBokforingsfil({ name: data.bokforingName ?? cleanName() });
+      onLoaded();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Kunde inte hämta från Google Drive');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
       <div className="w-full max-w-md space-y-6">
@@ -196,6 +212,16 @@ export function Welcome({ onLoaded, onStartFresh }: Props) {
             onClick={() => sieRef.current?.click()}
           />
           <input ref={sieRef} type="file" accept=".se,.si,.sie,.SE,.SI,.SIE" className="hidden" onChange={handleSie} />
+
+          {GDrive.isConfigured() && (
+            <OptionButton
+              icon={Cloud}
+              title="Hämta från Google Drive"
+              subtitle="Återöppna bokföring som synkats till Drive från en annan enhet"
+              onClick={handleDrivePull}
+              busy={busy === 'drive'}
+            />
+          )}
         </div>
 
         <p className="text-xs text-slate-400 text-center">

@@ -8,11 +8,13 @@ import {
   BokforingsfilMeta, SaveStatus, getBokforingsfil, clearBokforingsfil,
   createAutoSaver, watchDatabase, writeToFile, AutoSaver,
 } from './lib/bokforingsfil';
+import * as GDrive from './lib/gdrive';
 import { Welcome } from './components/Welcome';
 import { OpenBokforing } from './components/OpenBokforing';
 import { FilePrompt } from './components/FilePrompt';
 import { AiHelpProvider } from './components/AiHelp';
 import { AppVersion } from './components/AppVersion';
+import { DriveSync } from './components/DriveSync';
 import {
   LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw, Receipt,
   Sparkles, HelpCircle,
@@ -147,6 +149,18 @@ export default function App() {
     return () => clearTimeout(id);
   }, [copied]);
 
+  // Pusha till Drive när användaren lämnar appen (byter flik, stänger, bakgrundssätter)
+  useEffect(() => {
+    if (!hasData) return;
+    const onHide = () => {
+      if (document.visibilityState === 'hidden' && GDrive.getState().signedIn) {
+        GDrive.push();
+      }
+    };
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [hasData]);
+
   // Visa guiden automatiskt första gången appen används med data
   useEffect(() => {
     if (!ready || !hasData) return;
@@ -265,6 +279,9 @@ export default function App() {
             </button>
           ))}
         </nav>
+
+        {/* Google Drive sync */}
+        <DriveSync />
 
         {/* Quick backup */}
         <div className="px-3 py-4 border-t border-slate-800">
