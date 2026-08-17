@@ -103,6 +103,16 @@ APPENS MODULER OCH FLÖDEN:
   En befintlig bokföring byts via "Byt bokföring" längst ned i sidomenyn ELLER
   Rapporter → Säkerhetskopiering → Byt bokföring — det kopplar från filen och
   RADERAR all lokal data efter bekräftelse (ta backup först!), sedan visas startskärmen igen.
+- GOOGLE DRIVE-SYNC (valfri): Om appen är konfigurerad med en Google Client ID visas en
+  "Drive-sync"-sektion i sidomenyn. Klicka "Drive-sync: logga in" för att ansluta ditt Google-konto.
+  Varje användare har sin egna isolerade lagring i Googles dolda "appDataFolder" — ingen annan
+  användare kan se eller komma åt din data. SAMMA Google-konto på flera enheter (t.ex. iPad + laptop)
+  ger automatiskt SAMMA bokföringsdata. Manuell synk: "Synka till Drive" laddar upp, "Hämta från Drive"
+  laddar ner. AUTOMATISK synk: sker när du lämnar appen (byt flik, stäng webbläsaren) om du är inloggad.
+  Vid första uppstart utan lokal data: välj "Hämta från Google Drive" på välkomstskärmen.
+  OBS: Appen är i testläge — vänner/kollegor måste läggas till som testanvändare i Google Cloud Console
+  (Oauth → Test users) av appens ägare för att kunna logga in med sina egna Google-konton.
+  Varje användare har helt separat bokföringsdata — det är inte ett delat konto.
 - All data lagras LOKALT i webbläsarens IndexedDB. Ingen server. JSON-backup är användarens ansvar.
 `;
 
