@@ -314,6 +314,31 @@ export async function initializeDb(): Promise<{ hasData: boolean }> {
   // att kunna verifiera att fil och webbläsare är SAMMA databas i synk
   if (!(await getIdentity())) await newIdentity();
 
+  // Backfyll kundregistret från befintliga fakturor — körs en gång för
+  // användare som hade fakturor innan kundregistret introducerades (v5).
+  const customerCount = await db.customers.count();
+  if (customerCount === 0) {
+    const invoices = await db.invoices.toArray();
+    if (invoices.length > 0) {
+      // Behåll senaste fakturan per kundnamn (case-insensitive)
+      const seen = new Map<string, typeof invoices[0]>();
+      for (const inv of invoices.sort((a, b) => b.created_at - a.created_at)) {
+        const key = inv.customerName.toLowerCase();
+        if (!seen.has(key)) seen.set(key, inv);
+      }
+      await db.customers.bulkAdd(
+        [...seen.values()].map(inv => ({
+          name: inv.customerName,
+          address: inv.customerAddress,
+          orgnr: inv.customerOrgnr,
+          email: inv.customerEmail,
+          reference: inv.customerReference,
+          lastUsed: inv.created_at,
+        })),
+      );
+    }
+  }
+
   return { hasData: accountCount > 0 };
 }
 
