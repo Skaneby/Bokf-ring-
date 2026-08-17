@@ -17,7 +17,7 @@ import { AppVersion } from './components/AppVersion';
 import { DriveSync } from './components/DriveSync';
 import {
   LayoutDashboard, BookOpen, FileText, List, Download, Menu, Link, FileJson, RefreshCw, Receipt,
-  Sparkles, HelpCircle,
+  Sparkles, HelpCircle, ScanLine,
 } from 'lucide-react';
 
 // Lazy-laddade flikar — hålls utanför startbundeln
@@ -27,12 +27,14 @@ const GeminiImport    = lazy(() => import('./components/GeminiImport').then(m =>
 const Invoices        = lazy(() => import('./components/Invoices').then(m => ({ default: m.Invoices })));
 const AiChat          = lazy(() => import('./components/AiChat').then(m => ({ default: m.AiChat })));
 const Onboarding      = lazy(() => import('./components/Onboarding').then(m => ({ default: m.Onboarding })));
+const BatchScan       = lazy(() => import('./components/BatchScan').then(m => ({ default: m.BatchScan })));
 
 const APP_URL = 'https://skaneby.github.io/Bokf-ring-/';
 
 const NAV = [
   { id: 'dashboard', label: 'Översikt',   icon: LayoutDashboard },
   { id: 'voucher',   label: 'Bokför',     icon: BookOpen },
+  { id: 'batch',     label: 'Skanna',     icon: ScanLine },
   { id: 'invoices',  label: 'Fakturor',   icon: Receipt },
   { id: 'accounts',  label: 'Kontoplan',  icon: List },
   { id: 'reports',   label: 'Rapporter',  icon: FileText },
@@ -382,6 +384,7 @@ export default function App() {
                 />
                 <VoucherEntry editId={editId} onEditDone={() => { setEditId(null); if (editId) setTab('reports'); }} />
               </div>
+              {tab === 'batch'     && <BatchScan />}
               {tab === 'invoices'  && <Invoices />}
               {tab === 'accounts'  && <ChartOfAccounts />}
               {tab === 'reports'   && <Reports onEditVoucher={editVoucher} onReset={() => setHasData(false)} />}
