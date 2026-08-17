@@ -6,8 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
-# .claude/ ignoreras utom agentdefinitioner — de styr modellval per uppgiftstyp
+# .claude/ ignoreras utom agentdefinitioner + slash-kommandon — de är incheckade
+# projektinstruktioner (agenter styr modellval, kommandon styr arbetsflöden)
 .claude/*
 !.claude/agents/
+!.claude/commands/
 playwright-report/
 test-results/

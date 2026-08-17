@@ -339,3 +339,19 @@ Go fix failing CI tests without being told how.
 **Comment on Code**: Write clear and understandable comments for developers to follow.
 
 **Think Before Proposing**: For architectural decisions or non-obvious bugs, reason through trade-offs before presenting a solution. Show your reasoning when it matters.
+
+---
+
+## Claude-kommandon
+
+Slash-kommandon bor i `.claude/commands/` (incheckade). Åberopa med `/namn`.
+
+| Kommando | Syfte | Effort |
+|---|---|---|
+| `/ultraplan` | Djupplanering: resonera igenom minst 3 angreppssätt, väg trade-offs, skriv detaljerad spec till `tasks/todo.md`. För arkitektur, migrationer, okända felmoder. | xhigh |
+| `/ultracode` | Maximal rigor: orkestrera subagenter för parallell research/implementation, verifiera hårt (test + build + diff mot main) innan klart. För tvärgående ändringar över 5+ filer. | xhigh |
+| `/plan` | Standardplanering: gå in i plan-läge, skriv checkbar plan till `tasks/todo.md`, stäm av innan implementation. | high |
+| `/implement` | Genomför planen i `tasks/todo.md`: bocka av punkter löpande, förklara ändringar, verifiera. | high |
+| `/review` | Granska diff mot `main`: kör `npm run test` + `npm run build`, leta regressioner, kontrollera edge-cases. | high |
+
+Kommandona följer arbetsflödet ovan (Plan First → Verification Before Done) och delegerar enligt Modellstrategin.
