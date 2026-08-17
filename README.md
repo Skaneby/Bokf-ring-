@@ -34,7 +34,7 @@ npm install
 npm run dev        # http://localhost:3000/
 ```
 
-För OCR-skanning: skapa `.env` med `GEMINI_API_KEY=<din nyckel>` (hämtas på https://aistudio.google.com/apikey). Appen fungerar utan nyckel — bara skanningen inaktiveras.
+OCR-skanning och AI-chatten använder din **egna** Gemini-nyckel som du lägger in direkt i appen (AI-fliken → kugghjulet → "Validera och spara"). Nyckeln hämtas gratis på https://aistudio.google.com/apikey och lagras bara lokalt i din webbläsare — ingen nyckel bäddas in i appen. Utan nyckel fungerar allt utom skanning och chatt.
 
 ## Utveckling
 

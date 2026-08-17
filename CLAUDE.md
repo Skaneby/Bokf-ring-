@@ -38,11 +38,15 @@ git push origin main
 ---
 
 ## Miljövariabler
-- `GEMINI_API_KEY` läses med `process.env.GEMINI_API_KEY ?? env.GEMINI_API_KEY` i vite.config.ts
-  - `process.env` — fångar GitHub Actions secrets under bygget
-  - `env` (loadEnv) — fångar lokala `.env`-filer
-  - OBS: `loadEnv` läser INTE systemmiljövariabler — måste använda `process.env.X ?? env.X`
-- Nyckeln bäddas in i JS-bundelns vid byggtid (statisk app, ingen backend)
+- `VITE_GOOGLE_CLIENT_ID` — OAuth-klient-ID för Google Drive-sync (valfritt). Sätts i CI som
+  GitHub Secret `GOOGLE_CLIENT_ID`. Vite exponerar `VITE_*` automatiskt i klientbundeln. Utan
+  detta döljs Drive-sync-sektionen (`isConfigured()` i gdrive.ts).
+- **Gemini-nyckel bäddas INTE in längre.** Både OCR-skanningen (`ocr.ts` → `scanReceipt`) och
+  AI-chatten (`ai.ts`) använder användarens EGNA nyckel som läggs in lokalt i appen
+  (AI-fliken → kugghjulet). Nyckeln lagras i `settings`-nyckeln `'ai'` och är exkluderad från
+  backup/Drive-sync (`SETTINGS_NOT_IN_BACKUP`) — den läcker aldrig via en delad fil eller den
+  publika bundeln, och varje användare har sin egen kvot. `scanReceipt` kastar `OCR_NO_KEY_MESSAGE`
+  när ingen nyckel finns; skanningsflödena förkollar med `hasOcrKey()`.
 
 ---
 
@@ -114,7 +118,7 @@ e2e/app.spec.ts        — 6 E2E-tester (Playwright): desktop + mobil, UI och ut
 
 ### Deployment
 - **Repo-namnet har stort B** — `Bokf-ring-` inte `bokf-ring-` — påverkar base path och URL
-- **`loadEnv` läser inte `process.env`** — använd `process.env.X ?? env.X` för CI-secrets
+- **`loadEnv` läser inte `process.env`** — om en byggtidsvariabel måste fånga BÅDE CI-secrets och lokala `.env`, använd `process.env.X ?? env.X`. (Gäller inte längre någon nyckel — `VITE_*` exponeras automatiskt av Vite och Gemini-nyckeln bäddas inte in.)
 - **Aldrig pusha till gh-pages manuellt** — deploy-pages@v4 hanterar allt
 - **PWA service worker** — använd `registerType: 'autoUpdate'` + `skipWaiting: true` + `clientsClaim: true` — annars fastnar gamla SW och servar stale cache på användarens enhet
 

@@ -73,7 +73,9 @@ APPENS MODULER OCH FLÖDEN:
   inköp från utlandet — välj under "Typ": tjänst från EU, tjänst utanför EU eller varor från EU.
   Då anges fakturabeloppet (utan moms) och appen bokför automatiskt beräknad utgående + ingående
   moms som tar ut varandra. Snabbval: eget uttag (2013/1930), F-skatt (2510/1930),
-  egen insättning (1930/2018), egenavgifter (8422/2514). Kvitton kan skannas med kameran (OCR).
+  egen insättning (1930/2018), egenavgifter (8422/2514). Kvitton kan skannas med kameran (OCR) —
+  detta använder användarens EGNA Gemini-nyckel (samma som läggs in för AI-chatten under kugghjulet
+  på AI-fliken). Har man ingen nyckel visas en uppmaning om att lägga in en gratisnyckel först.
 - Fakturor: löpande obruten nummerserie. Bokförs enligt fakturametoden (vid skapande:
   1510 Kundfordringar mot intäkt+moms; betalning: 1930 mot 1510) eller kontantmetoden
   (allt bokförs vid betalning). Skriv ut/PDF, dela, e-post. Makulering vänder bokningen.

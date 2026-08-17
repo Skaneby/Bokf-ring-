@@ -27,7 +27,8 @@ jobs:
       - run: npm run build
         env:
           NODE_ENV: production
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # GEMINI_API_KEY bäddas INTE längre in — OCR använder användarens egna
+          # lokalt sparade nyckel (samma som AI-chatten). Ingen hemlighet i bundeln.
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       - uses: actions/upload-pages-artifact@v3
         with:

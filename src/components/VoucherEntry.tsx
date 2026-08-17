@@ -100,8 +100,14 @@ export function VoucherEntry({ editId, onEditDone }: { editId?: number | null; o
               ],
         );
       }
-    } catch {
-      setError('Kunde inte läsa kvittot. Kontrollera att GEMINI_API_KEY är konfigurerad.');
+    } catch (err) {
+      // OCR_NO_KEY_MESSAGE pekar användaren till var nyckeln matas in; andra
+      // fel (nätverk, tolkning) visas som ett generellt meddelande.
+      setError(
+        err instanceof Error && err.message.startsWith('Ingen Gemini-nyckel')
+          ? err.message
+          : 'Kunde inte läsa kvittot. Försök igen eller fyll i uppgifterna manuellt.',
+      );
     } finally {
       setScanning(false);
       e.target.value = '';

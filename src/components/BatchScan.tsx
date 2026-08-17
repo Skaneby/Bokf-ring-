@@ -3,7 +3,7 @@ import { CheckCircle, ScanLine, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, genId } from '../db';
-import { scanReceipt } from '../lib/ocr';
+import { scanReceipt, hasOcrKey, OCR_NO_KEY_MESSAGE } from '../lib/ocr';
 import { CaptureGrid } from './batchscan/CaptureGrid';
 import { ReviewList } from './batchscan/ReviewList';
 import type { ScanItem, VoucherDraft } from './batchscan/types';
@@ -29,6 +29,7 @@ export function BatchScan() {
   const [phase, setPhase] = useState<Phase>('capturing');
   const [items, setItems] = useState<ScanItem[]>([]);
   const [bookedCount, setBookedCount] = useState(0);
+  const [keyError, setKeyError] = useState('');
 
   const accounts = useLiveQuery(() => db.accounts.orderBy('id').toArray(), []) ?? [];
 
@@ -62,6 +63,13 @@ export function BatchScan() {
 
   const startScanning = async () => {
     if (items.length === 0) return;
+    // Förkolla att användaren har en egen nyckel innan hela batchen körs — annars
+    // skulle varje kort fela var för sig. Visa istället en tydlig prompt.
+    if (!(await hasOcrKey())) {
+      setKeyError(OCR_NO_KEY_MESSAGE);
+      return;
+    }
+    setKeyError('');
     setPhase('scanning');
 
     // Markera alla som "scanning"
@@ -231,12 +239,19 @@ export function BatchScan() {
       </div>
 
       {phase === 'capturing' && (
-        <CaptureGrid
-          items={items}
-          onAddFiles={addFiles}
-          onRemove={removeItem}
-          onScan={startScanning}
-        />
+        <>
+          {keyError && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              {keyError}
+            </div>
+          )}
+          <CaptureGrid
+            items={items}
+            onAddFiles={addFiles}
+            onRemove={removeItem}
+            onScan={startScanning}
+          />
+        </>
       )}
       {phase === 'reviewing' && (
         <ReviewList

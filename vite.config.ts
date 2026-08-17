@@ -60,8 +60,10 @@ export default defineConfig(({mode}) => {
         },
       }),
     ],
+    // OBS: Ingen GEMINI_API_KEY bäddas in längre. OCR-skanningen använder
+    // användarens EGNA lokalt sparade nyckel (samma som AI-chatten) — inget
+    // hemligt läcker via den publika bundeln och varje användare har sin kvot.
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY ?? env.GEMINI_API_KEY),
       __APP_VERSION__: JSON.stringify(BUILD_SHA),
       __BUILD_DATE__: JSON.stringify(BUILD_DATE),
     },

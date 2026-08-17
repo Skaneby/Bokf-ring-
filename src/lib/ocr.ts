@@ -1,3 +1,5 @@
+import { getAiSettings } from './ai';
+
 export interface ReceiptData {
   date?: string;            // YYYY-MM-DD
   amount?: number;          // inkl. moms
@@ -6,14 +8,33 @@ export interface ReceiptData {
   vatDir?: 'in' | 'out';   // in = inköp/kvitto, out = försäljning/faktura
 }
 
+// Användarvänligt felmeddelande när användaren inte lagt in någon egen
+// Gemini-nyckel. Skanningsflödena visar detta direkt, så det pekar exakt
+// på var nyckeln matas in. Exponeras som konstant så UI kan känna igen fallet.
+export const OCR_NO_KEY_MESSAGE =
+  'Ingen Gemini-nyckel. Gå till AI-fliken, klicka på kugghjulet, klistra in ' +
+  'din egen (gratis) nyckel och tryck "Validera och spara" — samma nyckel ' +
+  'används sedan för att skanna kvitton.';
+
+// Har användaren en egen nyckel inlagd? (Skanningsflödena kan förkolla innan
+// de startar en batch, så vi slipper fela på varje enskilt kort.)
+export async function hasOcrKey(): Promise<boolean> {
+  const { apiKey } = await getAiSettings();
+  return apiKey.trim().length > 0;
+}
+
 export async function scanReceipt(file: File): Promise<ReceiptData> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY saknas');
+  // Använd användarens EGNA lokalt sparade nyckel (samma som AI-chatten).
+  // Ingen nyckel bäddas in i appen — varje användare har sin egen kvot och
+  // inget hemligt läcker via den publika bundeln.
+  const { apiKey } = await getAiSettings();
+  const key = apiKey.trim();
+  if (!key) throw new Error(OCR_NO_KEY_MESSAGE);
 
   const base64 = await toBase64(file);
   // Ladda SDK:n först när skanning används — hålls utanför startbundeln
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  const genAI = new GoogleGenerativeAI(apiKey);
+  const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const prompt = `Du är en assistent som läser kvitton och fakturor.
