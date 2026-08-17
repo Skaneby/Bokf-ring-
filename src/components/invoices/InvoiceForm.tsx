@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { format, addDays } from 'date-fns';
-import { InvoiceRow, InvoiceMethod, Invoice } from '../../db';
+import { InvoiceRow, InvoiceMethod, Invoice, Customer, db } from '../../db';
 import { formatCurrency } from '../../lib/utils';
 import {
   createInvoice, invoiceTotals, getCompanySettings, downloadInvoiceFile,
 } from '../../lib/invoice';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Users } from 'lucide-react';
 
 const cls =
   'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 ' +
@@ -27,6 +27,12 @@ export function InvoiceForm({ onCreated }: { onCreated: (inv: Invoice) => void }
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Kundregister
+  const [customers, setCustomers]           = useState<Customer[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
   // Förifyll förfallodatum och metod från inställningarna
   useEffect(() => {
     getCompanySettings().then(s => {
@@ -34,6 +40,39 @@ export function InvoiceForm({ onCreated }: { onCreated: (inv: Invoice) => void }
       setMethod(s.defaultMethod);
     });
   }, []);
+
+  // Ladda kundregister sorterat på senast använd
+  useEffect(() => {
+    db.customers.orderBy('lastUsed').reverse().toArray().then(setCustomers);
+  }, []);
+
+  // Stäng suggestions om användaren klickar utanför
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node) &&
+        nameInputRef.current && !nameInputRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const filteredCustomers = customers.filter(c =>
+    !customerName.trim() || c.name.toLowerCase().includes(customerName.toLowerCase()),
+  ).slice(0, 6);
+
+  const applyCustomer = (c: Customer) => {
+    setCustomerName(c.name);
+    setCustomerAddress(c.address ?? '');
+    setCustomerOrgnr(c.orgnr ?? '');
+    setCustomerEmail(c.email ?? '');
+    setCustomerReference(c.reference ?? '');
+    setShowSuggestions(false);
+    nameInputRef.current?.blur();
+  };
 
   const updateRow = (i: number, patch: Partial<InvoiceRow>) =>
     setRows(r => r.map((row, j) => j === i ? { ...row, ...patch } : row));
@@ -64,6 +103,26 @@ export function InvoiceForm({ onCreated }: { onCreated: (inv: Invoice) => void }
       if (settings.autoDownloadInvoice !== false && inv.documentHtml) {
         downloadInvoiceFile(inv, inv.documentHtml);
       }
+
+      // Upsert kunduppgifter för återanvändning
+      const trimmed = customerName.trim();
+      const existing = await db.customers
+        .filter(c => c.name.toLowerCase() === trimmed.toLowerCase())
+        .first();
+      const customerData = {
+        name: trimmed,
+        address: customerAddress.trim() || undefined,
+        orgnr: customerOrgnr.trim() || undefined,
+        email: customerEmail.trim() || undefined,
+        reference: customerReference.trim() || undefined,
+        lastUsed: Date.now(),
+      };
+      if (existing?.id != null) {
+        await db.customers.update(existing.id, customerData);
+      } else {
+        await db.customers.add(customerData);
+      }
+
       onCreated(inv);
     } catch {
       setError('Kunde inte skapa fakturan. Försök igen.');
@@ -76,12 +135,45 @@ export function InvoiceForm({ onCreated }: { onCreated: (inv: Invoice) => void }
     <form onSubmit={handleSubmit} className="space-y-4">
       {/* Kund */}
       <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Kund</p>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Kund</p>
+          {customers.length > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-slate-400">
+              <Users className="h-3 w-3" />{customers.length} sparad{customers.length !== 1 ? 'e' : ''}
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
+          <div className="relative">
             <label className="mb-1.5 block text-xs text-slate-500">Namn *</label>
-            <input type="text" required value={customerName} onChange={e => setCustomerName(e.target.value)}
-                   placeholder="Kund AB" className={cls} />
+            <input
+              ref={nameInputRef}
+              type="text" required value={customerName}
+              onChange={e => { setCustomerName(e.target.value); setShowSuggestions(true); }}
+              onFocus={() => setShowSuggestions(true)}
+              placeholder="Kund AB"
+              className={cls}
+            />
+            {showSuggestions && filteredCustomers.length > 0 && (
+              <div
+                ref={suggestionsRef}
+                className="absolute z-20 left-0 right-0 top-full mt-1 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden"
+              >
+                {filteredCustomers.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={e => { e.preventDefault(); applyCustomer(c); }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
+                  >
+                    <p className="text-sm font-medium text-slate-900">{c.name}</p>
+                    {(c.orgnr || c.email) && (
+                      <p className="text-xs text-slate-400 mt-0.5">{[c.orgnr, c.email].filter(Boolean).join(' · ')}</p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1.5 block text-xs text-slate-500">Org.nr</label>

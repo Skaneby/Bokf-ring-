@@ -97,6 +97,18 @@ export interface Declaration {
   updated_at: number;
 }
 
+// Återanvändbar kunddata — sparas automatiskt vid varje faktura och kan väljas
+// i fakturablanketten för att slippa fylla i samma uppgifter igen.
+export interface Customer {
+  id?: number;
+  name: string;
+  address?: string;
+  orgnr?: string;
+  email?: string;
+  reference?: string;
+  lastUsed: number; // unix-ms — styr sorteringsordningen i träfflistan
+}
+
 export class AccountingDB extends Dexie {
   accounts!: Table<Account>;
   vouchers!: Table<Voucher>;
@@ -105,6 +117,7 @@ export class AccountingDB extends Dexie {
   settings!: Table<Setting>;
   declarations!: Table<Declaration>;
   attachments!: Table<Attachment>;
+  customers!: Table<Customer>;
 
   constructor() {
     super('AccountingDB');
@@ -139,6 +152,17 @@ export class AccountingDB extends Dexie {
       settings: 'key',
       declarations: '++id, taxYear',
       attachments: '++id, voucherId'
+    });
+    // v5: kundregister — återanvändbara kunduppgifter i fakturablanketten
+    this.version(5).stores({
+      accounts: 'id, type',
+      vouchers: '++id, date',
+      transactions: '++id, voucherId, accountId',
+      invoices: '++id, number, status, date',
+      settings: 'key',
+      declarations: '++id, taxYear',
+      attachments: '++id, voucherId',
+      customers: '++id, name, lastUsed'
     });
   }
 }
@@ -301,11 +325,12 @@ export async function wipeBokforing(): Promise<void> {
   await db.transaction(
     'rw',
     [db.accounts, db.vouchers, db.transactions, db.attachments,
-     db.invoices, db.declarations, db.settings],
+     db.invoices, db.declarations, db.settings, db.customers],
     async () => {
       await Promise.all([
         db.transactions.clear(), db.vouchers.clear(), db.accounts.clear(),
         db.attachments.clear(), db.invoices.clear(), db.declarations.clear(),
+        db.customers.clear(),
       ]);
       await db.settings.delete('company'); // uppgifter/mall/nummerserie nollställs
     },

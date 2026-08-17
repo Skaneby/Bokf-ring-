@@ -1,5 +1,5 @@
 import {
-  db, Account, Voucher, Transaction, Invoice, Declaration, Setting,
+  db, Account, Voucher, Transaction, Invoice, Declaration, Setting, Customer,
   getIdentity, setIdentity, newIdentity,
 } from '../db';
 import { bufferToBase64, base64ToBuffer } from './attachments';
@@ -35,10 +35,11 @@ export interface BackupData {
   invoices?: Invoice[];         // fakturor (inkl. arkiverad HTML, nummerserie)
   declarations?: Declaration[]; // NE/INK2-justeringar + inlämningssteg
   settings?: Setting[];         // företagsuppgifter + FAKTURAMALL + nästa nummer
+  customers?: Customer[];       // återanvändbara kunduppgifter
 }
 
 export async function buildBackupData(): Promise<BackupData> {
-  const [accounts, vouchers, transactions, attachments, invoices, declarations, settings, identity] =
+  const [accounts, vouchers, transactions, attachments, invoices, declarations, settings, customers, identity] =
     await Promise.all([
       db.accounts.toArray(),
       db.vouchers.toArray(),
@@ -47,6 +48,7 @@ export async function buildBackupData(): Promise<BackupData> {
       db.invoices.toArray(),
       db.declarations.toArray(),
       db.settings.toArray(),
+      db.customers.toArray(),
       getIdentity(),
     ]);
 
@@ -72,6 +74,7 @@ export async function buildBackupData(): Promise<BackupData> {
     invoices,
     declarations,
     settings: backupSettings,
+    customers,
   };
 }
 
@@ -86,11 +89,12 @@ export async function applyBackupData(data: BackupData): Promise<{ vouchers: num
   await db.transaction(
     'rw',
     [db.accounts, db.vouchers, db.transactions, db.attachments,
-     db.invoices, db.declarations, db.settings],
+     db.invoices, db.declarations, db.settings, db.customers],
     async () => {
       await Promise.all([
         db.transactions.clear(), db.vouchers.clear(), db.accounts.clear(),
         db.attachments.clear(), db.invoices.clear(), db.declarations.clear(),
+        db.customers.clear(),
       ]);
       await Promise.all([
         db.accounts.bulkAdd(data.accounts),
@@ -108,6 +112,7 @@ export async function applyBackupData(data: BackupData): Promise<{ vouchers: num
       }
       if (Array.isArray(data.invoices)) await db.invoices.bulkAdd(data.invoices);
       if (Array.isArray(data.declarations)) await db.declarations.bulkAdd(data.declarations);
+      if (Array.isArray(data.customers)) await db.customers.bulkAdd(data.customers);
       // Företagsuppgifter + fakturamall återställs; lokala nycklar (AI-nyckel,
       // filhandtag, identitet) lämnas orörda genom att bara skriva de sparade.
       if (Array.isArray(data.settings)) {
